@@ -89,8 +89,9 @@ following:
 2. Using the logic above, the cluster operator creates a headless
    service, fails to dial the cluster, and creates three peer
    resources.
-3. Each peer resource creates a persistent volume claim and launches a
-   pod, mounting the volume claim.
+3. Using the logic above, the operator for the peer resource notices
+   that the created peer resources do not have PVCs or pods, and so
+   creates them.
 4. The pods run etcd, bootstrap to each other, and then form a
    cluster.
 5. The cluster resource eventually is able to communicate with the
