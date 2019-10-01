@@ -52,8 +52,8 @@ deploys a "headless" service to allow connectivity to the cluster, and
 keeps its status field updated with the information about the cluster.
 
 The operator treats the cluster itself as the canonical view of the
-current state of the world. In particular the etcd cluster's peer list
-is used to define what the expected members should be.
+current state of the world. In particular the etcd cluster's member
+list is used to define what the expected members should be.
 
 When reconciling the cluster resource the operator will do the
 following:
@@ -63,21 +63,21 @@ following:
    successfully connected update the `status` field with information
    from the cluster.
 3. If we have communication with the cluster and the cluster is
-   quorate, check that the number of peers the cluster expects is the
-   same as the cluster resource's specified `size`. If the cluster has
-   too few peers, add a new one using the API. If too many, remove
-   exactly using the API.
-3. List the `EtcdPeer` resources that are our children. If we have
+   quorate, check that the number of members the cluster expects is
+   the same as the cluster resource's specified `size`. If the cluster
+   has too few members, add a new one using the API. If too many,
+   remove exactly one using the API.
+4. List the `EtcdPeer` resources that are our children. If we have
    communication with the cluster reconcile the peer resources with
-   the peer list in etcd. Peers that the exist in Kuberentes that the
-   cluster does not know about should be deleted, peers that exist in
-   the cluster and are not in Kubernetes should be created.
+   the member list in etcd. Peers that the exist in Kuberentes that
+   the cluster does not know about should be deleted, members that
+   exist in the cluster and are not in Kubernetes should be created.
 
    If we don't have communication with the cluster (or the cluster is
    nonquorate) and we don't have enough peer resources compared with
    our desired size, then add peer resources to make up the expected
    size.
-4. Update the status resource based on our communication with the
+5. Update the status resource based on our communication with the
    cluster. If the cluster cannot be reached we mark ourselves as not
    ready. If the cluster is not quorate we mark as non quorate.
 
@@ -101,8 +101,9 @@ following:
 1. A user edits the `EtcdCluster` resource to increase the size by
    one.
 2. Using the logic above, the cluster operator notes that the cluster
-   is undersized by one and adds a new peer to the etcd cluster.
-3. The cluster operator then notices that the cluster expects a peer
+   is undersized by one and adds a new member to the etcd cluster
+   using the etcd API.
+3. The cluster operator then notices that the cluster expects a member
    that does not have a `EtcdPeer` resource, and so adds one.
 4. The peer operator creates the PVC and pod for the new peer, which
    then bootstraps and joins the cluster.
@@ -112,9 +113,8 @@ following:
 1. A user edits the `EtcdCluster` resource to decrease the size by
    one.
 2. Using the logic above, the cluster operator notes that the number
-   of peers in the etcd cluster is too big by one and removes one.
+   of members in the etcd cluster is too big by one and removes one.
 3. The cluser operator notices that it has a `EtcdPeer` resource for a
-   node that the cluster does not know about and deletes one.
+   peer that the cluster does not know about and deletes one.
 4. A deletion hook for the peer resource removes the pod, but not any
    PVCs associated with the pod.
-
