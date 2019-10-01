@@ -1,0 +1,3 @@
+version: "2"
+domain: improbable.io
+repo: github.com/improbable-eng/etcd-cluster-operator
