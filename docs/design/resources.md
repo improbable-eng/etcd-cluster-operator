@@ -6,37 +6,39 @@ resource definitions:
 * `EtcdCluster`, or the "cluster resource", defines an entire
   operating cluster.
 * `EtcdPeer`, or the "peer resource", defines a single peer of the
-  etcd cluster. This principally concerns a Pod, but may also involve
+  etcd cluster. This principally concerns a Pod, but also includes
   attached storage and network identity.
 
 ## The Peer Resource
 
 The peer resource represents a single peer in an etcd
-cluster. Encoding it's bootstrap instructions, persistence settings,
+cluster. Encoding its bootstrap instructions, persistence settings,
 and extra pod settings (e.g., overridden CPU limits). Its `status`
-field exposes information about the peer including its hostname,
-liveness status, the peer's current generation, and if it's currently
-the leader of the etcd cluster.
+field exposes information about the peer including its hostname. In
+future the status may also include the liveness status if it's
+currently the leader of the etcd cluster.
 
 When reconciling the etcd peer resource the operator will do the
 following:
 
-1. If storage is enabled and a correctly named persistent volume claim
-   (PVC) does not exist, create one with the settings provided on the
-   peer resource.
+1. If a correctly named persistent volume claim (PVC) does not exist,
+   create one with the settings provided on the peer resource.
 
    We never delete a persistent volume claim automatically, so this
    behaviour ensures that the operator will resume stopped clusters if
-   the storage remains even if the peer resource was deleted.
+   the storage remains even if the peer resource was deleted. In
+   future, automatic cluster recovery tools **may** delete PVC
+   resources if they determine it is required and safe to do so,
+   although this is outside of the scope of this document.
 
    If the storage options on the peer resource are different from an
    existing PVC, the operator makes no attempt to 'correct' the
    preexisting PVC.
 2. If a correctly named pod does not exist, an etcd pod will be
-   launched with the PVC from above mounted as a volume if storage is
-   enabled. The bootstrap configuration will always be provided to the
-   pod as configuration, as etcd will ignore bootstrap configuration
-   if a data directory already exists.
+   launched with the PVC from above mounted as a volume. The bootstrap
+   configuration will always be provided to the pod as configuration,
+   as etcd will ignore bootstrap configuration if a data directory
+   already exists.
 3. If the pod is in a ready state, the operator will attempt to
    contact it using the gRPC endpoint and retrieve information to
    populate the status field. Otherwise, it will report the peer as
@@ -93,4 +95,26 @@ following:
    cluster.
 5. The cluster resource eventually is able to communicate with the
    cluster and comes up.
+
+### Scale-up
+
+1. A user edits the `EtcdCluster` resource to increase the size by
+   one.
+2. Using the logic above, the cluster operator notes that the cluster
+   is undersized by one and adds a new peer to the etcd cluster.
+3. The cluster operator then notices that the cluster expects a peer
+   that does not have a `EtcdPeer` resource, and so adds one.
+4. The peer operator creates the PVC and pod for the new peer, which
+   then bootstraps and joins the cluster.
+
+### Scale-down
+
+1. A user edits the `EtcdCluster` resource to decrease the size by
+   one.
+2. Using the logic above, the cluster operator notes that the number
+   of peers in the etcd cluster is too big by one and removes one.
+3. The cluser operator notices that it has a `EtcdPeer` resource for a
+   node that the cluster does not know about and deletes one.
+4. A deletion hook for the peer resource removes the pod, but not any
+   PVCs associated with the pod.
 
