@@ -9,6 +9,14 @@ resource definitions:
   etcd cluster. This principally concerns a Pod, but also includes
   attached storage and network identity.
 
+## Operator Deployment
+
+The operator is compiled into a single binary (`etcd-cluster-operator`) and
+deployed as a single Docker image (`improbable/etcd-cluter-operator` on Docker
+Hub). This single operator contains the controllers for both the peer resource
+and the cluster resource, and is multi-tennant for clusters defined in any
+namespace.
+
 ## The Peer Resource
 
 The peer resource represents a single peer in an etcd
