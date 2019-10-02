@@ -13,9 +13,13 @@ endif
 
 all: manager
 
+# Get binary dependencies
+bin/kubebuilder:
+	hack/download-kubebuilder-local.sh
+
 # Run tests
-test: generate fmt vet manifests
-	go test ./... -coverprofile cover.out
+test: generate fmt vet manifests bin/kubebuilder
+	KUBEBUILDER_ASSETS="$(shell pwd)/bin/kubebuilder/bin" go test ./... -coverprofile cover.out
 
 # Build manager binary
 manager: generate fmt vet
