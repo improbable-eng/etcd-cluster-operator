@@ -1,3 +1,19 @@
 version: "2"
 domain: improbable.io
 repo: github.com/improbable-eng/etcd-cluster-operator
+resources:
+- group: etcd
+  version: v1alpha1
+  kind: EtcdPeer
+- group: etcd
+  version: v1alpha1
+  kind: EtcdPeer
+- group: etcd
+  version: v1alpha1
+  kind: EtcdPeer
+- group: etcd
+  version: v1alpha1
+  kind: EtcdPeer
+- group: etcd
+  version: v1alpha1
+  kind: EtcdPeer
