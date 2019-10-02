@@ -90,10 +90,10 @@ following:
 ### Bootstrapping
 
 1. A user creates a `EtcdCluster` resource with size 3.
-2. Using the logic above, the cluster operator creates a headless
+2. Using the logic above, the cluster controller creates a headless
    service, fails to dial the cluster, and creates three peer
    resources.
-3. Using the logic above, the operator for the peer resource notices
+3. Using the logic above, the controller for the peer resource notices
    that the created peer resources do not have PVCs or pods, and so
    creates them.
 4. The pods run etcd, bootstrap to each other, and then form a
@@ -105,21 +105,21 @@ following:
 
 1. A user edits the `EtcdCluster` resource to increase the size by
    one.
-2. Using the logic above, the cluster operator notes that the cluster
+2. Using the logic above, the cluster controller notes that the cluster
    is undersized by one and adds a new member to the etcd cluster
    using the etcd API.
-3. The cluster operator then notices that the cluster expects a member
+3. The cluster controller then notices that the cluster expects a member
    that does not have a `EtcdPeer` resource, and so adds one.
-4. The peer operator creates the PVC and pod for the new peer, which
+4. The peer controller creates the PVC and pod for the new peer, which
    then bootstraps and joins the cluster.
 
 ### Scale-down
 
 1. A user edits the `EtcdCluster` resource to decrease the size by
    one.
-2. Using the logic above, the cluster operator notes that the number
+2. Using the logic above, the cluster controller notes that the number
    of members in the etcd cluster is too big by one and removes one.
-3. The cluser operator notices that it has a `EtcdPeer` resource for a
+3. The cluster controller notices that it has a `EtcdPeer` resource for a
    peer that the cluster does not know about and deletes one.
 4. A deletion hook for the peer resource removes the pod, but not any
    PVCs associated with the pod.
