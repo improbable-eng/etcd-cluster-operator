@@ -53,9 +53,12 @@ else
 fi
 
 # Extract
+tmpdir=$(mktemp -d)
+tar -C "$tmpdir" -zxvf /tmp/kubebuilder_${version}_${os}_${arch}.tar.gz
+
 mkdir -p "$projectdir/bin"
-tar -C /tmp -zxvf /tmp/kubebuilder_${version}_${os}_${arch}.tar.gz
-mv /tmp/kubebuilder_${version}_${os}_${arch} "$projectdir/bin/kubebuilder"
+mv "$tmpdir/kubebuilder_${version}_${os}_${arch}" "$projectdir/bin/kubebuilder"
 
 # cleanup
 rm /tmp/kubebuilder_${version}_${os}_${arch}.tar.gz
+rm -r "$tmpdir"
