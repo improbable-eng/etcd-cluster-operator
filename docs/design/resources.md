@@ -68,10 +68,14 @@ following:
    has too few members, add a new one using the API. If too many,
    remove exactly one using the API.
 4. List the `EtcdPeer` resources that are our children. If we have
-   communication with the cluster reconcile the peer resources with
-   the member list in etcd. Peers that the exist in Kuberentes that
-   the cluster does not know about should be deleted, members that
-   exist in the cluster and are not in Kubernetes should be created.
+   communication with the cluster, reconcile the peer resources with
+   the member list in etcd:
+
+   * If a member exists in the etcd member list, but does not have a
+     corresponding `EtcdPeer`, then create the peer resource.
+   * If a `EtcdPeer` resource exists that does not have a
+     corresponding member in the etcd memeber list, then remove the
+     peer resource.
 
    If we don't have communication with the cluster (or the cluster is
    nonquorate) and we don't have enough peer resources compared with
