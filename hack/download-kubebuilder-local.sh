@@ -9,6 +9,8 @@ version="2.0.1"
 arch=$(go env GOARCH)
 os=$(go env GOOS)
 
+projectdir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )/.."
+
 # Download Kubebuilder archive
 wget -O /tmp/kubebuilder_${version}_${os}_${arch}.tar.gz \
      https://github.com/kubernetes-sigs/kubebuilder/releases/download/v${version}/kubebuilder_${version}_${os}_${arch}.tar.gz
@@ -51,9 +53,9 @@ else
 fi
 
 # Extract
-mkdir -p bin
+mkdir -p "$projectdir/bin"
 tar -C /tmp -zxvf /tmp/kubebuilder_${version}_${os}_${arch}.tar.gz
-mv /tmp/kubebuilder_${version}_${os}_${arch} bin/kubebuilder
+mv /tmp/kubebuilder_${version}_${os}_${arch} "$projectdir/bin/kubebuilder"
 
 # cleanup
 rm /tmp/kubebuilder_${version}_${os}_${arch}.tar.gz
