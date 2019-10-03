@@ -61,7 +61,22 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		Spec: appsv1.ReplicaSetSpec{
 			// This will *always* be 1. Other peers are handled by other EtcdPeers.
 			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app":  "etcd",
+					"peer": etcdPeer.Name,
+				},
+			},
 			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app":  "etcd",
+						"peer": etcdPeer.Name,
+					},
+					Annotations: make(map[string]string),
+					Name:        etcdPeer.Name,
+					Namespace:   etcdPeer.Namespace,
+				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
@@ -75,6 +90,11 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	log.V(1).Info("Generated ReplicaSet", "rs", replicaSet)
+
+	if err := r.Create(ctx, &replicaSet); err != nil {
+		log.Error(err, "unable to create ReplicaSet for EtcdPeer", "replicaSet", replicaSet)
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }
