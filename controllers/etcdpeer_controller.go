@@ -43,14 +43,16 @@ func defineReplicaSet(etcdPeer etcdv1alpha1.EtcdPeer) (appsv1.ReplicaSet, error)
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"app":  "etcd",
+					"app": "etcd",
+					// Using the EtcdPeer's name as a label limits what the name can be
 					"peer": etcdPeer.Name,
 				},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"app":  "etcd",
+						"app": "etcd",
+						// Using the EtcdPeer's name as a label limits what the name can be
 						"peer": etcdPeer.Name,
 					},
 					Annotations: make(map[string]string),
