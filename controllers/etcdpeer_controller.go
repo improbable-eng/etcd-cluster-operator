@@ -35,23 +35,10 @@ const (
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=apps,resources=replicaset,verbs=get;update;patch;create
 
-func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
-	log := r.Log.WithValues("etcdpeer", req.NamespacedName)
-
-	var etcdPeer etcdv1alpha1.EtcdPeer
-	if err := r.Get(ctx, req.NamespacedName, &etcdPeer); err != nil {
-		log.Error(err, "unable to fetch EtcdPeer")
-		return ctrl.Result{}, ignoreNotFound(err)
-	}
-
-	log.V(1).Info("Found EtcdPeer",
-		"name", etcdPeer.Name,
-		"bootstrapPeers", etcdPeer.Spec.BootstrapPeers)
-
+func defineReplicaSet(etcdPeer etcdv1alpha1.EtcdPeer) (appsv1.ReplicaSet, error) {
 	var replicas int32 = 1
 
-	replicaSet := appsv1.ReplicaSet{
+	return appsv1.ReplicaSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels:      make(map[string]string),
 			Annotations: make(map[string]string),
@@ -87,9 +74,28 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				},
 			},
 		},
+	}, nil
+}
+
+func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+	ctx := context.Background()
+	log := r.Log.WithValues("etcdpeer", req.NamespacedName)
+
+	var etcdPeer etcdv1alpha1.EtcdPeer
+	if err := r.Get(ctx, req.NamespacedName, &etcdPeer); err != nil {
+		log.Error(err, "unable to fetch EtcdPeer")
+		return ctrl.Result{}, ignoreNotFound(err)
 	}
 
-	log.V(1).Info("Generated ReplicaSet", "rs", replicaSet)
+	log.V(1).Info("Found EtcdPeer",
+		"name", etcdPeer.Name,
+		"bootstrapPeers", etcdPeer.Spec.BootstrapPeers)
+
+	replicaSet, err := defineReplicaSet(etcdPeer)
+	if err != nil {
+		log.Error(err, "unable to generate ReplicaSet from EtcdPeer")
+		return ctrl.Result{}, err
+	}
 
 	if err := r.Create(ctx, &replicaSet); err != nil {
 		log.Error(err, "unable to create ReplicaSet for EtcdPeer", "replicaSet", replicaSet)
