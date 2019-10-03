@@ -21,7 +21,7 @@ type EtcdPeerReconciler struct {
 }
 
 const (
-	EtcdImage = "quay.io/coreos/etcd:v3.2.27"
+	etcdImage = "quay.io/coreos/etcd:v3.2.27"
 )
 
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch;create;update;patch;delete
@@ -64,7 +64,7 @@ func defineReplicaSet(etcdPeer etcdv1alpha1.EtcdPeer) (appsv1.ReplicaSet, error)
 					Containers: []corev1.Container{
 						{
 							Name:  "etcd",
-							Image: EtcdImage,
+							Image: etcdImage,
 						},
 					},
 				},
