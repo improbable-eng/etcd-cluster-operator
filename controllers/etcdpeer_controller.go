@@ -38,7 +38,9 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, ignoreNotFound(err)
 	}
 
-	log.V(1).Info("EtcdPeer name", etcdPeer.Spec.Name)
+	log.V(1).Info("Found EtcdPeer",
+		"name", etcdPeer.Name,
+		"bootstrapPeers", etcdPeer.Spec.BootstrapPeers)
 
 	return ctrl.Result{}, nil
 }
