@@ -12,7 +12,6 @@ type EtcdPeerSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	Name           string            `json:"name"`
 	BootstrapPeers map[string]string `json:"bootstrapPeers"`
 }
 
