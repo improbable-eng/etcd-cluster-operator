@@ -91,15 +91,32 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		"name", etcdPeer.Name,
 		"bootstrapPeers", etcdPeer.Spec.BootstrapPeers)
 
-	replicaSet, err := defineReplicaSet(etcdPeer)
-	if err != nil {
-		log.Error(err, "unable to generate ReplicaSet from EtcdPeer")
-		return ctrl.Result{}, err
-	}
+	var existingReplicaSet appsv1.ReplicaSet
+	err := r.Get(ctx,
+		client.ObjectKey{
+			Namespace: etcdPeer.Namespace,
+			Name:      etcdPeer.Name,
+		},
+		&existingReplicaSet)
 
-	if err := r.Create(ctx, &replicaSet); err != nil {
-		log.Error(err, "unable to create ReplicaSet for EtcdPeer", "replicaSet", replicaSet)
+	if apierrs.IsNotFound(err) {
+		log.V(1).Info("Replica set does not exist, creating")
+		replicaSet, err := defineReplicaSet(etcdPeer)
+		if err != nil {
+			log.Error(err, "unable to generate ReplicaSet from EtcdPeer")
+			return ctrl.Result{}, err
+		}
+
+		if err := r.Create(ctx, &replicaSet); err != nil {
+			log.Error(err, "unable to create ReplicaSet for EtcdPeer", "replicaSet", replicaSet)
+			return ctrl.Result{}, err
+		}
+
+	} else if err != nil {
+		log.Error(err, "unable to query for replica sets")
 		return ctrl.Result{}, err
+	} else {
+		log.V(1).Info("Replica set already exists")
 	}
 
 	return ctrl.Result{}, nil
