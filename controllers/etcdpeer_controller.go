@@ -33,10 +33,11 @@ func defineReplicaSet(etcdPeer etcdv1alpha1.EtcdPeer) (appsv1.ReplicaSet, error)
 
 	return appsv1.ReplicaSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Labels:      make(map[string]string),
-			Annotations: make(map[string]string),
-			Name:        etcdPeer.Name,
-			Namespace:   etcdPeer.Namespace,
+			Labels:          make(map[string]string),
+			Annotations:     make(map[string]string),
+			Name:            etcdPeer.Name,
+			Namespace:       etcdPeer.Namespace,
+			OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(&etcdPeer, etcdv1alpha1.GroupVersion.WithKind("EtcdPeer"))},
 		},
 		Spec: appsv1.ReplicaSetSpec{
 			// This will *always* be 1. Other peers are handled by other EtcdPeers.
@@ -119,5 +120,7 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 func (r *EtcdPeerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&etcdv1alpha1.EtcdPeer{}).
+		// Watch for changes to ReplicaSet resources that an EtcdPeer owns.
+		Owns(&appsv1.ReplicaSet{}).
 		Complete(r)
 }
