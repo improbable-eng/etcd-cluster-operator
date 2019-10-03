@@ -20,13 +20,6 @@ type EtcdPeerReconciler struct {
 	Log logr.Logger
 }
 
-func ignoreNotFound(err error) error {
-	if apierrs.IsNotFound(err) {
-		return nil
-	}
-	return err
-}
-
 const (
 	EtcdImage = "quay.io/coreos/etcd:v3.2.27"
 )
@@ -84,7 +77,7 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	var etcdPeer etcdv1alpha1.EtcdPeer
 	if err := r.Get(ctx, req.NamespacedName, &etcdPeer); err != nil {
 		log.Error(err, "unable to fetch EtcdPeer")
-		return ctrl.Result{}, ignoreNotFound(err)
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	log.V(1).Info("Found EtcdPeer",
