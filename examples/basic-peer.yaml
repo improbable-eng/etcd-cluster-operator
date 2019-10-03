@@ -1,0 +1,8 @@
+apiVersion: etcd.improbable.io/v1alpha1
+kind: EtcdPeer
+metadata:
+  name: foo
+spec:
+  bootstrapPeers:
+    bar: bar.default.cluster.local
+    baz: baz.default.cluster.local
