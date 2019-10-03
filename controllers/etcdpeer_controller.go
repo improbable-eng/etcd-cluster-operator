@@ -8,7 +8,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // EtcdPeerReconciler reconciles a EtcdPeer object
@@ -23,6 +26,10 @@ func ignoreNotFound(err error) error {
 	}
 	return err
 }
+
+const (
+	EtcdImage = "quay.io/coreos/etcd:v3.2.27"
+)
 
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers/status,verbs=get;update;patch
@@ -41,6 +48,33 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	log.V(1).Info("Found EtcdPeer",
 		"name", etcdPeer.Name,
 		"bootstrapPeers", etcdPeer.Spec.BootstrapPeers)
+
+	var replicas int32 = 1
+
+	replicaSet := appsv1.ReplicaSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels:      make(map[string]string),
+			Annotations: make(map[string]string),
+			Name:        etcdPeer.Name,
+			Namespace:   etcdPeer.Namespace,
+		},
+		Spec: appsv1.ReplicaSetSpec{
+			// This will *always* be 1. Other peers are handled by other EtcdPeers.
+			Replicas: &replicas,
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "etcd",
+							Image: EtcdImage,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	log.V(1).Info("Generated ReplicaSet", "rs", replicaSet)
 
 	return ctrl.Result{}, nil
 }
