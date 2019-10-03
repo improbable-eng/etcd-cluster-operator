@@ -11,8 +11,6 @@ import (
 type EtcdPeerSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-
-	BootstrapPeers map[string]string `json:"bootstrapPeers"`
 }
 
 // EtcdPeerStatus defines the observed state of EtcdPeer

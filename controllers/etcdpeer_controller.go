@@ -88,8 +88,7 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	log.V(1).Info("Found EtcdPeer",
-		"name", etcdPeer.Name,
-		"bootstrapPeers", etcdPeer.Spec.BootstrapPeers)
+		"name", etcdPeer.Name)
 
 	var existingReplicaSet appsv1.ReplicaSet
 	err := r.Get(ctx,
