@@ -83,7 +83,7 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	log.V(5).Info("Found EtcdPeer", "name", etcdPeer.Name)
+	log.V(2).Info("Found EtcdPeer", "name", etcdPeer.Name)
 
 	var existingReplicaSet appsv1.ReplicaSet
 	err := r.Get(
@@ -116,7 +116,7 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	log.V(5).Info("Replica set already exists")
+	log.V(2).Info("Replica set already exists")
 
 	// TODO Additional logic here
 
