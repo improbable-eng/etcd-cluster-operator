@@ -86,12 +86,14 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	log.V(5).Info("Found EtcdPeer", "name", etcdPeer.Name)
 
 	var existingReplicaSet appsv1.ReplicaSet
-	err := r.Get(ctx,
+	err := r.Get(
+		ctx,
 		client.ObjectKey{
 			Namespace: etcdPeer.Namespace,
 			Name:      etcdPeer.Name,
 		},
-		&existingReplicaSet)
+		&existingReplicaSet,
+	)
 
 	if apierrs.IsNotFound(err) {
 		log.V(1).Info("Replica set does not exist, creating")
@@ -105,13 +107,18 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			log.Error(err, "unable to create ReplicaSet for EtcdPeer", "replicaSet", replicaSet)
 			return ctrl.Result{}, err
 		}
+		return ctrl.Result{}, nil
+	}
 
-	} else if err != nil {
+	// Check for some other error from the previous `r.Get`
+	if err != nil {
 		log.Error(err, "unable to query for replica sets")
 		return ctrl.Result{}, err
-	} else {
-		log.V(5).Info("Replica set already exists")
 	}
+
+	log.V(5).Info("Replica set already exists")
+
+	// TODO Additional logic here
 
 	return ctrl.Result{}, nil
 }
