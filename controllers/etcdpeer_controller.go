@@ -29,7 +29,7 @@ const (
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=apps,resources=replicaset,verbs=get;update;patch;create
 
-func defineReplicaSet(etcdPeer etcdv1alpha1.EtcdPeer) (appsv1.ReplicaSet, error) {
+func defineReplicaSet(etcdPeer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 	var replicas int32 = 1
 
 	return appsv1.ReplicaSet{
@@ -71,7 +71,7 @@ func defineReplicaSet(etcdPeer etcdv1alpha1.EtcdPeer) (appsv1.ReplicaSet, error)
 				},
 			},
 		},
-	}, nil
+	}
 }
 
 func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
@@ -100,11 +100,7 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	if apierrs.IsNotFound(err) {
 		log.V(1).Info("Replica set does not exist, creating")
-		replicaSet, err := defineReplicaSet(etcdPeer)
-		if err != nil {
-			log.Error(err, "unable to generate ReplicaSet from EtcdPeer")
-			return ctrl.Result{}, err
-		}
+		replicaSet := defineReplicaSet(etcdPeer)
 
 		if err := r.Create(ctx, &replicaSet); err != nil {
 			log.Error(err, "unable to create ReplicaSet for EtcdPeer", "replicaSet", replicaSet)
