@@ -11,20 +11,21 @@ resource definitions:
 
 ## Operator Deployment
 
-The operator is compiled into a single binary (`etcd-cluster-operator`) and
-deployed as a single Docker image (`improbable/etcd-cluter-operator` on Docker
-Hub). This single operator contains the controllers for both the peer resource
-and the cluster resource, and is multi-tennant for clusters defined in any
+The operator is compiled into a single binary
+(`etcd-cluster-operator`) and deployed as a single Docker image
+(`improbable/etcd-cluter-operator` on Docker Hub). This single
+operator contains the controllers for both the peer resource and the
+cluster resource, and is multi-tennant for clusters defined in any
 namespace.
 
 ## The Peer Resource
 
-The peer resource represents a single peer in an etcd
-cluster. Encoding its bootstrap instructions, persistence settings,
-and extra pod settings (e.g., overridden CPU limits). Its `status`
-field exposes information about the peer including its hostname. In
-future the status may also include the liveness status if it's
-currently the leader of the etcd cluster.
+The peer resource represents a single peer in an etcd cluster.
+Encoding its bootstrap instructions, persistence settings, and extra
+pod settings (e.g., overridden CPU limits). Its `status` field exposes
+information about the peer including its hostname. In future the
+status may also include the liveness status if it's currently the
+leader of the etcd cluster.
 
 When reconciling the etcd peer resource the operator will do the
 following:
@@ -42,7 +43,7 @@ following:
    If the storage options on the peer resource are different from an
    existing PVC, the operator makes no attempt to 'correct' the
    preexisting PVC.
-2. If a correctly named pod does not exist, an etcd pod will be
+2. If a correctly named replica set does not exist, one will be
    launched with the PVC from above mounted as a volume. The bootstrap
    configuration will always be provided to the pod as configuration,
    as etcd will ignore bootstrap configuration if a data directory
@@ -118,8 +119,8 @@ following:
    using the etcd API.
 3. The cluster controller then notices that the cluster expects a member
    that does not have a `EtcdPeer` resource, and so adds one.
-4. The peer controller creates the PVC and pod for the new peer, which
-   then bootstraps and joins the cluster.
+4. The peer controller creates the PVC and replica set for the new
+   peer, which then bootstraps and joins the cluster.
 
 ### Scale-down
 
@@ -129,5 +130,5 @@ following:
    of members in the etcd cluster is too big by one and removes one.
 3. The cluster controller notices that it has a `EtcdPeer` resource for a
    peer that the cluster does not know about and deletes one.
-4. A deletion hook for the peer resource removes the pod, but not any
-   PVCs associated with the pod.
+4. A deletion hook for the peer resource removes the replica set, but
+   not any PVCs associated with the pod.
