@@ -2,6 +2,8 @@ package controllers
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -28,6 +30,14 @@ const (
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=apps,resources=replicaset,verbs=get;update;patch;create
+
+func clusterDiscoveryString(bootstrapPeers []etcdv1alpha1.BootstrapPeer) string {
+	s := make([]string, len(bootstrapPeers))
+	for i, bp := range bootstrapPeers {
+		s[i] = fmt.Sprintf("%s=http://%s:2380", bp.Name, bp.Host)
+	}
+	return strings.Join(s, ",")
+}
 
 func defineReplicaSet(etcdPeer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 	var replicas int32 = 1

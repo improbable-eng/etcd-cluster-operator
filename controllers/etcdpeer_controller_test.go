@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -13,6 +14,26 @@ import (
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
 )
+
+func TestClusterDiscoveryString(t *testing.T) {
+	peers := []etcdv1alpha1.BootstrapPeer{
+		{
+			Name: "Foo",
+			Host: "my-peer",
+		},
+		{
+			Name: "Bar",
+			Host: "my-peer.other.cluster.local",
+		},
+	}
+
+	actual := clusterDiscoveryString(peers)
+	expected := "Foo=http://my-peer:2380,Bar=http://my-peer.other.cluster.local:2380"
+
+	if expected != actual {
+		t.Errorf("Failed to generate correct cluster discovery string. Expected '%s', actual '%s'", expected, actual)
+	}
+}
 
 var _ = Describe("Etcd peer controller", func() {
 	ctx := context.Background()

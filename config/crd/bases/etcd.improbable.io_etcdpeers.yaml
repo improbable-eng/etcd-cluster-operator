@@ -31,6 +31,29 @@ spec:
           type: object
         spec:
           description: EtcdPeerSpec defines the desired state of EtcdPeer
+          properties:
+            bootstrapPeers:
+              description: BootstrapPeers is the list of all other peers for bootstrap
+                purpses. This does not need to be kept up to date after bootstrap
+                has occured as it's *only* used before cluster peers have conatacted
+                each other.
+              items:
+                description: BootstrapPeer describes a single *other* peer that will
+                  be used for bootstrapping
+                properties:
+                  host:
+                    description: Host forms part of the Advertise URL - the URL at
+                      which this peer can be contacted. The port and scheme are hardcoded.
+                    type: string
+                  name:
+                    description: Name is the initial name of the peer, which is set
+                      into etcd at the end of this process
+                    type: string
+                required:
+                - host
+                - name
+                type: object
+              type: array
           type: object
         status:
           description: EtcdPeerStatus defines the observed state of EtcdPeer
