@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
@@ -10,6 +11,7 @@ import (
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -56,6 +58,34 @@ var _ = BeforeSuite(func(done Done) {
 
 	close(done)
 }, 60)
+
+func SetupTest(ctx context.Context) {
+	var stopCh chan struct{}
+
+	BeforeEach(func() {
+		stopCh = make(chan struct{})
+
+		mgr, err := ctrl.NewManager(cfg, ctrl.Options{})
+		Expect(err).ToNot(HaveOccurred(), "failed to create manager")
+
+		controller := EtcdPeerReconciler{
+			Client: mgr.GetClient(),
+			Log:    logf.Log,
+		}
+		err = controller.SetupWithManager(mgr)
+		Expect(err).ToNot(HaveOccurred(), "Failed to setup EtcdPeer controller")
+
+		go func() {
+			err := mgr.Start(stopCh)
+			Expect(err).ToNot(HaveOccurred(), "Failed to start manager")
+		}()
+	})
+
+	AfterEach(func() {
+		close(stopCh)
+	})
+
+}
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
