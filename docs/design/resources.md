@@ -11,20 +11,21 @@ resource definitions:
 
 ## Operator Deployment
 
-The operator is compiled into a single binary (`etcd-cluster-operator`) and
-deployed as a single Docker image (`improbable/etcd-cluter-operator` on Docker
-Hub). This single operator contains the controllers for both the peer resource
-and the cluster resource, and is multi-tennant for clusters defined in any
+The operator is compiled into a single binary
+(`etcd-cluster-operator`) and deployed as a single Docker image
+(`improbable/etcd-cluter-operator` on Docker Hub). This single
+operator contains the controllers for both the peer resource and the
+cluster resource, and is multi-tennant for clusters defined in any
 namespace.
 
 ## The Peer Resource
 
-The peer resource represents a single peer in an etcd
-cluster. Encoding its bootstrap instructions, persistence settings,
-and extra pod settings (e.g., overridden CPU limits). Its `status`
-field exposes information about the peer including its hostname. In
-future the status may also include the liveness status if it's
-currently the leader of the etcd cluster.
+The peer resource represents a single peer in an etcd cluster.
+Encoding its bootstrap instructions, persistence settings, and extra
+pod settings (e.g., overridden CPU limits). Its `status` field exposes
+information about the peer including its hostname. In future the
+status may also include the liveness status if it's currently the
+leader of the etcd cluster.
 
 When reconciling the etcd peer resource the operator will do the
 following:
