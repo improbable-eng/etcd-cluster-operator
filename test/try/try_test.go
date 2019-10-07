@@ -44,7 +44,7 @@ func TestConsistently(t *testing.T) {
 				}
 			},
 			tick:      time.Millisecond * 10,
-			duration:  time.Millisecond * 50,
+			duration:  time.Millisecond * 100,
 			expectErr: true,
 		},
 		{
