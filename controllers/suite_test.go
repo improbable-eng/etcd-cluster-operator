@@ -44,17 +44,19 @@ func setupSuite(t *testing.T) (suite *controllerSuite, teardownFunc func()) {
 	require.NoError(t, err)
 	require.NotNil(t, k8sClient)
 
-	return &controllerSuite{
-			ctx:       ctx,
-			cfg:       cfg,
-			k8sClient: k8sClient,
-			testEnv:   testEnv,
-		}, func() {
-			err := suite.testEnv.Stop()
-			require.NoError(t, err)
+	stopFunc := func() {
+		err := suite.testEnv.Stop()
+		require.NoError(t, err)
 
-			ctxCancel()
-		}
+		ctxCancel()
+	}
+
+	return &controllerSuite{
+		ctx:       ctx,
+		cfg:       cfg,
+		k8sClient: k8sClient,
+		testEnv:   testEnv,
+	}, stopFunc
 }
 
 func (s controllerSuite) setupTest(t *testing.T) (teardownFunc func()) {
