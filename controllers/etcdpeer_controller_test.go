@@ -72,6 +72,8 @@ var _ = Describe("Etcd peer controller", func() {
 				// Polling Interval
 				time.Millisecond*500,
 			).Should(BeNil())
+
+			Expect(*replicaSet.Spec.Replicas).Should(Equal(int32(1)))
 		})
 	})
 })
