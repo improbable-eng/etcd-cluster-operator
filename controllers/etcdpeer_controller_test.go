@@ -1,9 +1,6 @@
-// Copyright (c) Improbable Worlds Ltd, All Rights Reserved
-
 package controllers
 
 import (
-	"github.com/avast/retry-go"
 	"testing"
 	"time"
 
@@ -13,6 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
+	"github.com/improbable-eng/etcd-cluster-operator/test/try"
 )
 
 func (s *controllerSuite) testPeerController(t *testing.T) {
@@ -34,19 +32,16 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 
 		replicaSet := &appsv1.ReplicaSet{}
 
-		err = retry.Do(
-			func() error {
-				return s.k8sClient.Get(s.ctx, client.ObjectKey{
-					// Same name and namespace as the EtcdPeer above
-					Name:      etcdPeer.Name,
-					Namespace: etcdPeer.Namespace,
-				}, replicaSet)
-			},
-			retry.Attempts(10),
-			retry.Delay(time.Millisecond*500),
-			retry.DelayType(retry.FixedDelay),
-		)
+		err = try.Eventually(func() error {
+			return s.k8sClient.Get(s.ctx, client.ObjectKey{
+				// Same name and namespace as the EtcdPeer above
+				Name:      etcdPeer.Name,
+				Namespace: etcdPeer.Namespace,
+			}, replicaSet)
+		}, time.Millisecond*500, time.Second*5)
 		require.NoError(t, err)
 
 	})
 }
+
+

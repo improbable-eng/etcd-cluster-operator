@@ -3,7 +3,6 @@ module github.com/improbable-eng/etcd-cluster-operator
 go 1.13
 
 require (
-	github.com/avast/retry-go v2.4.1+incompatible
 	github.com/go-logr/logr v0.1.0
 	github.com/stretchr/testify v1.3.0
 	k8s.io/api v0.0.0-20190409021203-6e4e0e4f393b
