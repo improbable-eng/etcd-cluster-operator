@@ -24,7 +24,8 @@ type EtcdPeerReconciler struct {
 }
 
 const (
-	etcdImage = "quay.io/coreos/etcd:v3.2.27"
+	etcdImage                = "quay.io/coreos/etcd:v3.2.27"
+	etcdInitialClusterEnvVar = "ETCD_INITIAL_CLUSTER"
 )
 
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch;create;update;patch;delete
@@ -76,6 +77,12 @@ func defineReplicaSet(etcdPeer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 						{
 							Name:  "etcd",
 							Image: etcdImage,
+							Env: []corev1.EnvVar{
+								{
+									Name:  etcdInitialClusterEnvVar,
+									Value: clusterDiscoveryString(etcdPeer.Spec.BootstrapPeers),
+								},
+							},
 						},
 					},
 				},

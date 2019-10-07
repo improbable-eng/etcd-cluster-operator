@@ -2,12 +2,14 @@ package controllers
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -50,6 +52,18 @@ var _ = Describe("Etcd peer controller", func() {
 					Name:        "bees",
 					Namespace:   "default",
 				},
+				Spec: etcdv1alpha1.EtcdPeerSpec{
+					BootstrapPeers: []etcdv1alpha1.BootstrapPeer{
+						{
+							Name: "foo",
+							Host: "foo.default.cluster.local",
+						},
+						{
+							Name: "bar",
+							Host: "bar.default.cluster.local",
+						},
+					},
+				},
 			}
 
 			err := k8sClient.Create(ctx, &etcdPeer)
@@ -74,6 +88,32 @@ var _ = Describe("Etcd peer controller", func() {
 			).Should(BeNil())
 
 			Expect(*replicaSet.Spec.Replicas).Should(Equal(int32(1)))
+
+			// Find the etcd container
+			containers := replicaSet.Spec.Template.Spec.Containers
+			var etcdContainer corev1.Container
+			for _, container := range containers {
+				if container.Name == "etcd" {
+					etcdContainer = container
+					break
+				}
+			}
+			Expect(etcdContainer).Should(Not(BeNil()))
+
+			image := strings.Split(etcdContainer.Image, ":")[0]
+			Expect(image).Should(Equal("quay.io/coreos/etcd"))
+
+			// Find the environment variable for inital cluster
+			var etcdInitialClusterEnvVar corev1.EnvVar
+			for _, ev := range etcdContainer.Env {
+				if ev.Name == "ETCD_INITIAL_CLUSTER" {
+					etcdInitialClusterEnvVar = ev
+					break
+				}
+			}
+			Expect(etcdContainer).Should(Not(BeNil()))
+			Expect(etcdInitialClusterEnvVar.Value).Should(
+				Equal("foo=http://foo.default.cluster.local:2380,bar=http://bar.default.cluster.local:2380"))
 		})
 	})
 })
