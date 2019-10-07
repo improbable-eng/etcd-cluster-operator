@@ -11,12 +11,12 @@ func Consistently(fn func() error, duration time.Duration, tick time.Duration) e
 	timeout := time.After(duration)
 	ticker := time.Tick(tick)
 	for {
-		select{
+		select {
 		case <-timeout:
 			return nil
 		case <-ticker:
 			if err := fn(); err != nil {
- 				return err
+				return err
 			}
 		}
 	}
@@ -29,7 +29,7 @@ func Eventually(fn func() error, duration time.Duration, tick time.Duration) err
 	ticker := time.Tick(tick)
 	var lastErr error
 	for {
-		select{
+		select {
 		case <-timeout:
 			if lastErr == nil {
 				return errors.New("function failed to return at least once")

@@ -43,5 +43,3 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 
 	})
 }
-
-

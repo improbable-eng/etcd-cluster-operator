@@ -9,20 +9,20 @@ import (
 )
 
 func TestConsistently(t *testing.T) {
-	for _, tc := range []struct{
-		name string
-		fn func(int) error
-		tick time.Duration
-		duration time.Duration
+	for _, tc := range []struct {
+		name      string
+		fn        func(int) error
+		tick      time.Duration
+		duration  time.Duration
 		expectErr bool
-	} {
+	}{
 		{
 			name: "TestConsistently_NeverErroring_DoesNotReturnError",
 			fn: func(_ int) error {
 				return nil
 			},
-			tick: time.Millisecond * 10,
-			duration: time.Millisecond * 50,
+			tick:      time.Millisecond * 10,
+			duration:  time.Millisecond * 50,
 			expectErr: false,
 		},
 		{
@@ -30,21 +30,21 @@ func TestConsistently(t *testing.T) {
 			fn: func(_ int) error {
 				return errors.New("foo")
 			},
-			tick: time.Millisecond * 10,
-			duration: time.Millisecond * 50,
+			tick:      time.Millisecond * 10,
+			duration:  time.Millisecond * 50,
 			expectErr: true,
 		},
 		{
 			name: "TestConsistently_SometimesErroring_ReturnsError",
 			fn: func(state int) error {
-				if state % 2 == 0 {
+				if state%2 == 0 {
 					return nil
 				} else {
 					return errors.New("foo")
 				}
 			},
-			tick: time.Millisecond * 10,
-			duration: time.Millisecond * 50,
+			tick:      time.Millisecond * 10,
+			duration:  time.Millisecond * 50,
 			expectErr: true,
 		},
 		{
@@ -56,8 +56,8 @@ func TestConsistently(t *testing.T) {
 					return nil
 				}
 			},
-			tick: time.Millisecond * 10,
-			duration: time.Millisecond * 50,
+			tick:      time.Millisecond * 10,
+			duration:  time.Millisecond * 50,
 			expectErr: false,
 		},
 	} {
@@ -78,20 +78,20 @@ func TestConsistently(t *testing.T) {
 }
 
 func TestEventually(t *testing.T) {
-	for _, tc := range []struct{
-		name string
-		fn func(int) error
-		tick time.Duration
-		duration time.Duration
+	for _, tc := range []struct {
+		name      string
+		fn        func(int) error
+		tick      time.Duration
+		duration  time.Duration
 		expectErr bool
-	} {
+	}{
 		{
 			name: "TestEventually_NeverErroring_Succeeds",
 			fn: func(_ int) error {
 				return nil
 			},
-			tick: time.Millisecond * 10,
-			duration: time.Millisecond * 50,
+			tick:      time.Millisecond * 10,
+			duration:  time.Millisecond * 50,
 			expectErr: false,
 		},
 		{
@@ -99,8 +99,8 @@ func TestEventually(t *testing.T) {
 			fn: func(_ int) error {
 				return errors.New("foo")
 			},
-			tick: time.Millisecond * 10,
-			duration: time.Millisecond * 50,
+			tick:      time.Millisecond * 10,
+			duration:  time.Millisecond * 50,
 			expectErr: true,
 		},
 		{
@@ -111,8 +111,8 @@ func TestEventually(t *testing.T) {
 				}
 				return errors.New("foo")
 			},
-			tick: time.Millisecond * 10,
-			duration: time.Millisecond * 50,
+			tick:      time.Millisecond * 10,
+			duration:  time.Millisecond * 50,
 			expectErr: false,
 		},
 	} {
