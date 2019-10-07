@@ -1,62 +1,45 @@
 package controllers
 
 import (
-	"context"
+	"testing"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
+	"github.com/improbable-eng/etcd-cluster-operator/test/try"
 )
 
-var _ = Describe("Etcd peer controller", func() {
-	ctx := context.Background()
-	SetupTest(ctx)
+func (s *controllerSuite) testPeerController(t *testing.T) {
+	t.Run("TestPeerController_OnCreation_CreatesReplicaSet", func(t *testing.T) {
+		teardownFunc := s.setupTest(t)
+		defer teardownFunc()
 
-	Context("ReplicaSet creation", func() {
-		It("Should create a ReplicaSet if one does not exist already", func() {
+		etcdPeer := &etcdv1alpha1.EtcdPeer{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels:      make(map[string]string),
+				Annotations: make(map[string]string),
+				Name:        "bees",
+				Namespace:   "default",
+			},
+		}
 
-			By("Creating a EtcdPeer")
-			etcdPeer := etcdv1alpha1.EtcdPeer{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels:      make(map[string]string),
-					Annotations: make(map[string]string),
-					Name:        "bees",
-					Namespace:   "default",
-				},
-			}
+		err := s.k8sClient.Create(s.ctx, etcdPeer)
+		require.NoError(t, err, "failed to create EtcdPeer resource")
 
-			err := k8sClient.Create(ctx, &etcdPeer)
-			Expect(err).NotTo(HaveOccurred(), "failed to create EtcdPeer resource")
+		replicaSet := &appsv1.ReplicaSet{}
 
-			By("The controller having created a ReplicaSet")
-			replicaSet := &appsv1.ReplicaSet{}
-			Eventually(
-				getResourceFunc(
-					ctx,
-					client.ObjectKey{
-						// Same name and namespace as the EtcdPeer above
-						Name:      etcdPeer.Name,
-						Namespace: etcdPeer.Namespace,
-					},
-					replicaSet,
-				),
-				// Timeout
-				time.Second*5,
-				// Polling Interval
-				time.Millisecond*500,
-			).Should(BeNil())
-		})
+		err = try.Eventually(func() error {
+			return s.k8sClient.Get(s.ctx, client.ObjectKey{
+				// Same name and namespace as the EtcdPeer above
+				Name:      etcdPeer.Name,
+				Namespace: etcdPeer.Namespace,
+			}, replicaSet)
+		}, time.Second*5, time.Millisecond*500)
+		require.NoError(t, err)
+
 	})
-})
-
-func getResourceFunc(ctx context.Context, key client.ObjectKey, obj runtime.Object) func() error {
-	return func() error {
-		return k8sClient.Get(ctx, key, obj)
-	}
 }
