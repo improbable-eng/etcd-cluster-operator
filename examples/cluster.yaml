@@ -1,0 +1,41 @@
+apiVersion: etcd.improbable.io/v1alpha1
+kind: EtcdPeer
+metadata:
+  name: foo
+  namespace: default
+spec:
+  bootstrapPeers:
+    - name: foo
+      host: foo.default.cluster.local
+    - name: bar
+      host: bar.default.cluster.local
+    - name: baz
+      host: baz.default.cluster.local
+---
+apiVersion: etcd.improbable.io/v1alpha1
+kind: EtcdPeer
+metadata:
+  name: bar
+  namespace: default
+spec:
+  bootstrapPeers:
+    - name: foo
+      host: foo.default.cluster.local
+    - name: bar
+      host: bar.default.cluster.local
+    - name: baz
+      host: baz.default.cluster.local
+---
+apiVersion: etcd.improbable.io/v1alpha1
+kind: EtcdPeer
+metadata:
+  name: baz
+  namespace: default
+spec:
+  bootstrapPeers:
+    - name: foo
+      host: foo.default.cluster.local
+    - name: bar
+      host: bar.default.cluster.local
+    - name: baz
+      host: baz.default.cluster.local
