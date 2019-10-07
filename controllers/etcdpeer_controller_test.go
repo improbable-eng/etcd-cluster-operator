@@ -38,7 +38,7 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 				Name:      etcdPeer.Name,
 				Namespace: etcdPeer.Namespace,
 			}, replicaSet)
-		}, time.Millisecond*500, time.Second*5)
+		}, time.Second*5, time.Millisecond*500)
 		require.NoError(t, err)
 
 	})
