@@ -32,28 +32,45 @@ spec:
         spec:
           description: EtcdPeerSpec defines the desired state of EtcdPeer
           properties:
-            bootstrapPeers:
-              description: BootstrapPeers is the list of all other peers for bootstrap
-                purpses. This does not need to be kept up to date after bootstrap
-                has occured as it's *only* used before cluster peers have conatacted
-                each other.
-              items:
-                description: BootstrapPeer describes a single *other* peer that will
-                  be used for bootstrapping
-                properties:
-                  host:
-                    description: Host forms part of the Advertise URL - the URL at
-                      which this peer can be contacted. The port and scheme are hardcoded.
-                    type: string
-                  name:
-                    description: Name is the initial name of the peer, which is set
-                      into etcd at the end of this process
-                    type: string
-                required:
-                - host
-                - name
-                type: object
-              type: array
+            bootstrap:
+              description: Bootstrap is the bootstrap configuration to pass down into
+                the etcd pods. As per the etcd documentation, etcd will ignore bootstrap
+                instructions if it already knows where it's peers are.
+              properties:
+                static:
+                  description: Static boostrapping requires that we know the network
+                    names of the other peers ahead of time.
+                  properties:
+                    initalCluster:
+                      description: InitialCluster provides details of all initial
+                        cluster members, and should include ourselves.
+                      items:
+                        description: InitialClusterMemeber describes a single member
+                          of the initial cluster.
+                        properties:
+                          host:
+                            description: Host forms part of the Advertise URL - the
+                              URL at which this peer can be contacted. The port and
+                              scheme are hardcoded.
+                            type: string
+                          name:
+                            description: Name is the initial name of the peer, which
+                              is set into etcd at the end of this process
+                            type: string
+                        required:
+                        - host
+                        - name
+                        type: object
+                      type: array
+                  type: object
+              type: object
+            clusterName:
+              description: The name of the etcd cluster that this peer should join.
+                This will be used to set the `spec.subdomain` field and the `etcd.improbable.io/cluster-name`
+                label on the Pod running etcd.
+              type: string
+          required:
+          - clusterName
           type: object
         status:
           description: EtcdPeerStatus defines the observed state of EtcdPeer

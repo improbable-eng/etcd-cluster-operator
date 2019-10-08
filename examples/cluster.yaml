@@ -1,30 +1,68 @@
-apiVersion: etcd.improbable.io/v1alpha1
-kind: EtcdPeer
+apiVersion: v1
+kind: Service
 metadata:
-  name: foo
+  name: magic
   namespace: default
 spec:
-  bootstrapPeers:
-    - name: foo
-      host: foo.default.cluster.local
-    - name: bar
-      host: bar.default.cluster.local
-    - name: baz
-      host: baz.default.cluster.local
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: etcd
+    app.kubernetes.io/version: 3.2.27
+    etcd.improable.io/cluster: magic
+  ports:
+    - protocol: TCP
+      port: 2380
+      targetPort: 2380
 ---
 apiVersion: etcd.improbable.io/v1alpha1
 kind: EtcdPeer
 metadata:
-  name: bar
+  name: one
   namespace: default
 spec:
+  clusterName: magic
+  bootstrap:
+    static:
+      initialCluster:
+      - name: one
+        host: one.magic.default.svc
+      - name: two
+        host: two.magic.default.svc
+      - name: three
+        host: three.magic.default.svc
+---
+apiVersion: etcd.improbable.io/v1alpha1
+kind: EtcdPeer
+metadata:
+  name: two
+  namespace: default
+spec:
+  advertiseURL: two.bees.svc.cluster.local
+  hostname: two
+  subdomain: bees
   bootstrapPeers:
-    - name: foo
-      host: foo.default.cluster.local
-    - name: bar
-      host: bar.default.cluster.local
-    - name: baz
-      host: baz.default.cluster.local
+    - name: one
+      host: one.bees.svc.cluster.local
+    - name: three
+      host: three.bees.svc.cluster.local
+---
+apiVersion: etcd.improbable.io/v1alpha1
+kind: EtcdPeer
+metadata:
+  name: three
+  namespace: default
+spec:
+  advertiseURL: three.bees.svc.cluster.local
+  hostname: three
+  subdomain: bees
+  bootstrapPeers:
+    - name: one
+      host: one.bees.svc.cluster.local
+    - name: two
+      host: two.bees.svc.cluster.local
+
+
 ---
 apiVersion: etcd.improbable.io/v1alpha1
 kind: EtcdPeer
@@ -34,8 +72,8 @@ metadata:
 spec:
   bootstrapPeers:
     - name: foo
-      host: foo.default.cluster.local
+      host: foo.bees.svc.cluster.local
     - name: bar
-      host: bar.default.cluster.local
+      host: bar.bees.svc.cluster.local
     - name: baz
-      host: baz.default.cluster.local
+      host: baz.bees.svc.cluster.local

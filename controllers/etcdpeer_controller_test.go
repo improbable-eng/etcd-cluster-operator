@@ -17,20 +17,22 @@ import (
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
 )
 
-func TestClusterDiscoveryString(t *testing.T) {
-	peers := []etcdv1alpha1.BootstrapPeer{
-		{
-			Name: "Foo",
-			Host: "my-peer",
-		},
-		{
-			Name: "Bar",
-			Host: "my-peer.other.cluster.local",
+func TestStaticBootstrap(t *testing.T) {
+	static := etcdv1alpha1.StaticBootstrap{
+		InitialCluster: []etcdv1alpha1.InitialClusterMember{
+			{
+				Name: "foo",
+				Host: "foo.bees.default.svc",
+			},
+			{
+				Name: "bar",
+				Host: "bar.bees.default.svc",
+			},
 		},
 	}
 
-	actual := clusterDiscoveryString(peers)
-	expected := "Foo=http://my-peer:2380,Bar=http://my-peer.other.cluster.local:2380"
+	actual := staticBootstrapInitialCluster(static)
+	expected := "foo=http://foo.bees.default.svc:2380,bar=http://bar.bees.default.svc:2380"
 
 	if expected != actual {
 		t.Errorf("Failed to generate correct cluster discovery string. Expected '%s', actual '%s'", expected, actual)
@@ -53,14 +55,18 @@ var _ = Describe("Etcd peer controller", func() {
 					Namespace:   "default",
 				},
 				Spec: etcdv1alpha1.EtcdPeerSpec{
-					BootstrapPeers: []etcdv1alpha1.BootstrapPeer{
-						{
-							Name: "foo",
-							Host: "foo.default.cluster.local",
-						},
-						{
-							Name: "bar",
-							Host: "bar.default.cluster.local",
+					Bootstrap: etcdv1alpha1.Bootstrap{
+						Static: etcdv1alpha1.StaticBootstrap{
+							InitialCluster: []etcdv1alpha1.InitialClusterMember{
+								{
+									Name: "foo",
+									Host: "foo.default.cluster.local",
+								},
+								{
+									Name: "bar",
+									Host: "bar.default.cluster.local",
+								},
+							},
 						},
 					},
 				},

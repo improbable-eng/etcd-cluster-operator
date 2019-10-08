@@ -7,8 +7,8 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// BootstrapPeer describes a single *other* peer that will be used for bootstrapping
-type BootstrapPeer struct {
+// InitialClusterMemeber describes a single member of the initial cluster.
+type InitialClusterMember struct {
 	// Name is the initial name of the peer, which is set into etcd at the
 	// end of this process
 	Name string `json:"name"`
@@ -18,15 +18,37 @@ type BootstrapPeer struct {
 	Host string `json:"host"`
 }
 
+// StaticBootstrap provides static contact information for initial members of
+// the cluster.
+type StaticBootstrap struct {
+	// InitialCluster provides details of all initial cluster members,
+	// and should include ourselves.
+	InitialCluster []InitialClusterMember `json:"initalCluster,omitempty"`
+}
+
+// Bootstrap contains bootstrap infromation for the peer to use.
+type Bootstrap struct {
+	// Static boostrapping requires that we know the network names of the
+	// other peers ahead of time.
+	// +optional
+	Static StaticBootstrap `json:"static,omitempty"`
+}
+
 // EtcdPeerSpec defines the desired state of EtcdPeer
 type EtcdPeerSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+	// INSERT ADDITIONAL SPEC FIELDS - desired state of clquster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// BootstrapPeers is the list of all other peers for bootstrap purpses.
-	// This does not need to be kept up to date after bootstrap has occured
-	// as it's *only* used before cluster peers have conatacted each other.
-	BootstrapPeers []BootstrapPeer `json:"bootstrapPeers,omitempty"`
+	// The name of the etcd cluster that this peer should join. This will be
+	// used to set the `spec.subdomain` field and the
+	// `etcd.improbable.io/cluster-name` label on the Pod running etcd.
+	ClusterName string `json:"clusterName"`
+
+	// Bootstrap is the bootstrap configuration to pass down into the etcd
+	// pods. As per the etcd documentation, etcd will ignore bootstrap
+	// instructions if it already knows where it's peers are.
+	// +optional
+	Bootstrap Bootstrap `json:"bootstrap,omitempty"`
 }
 
 // EtcdPeerStatus defines the observed state of EtcdPeer
