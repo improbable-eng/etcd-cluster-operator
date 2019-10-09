@@ -8,8 +8,7 @@ spec:
   publishNotReadyAddresses: true
   selector:
     app.kubernetes.io/name: etcd
-    app.kubernetes.io/version: 3.2.27
-    etcd.improable.io/cluster: magic
+    etcd.improable.io/cluster-name: magic
   ports:
     - protocol: TCP
       port: 2380
@@ -38,14 +37,16 @@ metadata:
   name: two
   namespace: default
 spec:
-  advertiseURL: two.bees.svc.cluster.local
-  hostname: two
-  subdomain: bees
-  bootstrapPeers:
-    - name: one
-      host: one.bees.svc.cluster.local
-    - name: three
-      host: three.bees.svc.cluster.local
+  clusterName: magic
+  bootstrap:
+    static:
+      initialCluster:
+      - name: one
+        host: one.magic.default.svc
+      - name: two
+        host: two.magic.default.svc
+      - name: three
+        host: three.magic.default.svc
 ---
 apiVersion: etcd.improbable.io/v1alpha1
 kind: EtcdPeer
@@ -53,27 +54,13 @@ metadata:
   name: three
   namespace: default
 spec:
-  advertiseURL: three.bees.svc.cluster.local
-  hostname: three
-  subdomain: bees
-  bootstrapPeers:
-    - name: one
-      host: one.bees.svc.cluster.local
-    - name: two
-      host: two.bees.svc.cluster.local
-
-
----
-apiVersion: etcd.improbable.io/v1alpha1
-kind: EtcdPeer
-metadata:
-  name: baz
-  namespace: default
-spec:
-  bootstrapPeers:
-    - name: foo
-      host: foo.bees.svc.cluster.local
-    - name: bar
-      host: bar.bees.svc.cluster.local
-    - name: baz
-      host: baz.bees.svc.cluster.local
+  clusterName: magic
+  bootstrap:
+    static:
+      initialCluster:
+      - name: one
+        host: one.magic.default.svc
+      - name: two
+        host: two.magic.default.svc
+      - name: three
+        host: three.magic.default.svc
