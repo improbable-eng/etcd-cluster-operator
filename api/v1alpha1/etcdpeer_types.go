@@ -36,7 +36,7 @@ type Bootstrap struct {
 
 // EtcdPeerSpec defines the desired state of EtcdPeer
 type EtcdPeerSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of clquster
+	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// The name of the etcd cluster that this peer should join. This will be
