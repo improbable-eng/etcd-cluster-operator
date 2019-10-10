@@ -30,7 +30,7 @@ const (
 	etcdInitialClusterEnvVar      = "ETCD_INITIAL_CLUSTER"
 	etcdNameEnvVar                = "ETCD_NAME"
 	etcdScheme                    = "http"
-	etcdPort                      = 2380
+	etcdPeerPort                  = 2380
 	appName                       = "etcd"
 	appLabel                      = "app.kubernetes.io/app"
 	clusterLabel                  = "etcd.improbable.io/cluster-name"
@@ -44,7 +44,7 @@ const (
 func initialMemberURL(member etcdv1alpha1.InitialClusterMember) *url.URL {
 	return &url.URL{
 		Scheme: etcdScheme,
-		Host:   fmt.Sprintf("%s:%d", member.Host, etcdPort),
+		Host:   fmt.Sprintf("%s:%d", member.Host, etcdPeerPort),
 	}
 }
 
