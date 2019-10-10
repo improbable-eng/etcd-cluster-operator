@@ -9,12 +9,14 @@ import (
 
 // InitialClusterMemeber describes a single member of the initial cluster.
 type InitialClusterMember struct {
-	// Name is the initial name of the peer, which is set into etcd at the
-	// end of this process
+	// Name is a friendly name for the peer, used as a means to identify the
+	// peer once it has joined a cluster. This should match the `name` field
+	// of the `EtcdPeer` resource representing that peer.
 	Name string `json:"name"`
 
 	// Host forms part of the Advertise URL - the URL at which this peer can
-	// be contacted. The port and scheme are hardcoded.
+	// be contacted. The port and scheme are hardcoded to 2380 and http
+	// respectively.
 	Host string `json:"host"`
 }
 
