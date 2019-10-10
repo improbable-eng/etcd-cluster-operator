@@ -115,7 +115,7 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 							Env: []corev1.EnvVar{
 								{
 									Name:  etcdInitialClusterEnvVar,
-									Value: staticBootstrapInitialCluster(peer.Spec.Bootstrap.Static),
+									Value: staticBootstrapInitialCluster(*peer.Spec.Bootstrap.Static),
 								},
 								{
 									Name:  etcdNameEnvVar,
