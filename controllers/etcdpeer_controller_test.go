@@ -63,9 +63,8 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		require.Equal(t, int32(1), *replicaSet.Spec.Replicas, "Number of replicas was not one")
 
 		// Find the etcd container
-		containers := replicaSet.Spec.Template.Spec.Containers
 		var etcdContainer corev1.Container
-		for _, container := range containers {
+		for _, container := range replicaSet.Spec.Template.Spec.Containers {
 			if container.Name == "etcd" {
 				etcdContainer = container
 				break
