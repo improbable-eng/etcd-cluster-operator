@@ -23,6 +23,7 @@ type InitialClusterMember struct {
 type StaticBootstrap struct {
 	// InitialCluster provides details of all initial cluster members,
 	// and should include ourselves.
+	// +kubebuilder:validation:MinItems:=1
 	InitialCluster []InitialClusterMember `json:"initalCluster,omitempty"`
 }
 
@@ -42,6 +43,7 @@ type EtcdPeerSpec struct {
 	// The name of the etcd cluster that this peer should join. This will be
 	// used to set the `spec.subdomain` field and the
 	// `etcd.improbable.io/cluster-name` label on the Pod running etcd.
+	// +kubebuilder:validation:MaxLength:=64
 	ClusterName string `json:"clusterName"`
 
 	// Bootstrap is the bootstrap configuration to pass down into the etcd
