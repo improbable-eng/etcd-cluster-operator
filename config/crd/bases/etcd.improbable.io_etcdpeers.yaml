@@ -31,6 +31,50 @@ spec:
           type: object
         spec:
           description: EtcdPeerSpec defines the desired state of EtcdPeer
+          properties:
+            bootstrap:
+              description: Bootstrap is the bootstrap configuration to pass down into
+                the etcd pods. As per the etcd documentation, etcd will ignore bootstrap
+                instructions if it already knows where it's peers are.
+              properties:
+                static:
+                  description: Static boostrapping requires that we know the network
+                    names of the other peers ahead of time.
+                  properties:
+                    initalCluster:
+                      description: InitialCluster provides details of all initial
+                        cluster members, and should include ourselves.
+                      items:
+                        description: InitialClusterMemeber describes a single member
+                          of the initial cluster.
+                        properties:
+                          host:
+                            description: Host forms part of the Advertise URL - the
+                              URL at which this peer can be contacted. The port and
+                              scheme are hardcoded to 2380 and http respectively.
+                            type: string
+                          name:
+                            description: Name is a friendly name for the peer, used
+                              as a means to identify the peer once it has joined a
+                              cluster. This should match the `name` field of the `EtcdPeer`
+                              resource representing that peer.
+                            type: string
+                        required:
+                        - host
+                        - name
+                        type: object
+                      minItems: 1
+                      type: array
+                  type: object
+              type: object
+            clusterName:
+              description: The name of the etcd cluster that this peer should join.
+                This will be used to set the `spec.subdomain` field and the `etcd.improbable.io/cluster-name`
+                label on the Pod running etcd.
+              maxLength: 64
+              type: string
+          required:
+          - clusterName
           type: object
         status:
           description: EtcdPeerStatus defines the observed state of EtcdPeer

@@ -2,6 +2,9 @@ package controllers
 
 import (
 	"context"
+	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -22,50 +25,107 @@ type EtcdPeerReconciler struct {
 }
 
 const (
-	etcdImage = "quay.io/coreos/etcd:v3.2.27"
+	etcdImage                     = "quay.io/coreos/etcd:v3.2.27"
+	etcdAdvertiseClientURLsEnvVar = "ETCD_ADVERTISE_CLIENT_URLS"
+	etcdInitialClusterEnvVar      = "ETCD_INITIAL_CLUSTER"
+	etcdNameEnvVar                = "ETCD_NAME"
+	etcdScheme                    = "http"
+	etcdPeerPort                  = 2380
+	appName                       = "etcd"
+	appLabel                      = "app.kubernetes.io/app"
+	clusterLabel                  = "etcd.improbable.io/cluster-name"
+	peerLabel                     = "etcd.improbable.io/peer-name"
 )
 
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=apps,resources=replicaset,verbs=get;update;patch;create
 
-func defineReplicaSet(etcdPeer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
+func initialMemberURL(member etcdv1alpha1.InitialClusterMember) *url.URL {
+	return &url.URL{
+		Scheme: etcdScheme,
+		Host:   fmt.Sprintf("%s:%d", member.Host, etcdPeerPort),
+	}
+}
+
+// staticBootstrapInitialCluster returns the value of `ETCD_INITIAL_CLUSTER`
+// environment variable.
+func staticBootstrapInitialCluster(static etcdv1alpha1.StaticBootstrap) string {
+	s := make([]string, len(static.InitialCluster))
+	// Put our peers in as the other entries
+	for i, member := range static.InitialCluster {
+		s[i] = fmt.Sprintf("%s=%s",
+			member.Name,
+			initialMemberURL(member).String())
+	}
+	return strings.Join(s, ",")
+}
+
+// advertiseURL builds the canonical URL of this peer from it's name and the
+// cluster name.
+func advertiseURL(etcdPeer etcdv1alpha1.EtcdPeer) *url.URL {
+	return &url.URL{
+		Scheme: "http",
+		Host: fmt.Sprintf(
+			"%s.%s.%s.svc:2380",
+			etcdPeer.Name,
+			etcdPeer.Namespace,
+			etcdPeer.Spec.ClusterName,
+		),
+	}
+}
+
+func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 	var replicas int32 = 1
+
+	// We use the same labels for the replica set itself, the selector on
+	// the replica set, and the pod template under the replica set.
+	labels := map[string]string{
+		appLabel:     appName,
+		clusterLabel: peer.Spec.ClusterName,
+		peerLabel:    peer.Name,
+	}
 
 	return appsv1.ReplicaSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Labels:          make(map[string]string),
+			Labels:          labels,
 			Annotations:     make(map[string]string),
-			Name:            etcdPeer.Name,
-			Namespace:       etcdPeer.Namespace,
-			OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(&etcdPeer, etcdv1alpha1.GroupVersion.WithKind("EtcdPeer"))},
+			Name:            peer.Name,
+			Namespace:       peer.Namespace,
+			OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(&peer, etcdv1alpha1.GroupVersion.WithKind("EtcdPeer"))},
 		},
 		Spec: appsv1.ReplicaSetSpec{
 			// This will *always* be 1. Other peers are handled by other EtcdPeers.
 			Replicas: &replicas,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					"app": "etcd",
-					// Using the EtcdPeer's name as a label limits what the name can be
-					"peer": etcdPeer.Name,
-				},
-			},
+			Selector: &metav1.LabelSelector{MatchLabels: labels},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						"app": "etcd",
-						// Using the EtcdPeer's name as a label limits what the name can be
-						"peer": etcdPeer.Name,
-					},
+					Labels:      labels,
 					Annotations: make(map[string]string),
-					Name:        etcdPeer.Name,
-					Namespace:   etcdPeer.Namespace,
+					Name:        peer.Name,
+					Namespace:   peer.Namespace,
 				},
 				Spec: corev1.PodSpec{
+					Hostname:  peer.Name,
+					Subdomain: peer.Spec.ClusterName,
 					Containers: []corev1.Container{
 						{
-							Name:  "etcd",
+							Name:  appName,
 							Image: etcdImage,
+							Env: []corev1.EnvVar{
+								{
+									Name:  etcdInitialClusterEnvVar,
+									Value: staticBootstrapInitialCluster(peer.Spec.Bootstrap.Static),
+								},
+								{
+									Name:  etcdNameEnvVar,
+									Value: peer.Name,
+								},
+								{
+									Name:  etcdAdvertiseClientURLsEnvVar,
+									Value: advertiseURL(peer).String(),
+								},
+							},
 						},
 					},
 				},
@@ -80,27 +140,27 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	log := r.Log.WithValues("etcdpeer", req.NamespacedName)
 
-	var etcdPeer etcdv1alpha1.EtcdPeer
-	if err := r.Get(ctx, req.NamespacedName, &etcdPeer); err != nil {
+	var peer etcdv1alpha1.EtcdPeer
+	if err := r.Get(ctx, req.NamespacedName, &peer); err != nil {
 		log.Error(err, "unable to fetch EtcdPeer")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	log.V(2).Info("Found EtcdPeer", "name", etcdPeer.Name)
+	log.V(2).Info("Found EtcdPeer", "name", peer.Name)
 
 	var existingReplicaSet appsv1.ReplicaSet
 	err := r.Get(
 		ctx,
 		client.ObjectKey{
-			Namespace: etcdPeer.Namespace,
-			Name:      etcdPeer.Name,
+			Namespace: peer.Namespace,
+			Name:      peer.Name,
 		},
 		&existingReplicaSet,
 	)
 
 	if apierrs.IsNotFound(err) {
 		log.V(1).Info("Replica set does not exist, creating")
-		replicaSet := defineReplicaSet(etcdPeer)
+		replicaSet := defineReplicaSet(peer)
 
 		if err := r.Create(ctx, &replicaSet); err != nil {
 			log.Error(err, "unable to create ReplicaSet for EtcdPeer", "replicaSet", replicaSet)
