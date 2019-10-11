@@ -29,8 +29,8 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 			},
 			Spec: etcdv1alpha1.EtcdPeerSpec{
 				ClusterName: "my-cluster",
-				Bootstrap: etcdv1alpha1.Bootstrap{
-					Static: etcdv1alpha1.StaticBootstrap{
+				Bootstrap: &etcdv1alpha1.Bootstrap{
+					Static: &etcdv1alpha1.StaticBootstrap{
 						InitialCluster: []etcdv1alpha1.InitialClusterMember{
 							{
 								Name: "bees",
