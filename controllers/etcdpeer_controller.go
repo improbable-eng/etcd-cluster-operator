@@ -78,6 +78,13 @@ func advertiseURL(etcdPeer etcdv1alpha1.EtcdPeer, port int32) *url.URL {
 	}
 }
 
+func bindAllAddress(port int) *url.URL {
+	return &url.URL{
+		Scheme: "http",
+		Host:   fmt.Sprintf("0.0.0.0:%d", port),
+	}
+}
+
 func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 	var replicas int32 = 1
 
@@ -134,11 +141,11 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 								},
 								{
 									Name:  "ETCD_LISTEN_PEER_URLS",
-									Value: "http://0.0.0.0:2380",
+									Value: bindAllAddress(etcdPeerPort).String(),
 								},
 								{
 									Name:  "ETCD_LISTEN_CLIENT_URLS",
-									Value: "http://0.0.0.0:2379",
+									Value: bindAllAddress(etcdClientPort).String(),
 								},
 								{
 									Name:  "ETCD_INITIAL_CLUSTER_STATE",
