@@ -21,7 +21,7 @@ func TestConsistently(t *testing.T) {
 			fn: func(_ int) error {
 				return nil
 			},
-			tick:      time.Millisecond * 10,
+			tick:      time.Millisecond * 5,
 			duration:  time.Millisecond * 50,
 			expectErr: false,
 		},
@@ -30,7 +30,7 @@ func TestConsistently(t *testing.T) {
 			fn: func(_ int) error {
 				return errors.New("foo")
 			},
-			tick:      time.Millisecond * 10,
+			tick:      time.Millisecond * 5,
 			duration:  time.Millisecond * 50,
 			expectErr: true,
 		},
@@ -43,20 +43,20 @@ func TestConsistently(t *testing.T) {
 					return errors.New("foo")
 				}
 			},
-			tick:      time.Millisecond * 10,
+			tick:      time.Millisecond * 5,
 			duration:  time.Millisecond * 100,
 			expectErr: true,
 		},
 		{
 			name: "TestConsistently_ErrorAfterDuration_MissesError",
 			fn: func(state int) error {
-				if state == 6 {
+				if state == 11 {
 					return errors.New("foo")
 				} else {
 					return nil
 				}
 			},
-			tick:      time.Millisecond * 10,
+			tick:      time.Millisecond * 5,
 			duration:  time.Millisecond * 50,
 			expectErr: false,
 		},
@@ -90,7 +90,7 @@ func TestEventually(t *testing.T) {
 			fn: func(_ int) error {
 				return nil
 			},
-			tick:      time.Millisecond * 10,
+			tick:      time.Millisecond * 5,
 			duration:  time.Millisecond * 50,
 			expectErr: false,
 		},
@@ -99,7 +99,7 @@ func TestEventually(t *testing.T) {
 			fn: func(_ int) error {
 				return errors.New("foo")
 			},
-			tick:      time.Millisecond * 10,
+			tick:      time.Millisecond * 5,
 			duration:  time.Millisecond * 50,
 			expectErr: true,
 		},
@@ -111,7 +111,7 @@ func TestEventually(t *testing.T) {
 				}
 				return errors.New("foo")
 			},
-			tick:      time.Millisecond * 10,
+			tick:      time.Millisecond * 5,
 			duration:  time.Millisecond * 50,
 			expectErr: false,
 		},
@@ -125,6 +125,7 @@ func TestEventually(t *testing.T) {
 			}, tc.duration, tc.tick)
 			if tc.expectErr {
 				require.Error(t, err, "an error was not found, but one was expected")
+				require.Equal(t, "foo", err.Error())
 			} else {
 				require.NoError(t, err, "an error was found, but not expected")
 			}

@@ -36,7 +36,7 @@ func Eventually(fn func() error, duration time.Duration, tick time.Duration) err
 			}
 			return lastErr
 		case <-ticker:
-			lastErr := fn()
+			lastErr = fn()
 			if lastErr == nil {
 				return nil
 			}
