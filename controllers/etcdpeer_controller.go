@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/etcdenvvar"
 )
 
 // EtcdPeerReconciler reconciles a EtcdPeer object
@@ -25,18 +26,14 @@ type EtcdPeerReconciler struct {
 }
 
 const (
-	etcdImage                     = "quay.io/coreos/etcd:v3.2.27"
-	etcdAdvertisePeerURLsEnvVar   = "ETCD_INITIAL_ADVERTISE_PEER_URLS"
-	etcdAdvertiseClientURLsEnvVar = "ETCD_ADVERTISE_CLIENT_URLS"
-	etcdInitialClusterEnvVar      = "ETCD_INITIAL_CLUSTER"
-	etcdNameEnvVar                = "ETCD_NAME"
-	etcdScheme                    = "http"
-	etcdClientPort                = 2379
-	etcdPeerPort                  = 2380
-	appName                       = "etcd"
-	appLabel                      = "app.kubernetes.io/name"
-	clusterLabel                  = "etcd.improbable.io/cluster-name"
-	peerLabel                     = "etcd.improbable.io/peer-name"
+	etcdImage      = "quay.io/coreos/etcd:v3.2.27"
+	etcdScheme     = "http"
+	etcdClientPort = 2379
+	etcdPeerPort   = 2380
+	appName        = "etcd"
+	appLabel       = "app.kubernetes.io/name"
+	clusterLabel   = "etcd.improbable.io/cluster-name"
+	peerLabel      = "etcd.improbable.io/peer-name"
 )
 
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch;create;update;patch;delete
@@ -124,31 +121,31 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 							Image: etcdImage,
 							Env: []corev1.EnvVar{
 								{
-									Name:  etcdInitialClusterEnvVar,
+									Name:  etcdenvvar.InitialCluster,
 									Value: staticBootstrapInitialCluster(peer.Spec.Bootstrap.Static),
 								},
 								{
-									Name:  etcdNameEnvVar,
+									Name:  etcdenvvar.Name,
 									Value: peer.Name,
 								},
 								{
-									Name:  etcdAdvertisePeerURLsEnvVar,
+									Name:  etcdenvvar.AdvertisePeerURLs,
 									Value: advertiseURL(peer, etcdPeerPort).String(),
 								},
 								{
-									Name:  etcdAdvertiseClientURLsEnvVar,
+									Name:  etcdenvvar.AdvertiseClientURLs,
 									Value: advertiseURL(peer, etcdClientPort).String(),
 								},
 								{
-									Name:  "ETCD_LISTEN_PEER_URLS",
+									Name:  etcdenvvar.ListenPeerURLs,
 									Value: bindAllAddress(etcdPeerPort).String(),
 								},
 								{
-									Name:  "ETCD_LISTEN_CLIENT_URLS",
+									Name:  etcdenvvar.ListenClientURLs,
 									Value: bindAllAddress(etcdClientPort).String(),
 								},
 								{
-									Name:  "ETCD_INITIAL_CLUSTER_STATE",
+									Name:  etcdenvvar.InitialClusterState,
 									Value: "new",
 								},
 							},
