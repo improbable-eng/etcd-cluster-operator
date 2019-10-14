@@ -40,6 +40,10 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 								Name: "magic",
 								Host: "magic.my-cluster.default.svc",
 							},
+							{
+								Name: "goose",
+								Host: "goose.my-cluster.default.svc",
+							},
 						},
 					},
 				},
@@ -61,6 +65,14 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Equal(t, int32(1), *replicaSet.Spec.Replicas, "Number of replicas was not one")
+		require.Equal(t,
+			replicaSet.Spec.Template.Spec.Hostname,
+			etcdPeer.Name,
+			"Peer name not set as Pod hostname")
+		require.Equal(t,
+			replicaSet.Spec.Template.Spec.Subdomain,
+			etcdPeer.Spec.ClusterName,
+			"Cluster name not set as Pod subdomain")
 
 		// Find the etcd container
 		var etcdContainer corev1.Container
@@ -75,7 +87,7 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		image := strings.Split(etcdContainer.Image, ":")[0]
 		require.Equal(t, "quay.io/coreos/etcd", image, "etcd Image was not the CoreOS one")
 
-		// Find the environment variable for inital cluster on the etcd container
+		// Find the environment variable for initial cluster on the etcd container
 		var etcdInitialClusterEnvVar corev1.EnvVar
 		for _, ev := range etcdContainer.Env {
 			if ev.Name == "ETCD_INITIAL_CLUSTER" {
@@ -85,7 +97,9 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		}
 		require.NotNil(t, etcdInitialClusterEnvVar, "ETCD_INITIAL_CLUSTER environment variable unset")
 		require.Equal(t,
-			"bees=http://bees.my-cluster.default.svc:2380,magic=http://magic.my-cluster.default.svc:2380",
+			"bees=http://bees.my-cluster.default.svc:2380," +
+			"magic=http://magic.my-cluster.default.svc:2380," +
+			"goose=http://goose.my-cluster.default.svc:2380",
 			etcdInitialClusterEnvVar.Value,
 			"ETCD_INITIAL_CLUSTER environment variable set incorrectly",
 		)
