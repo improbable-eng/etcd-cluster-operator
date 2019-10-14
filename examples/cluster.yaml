@@ -1,38 +1,33 @@
+# This service is to give the pods persistent network identity, and must have the same name as the cluster. This is
+# because the `spec.clusterName` field on the EtcdPeer resources below is used to set the `spec.subdomain` field on the
+# resulting pods. As this service is headless, pods with a subdomain that matches the name of this service will get
+# their own DNS name.
+#
+# This service is *also* used for client access. Because the API for etcd is gRPC, load balancing is done on the client
+# side. In addition, etcd provides a advertised client URL, which will just be the persistent network identity that
+# this service creates.
+#
+# Therefore, using this service the etcd cluster can be communicated with by a pod in the same namespace like this:
+#
+#     etcdctl --endpoints "http://my-cluster:2379" member list
 apiVersion: v1
 kind: Service
 metadata:
-  name: magic-client
-  namespace: default
-spec:
-  type: NodePort
-  selector:
-    app.kubernetes.io/name: etcd
-    etcd.improbable.io/cluster-name: magic
-  ports:
-    - protocol: TCP
-      port: 2379
-      targetPort: 2379
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: magic
+  name: my-cluster
   namespace: default
 spec:
   clusterIP: None
   publishNotReadyAddresses: true
   selector:
     app.kubernetes.io/name: etcd
-    etcd.improbable.io/cluster-name: magic
+    etcd.improbable.io/cluster-name: my-cluster
   ports:
-    - protocol: TCP
-      port: 2380
-      targetPort: 2380
-      name: peer
-    - protocol: TCP
-      port: 2379
-      targetPort: 2379
-      name: client
+  - name: etcd-peer
+    protocol: TCP
+    port: 2380
+  - name: etcd-client
+    protocol: TCP
+    port: 2379
 ---
 apiVersion: etcd.improbable.io/v1alpha1
 kind: EtcdPeer
@@ -40,16 +35,16 @@ metadata:
   name: one
   namespace: default
 spec:
-  clusterName: magic
+  clusterName: my-cluster
   bootstrap:
     static:
       initialCluster:
       - name: one
-        host: one.magic.default.svc
+        host: one.my-cluster.default.svc
       - name: two
-        host: two.magic.default.svc
+        host: two.my-cluster.default.svc
       - name: three
-        host: three.magic.default.svc
+        host: three.my-cluster.default.svc
 ---
 apiVersion: etcd.improbable.io/v1alpha1
 kind: EtcdPeer
@@ -57,16 +52,16 @@ metadata:
   name: two
   namespace: default
 spec:
-  clusterName: magic
+  clusterName: my-cluster
   bootstrap:
     static:
       initialCluster:
       - name: one
-        host: one.magic.default.svc
+        host: one.my-cluster.default.svc
       - name: two
-        host: two.magic.default.svc
+        host: two.my-cluster.default.svc
       - name: three
-        host: three.magic.default.svc
+        host: three.my-cluster.default.svc
 ---
 apiVersion: etcd.improbable.io/v1alpha1
 kind: EtcdPeer
@@ -74,13 +69,13 @@ metadata:
   name: three
   namespace: default
 spec:
-  clusterName: magic
+  clusterName: my-cluster
   bootstrap:
     static:
       initialCluster:
       - name: one
-        host: one.magic.default.svc
+        host: one.my-cluster.default.svc
       - name: two
-        host: two.magic.default.svc
+        host: two.my-cluster.default.svc
       - name: three
-        host: three.magic.default.svc
+        host: three.my-cluster.default.svc
