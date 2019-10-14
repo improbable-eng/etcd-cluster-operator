@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -22,7 +23,7 @@ func requireEnvVar(t *testing.T, env []corev1.EnvVar, evName string) string {
 			return ev.Value
 		}
 	}
-	require.Failf(t, "%s environment variable unset", evName)
+	require.Fail(t, fmt.Sprintf("%s environment variable unset", evName))
 	return ""
 }
 
