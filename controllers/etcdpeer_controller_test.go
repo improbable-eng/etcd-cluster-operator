@@ -106,5 +106,47 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 			requireEnvVar(t, etcdContainer.Env, "ETCD_INITIAL_CLUSTER"),
 			"ETCD_INITIAL_CLUSTER environment variable set incorrectly",
 		)
+
+		require.Equal(t,
+			etcdPeer.Name,
+			requireEnvVar(t, etcdContainer.Env, "ETCD_NAME"),
+			"ETCD_NAME environment variable set incorrectly",
+		)
+
+		require.Equal(t,
+			fmt.Sprintf("http://%s.%s.%s.svc:2380",
+				etcdPeer.Name,
+				etcdPeer.Spec.ClusterName,
+				etcdPeer.Namespace),
+			requireEnvVar(t, etcdContainer.Env, "ETCD_INITIAL_ADVERTISE_PEER_URLS"),
+			"ETCD_INITIAL_ADVERTISE_PEER_URLS environment variable set incorrectly",
+		)
+
+		require.Equal(t,
+			fmt.Sprintf("http://%s.%s.%s:2379",
+				etcdPeer.Name,
+				etcdPeer.Spec.ClusterName,
+				etcdPeer.Namespace),
+			requireEnvVar(t, etcdContainer.Env, "ETCD_ADVERTISE_CLIENT_URLS"),
+			"ETCD_ADVERTISE_CLIENT_URLS environment variable set incorrectly",
+		)
+
+		require.Equal(t,
+			"0.0.0.0:2380",
+			requireEnvVar(t, etcdContainer.Env, "ETCD_ADVERTISE_PEER_URLS"),
+			"ETCD_ADVERTISE_PEER_URLS environment variable set incorrectly",
+		)
+
+		require.Equal(t,
+			"0.0.0.0:2379",
+			requireEnvVar(t, etcdContainer.Env, "ETCD_ADVERTISE_CLIENT_URLS"),
+			"ETCD_ADVERTISE_CLIENT_URLS environment variable set incorrectly",
+		)
+
+		require.Equal(t,
+			"new",
+			requireEnvVar(t, etcdContainer.Env, "ETCD_INITIAL_CLUSTER_STATE"),
+			"ETCD_INITIAL_CLUSTER_STATE environment variable set incorrectly",
+		)
 	})
 }

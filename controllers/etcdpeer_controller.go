@@ -129,7 +129,7 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 									Value: peer.Name,
 								},
 								{
-									Name:  etcdenvvar.AdvertisePeerURLs,
+									Name:  etcdenvvar.InitialAdvertisePeerURLs,
 									Value: advertiseURL(peer, etcdPeerPort).String(),
 								},
 								{
