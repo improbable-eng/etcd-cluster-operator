@@ -12,7 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
-	"github.com/improbable-eng/etcd-cluster-operator/test/try"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/test/try"
 )
 
 func (s *controllerSuite) testPeerController(t *testing.T) {
