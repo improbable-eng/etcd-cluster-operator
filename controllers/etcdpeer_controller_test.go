@@ -15,6 +15,17 @@ import (
 	"github.com/improbable-eng/etcd-cluster-operator/test/try"
 )
 
+// requireEnvVar finds an environment variable and returns its value, or fails
+func requireEnvVar(t *testing.T, env []corev1.EnvVar, evName string) string {
+	for _, ev := range env {
+		if ev.Name == evName {
+			return ev.Value
+		}
+	}
+	require.Failf(t, "%s environment variable unset", evName)
+	return ""
+}
+
 func (s *controllerSuite) testPeerController(t *testing.T) {
 	t.Run("TestPeerController_OnCreation_CreatesReplicaSet", func(t *testing.T) {
 		teardownFunc := s.setupTest(t)
@@ -87,20 +98,11 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		image := strings.Split(etcdContainer.Image, ":")[0]
 		require.Equal(t, "quay.io/coreos/etcd", image, "etcd Image was not the CoreOS one")
 
-		// Find the environment variable for initial cluster on the etcd container
-		var etcdInitialClusterEnvVar corev1.EnvVar
-		for _, ev := range etcdContainer.Env {
-			if ev.Name == "ETCD_INITIAL_CLUSTER" {
-				etcdInitialClusterEnvVar = ev
-				break
-			}
-		}
-		require.NotNil(t, etcdInitialClusterEnvVar, "ETCD_INITIAL_CLUSTER environment variable unset")
 		require.Equal(t,
-			"bees=http://bees.my-cluster.default.svc:2380," +
-			"magic=http://magic.my-cluster.default.svc:2380," +
-			"goose=http://goose.my-cluster.default.svc:2380",
-			etcdInitialClusterEnvVar.Value,
+			"bees=http://bees.my-cluster.default.svc:2380,"+
+				"magic=http://magic.my-cluster.default.svc:2380,"+
+				"goose=http://goose.my-cluster.default.svc:2380",
+			requireEnvVar(t, etcdContainer.Env, "ETCD_INITIAL_CLUSTER"),
 			"ETCD_INITIAL_CLUSTER environment variable set incorrectly",
 		)
 	})
