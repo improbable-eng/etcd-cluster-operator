@@ -13,7 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
-	"github.com/improbable-eng/etcd-cluster-operator/test/try"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/test/try"
 )
 
 // requireEnvVar finds an environment variable and returns its value, or fails
@@ -41,8 +41,8 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 			},
 			Spec: etcdv1alpha1.EtcdPeerSpec{
 				ClusterName: "my-cluster",
-				Bootstrap: etcdv1alpha1.Bootstrap{
-					Static: etcdv1alpha1.StaticBootstrap{
+				Bootstrap: &etcdv1alpha1.Bootstrap{
+					Static: &etcdv1alpha1.StaticBootstrap{
 						InitialCluster: []etcdv1alpha1.InitialClusterMember{
 							{
 								Name: "bees",
@@ -123,7 +123,7 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		)
 
 		require.Equal(t,
-			fmt.Sprintf("http://%s.%s.%s:2379",
+			fmt.Sprintf("http://%s.%s.%s.svc:2379",
 				etcdPeer.Name,
 				etcdPeer.Spec.ClusterName,
 				etcdPeer.Namespace),
@@ -132,15 +132,15 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		)
 
 		require.Equal(t,
-			"0.0.0.0:2380",
-			requireEnvVar(t, etcdContainer.Env, "ETCD_ADVERTISE_PEER_URLS"),
-			"ETCD_ADVERTISE_PEER_URLS environment variable set incorrectly",
+			"http://0.0.0.0:2380",
+			requireEnvVar(t, etcdContainer.Env, "ETCD_LISTEN_PEER_URLS"),
+			"ETCD_LISTEN_PEER_URLS environment variable set incorrectly",
 		)
 
 		require.Equal(t,
-			"0.0.0.0:2379",
-			requireEnvVar(t, etcdContainer.Env, "ETCD_ADVERTISE_CLIENT_URLS"),
-			"ETCD_ADVERTISE_CLIENT_URLS environment variable set incorrectly",
+			"http://0.0.0.0:2379",
+			requireEnvVar(t, etcdContainer.Env, "ETCD_LISTEN_CLIENT_URLS"),
+			"ETCD_LISTEN_CLIENT_URLS environment variable set incorrectly",
 		)
 
 		require.Equal(t,
