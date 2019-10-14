@@ -154,11 +154,11 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 							},
 							Ports: []corev1.ContainerPort{
 								{
-									Name:          "client",
+									Name:          "etcd-client",
 									ContainerPort: etcdClientPort,
 								},
 								{
-									Name:          "peer",
+									Name:          "etcd-peer",
 									ContainerPort: etcdPeerPort,
 								},
 							},
