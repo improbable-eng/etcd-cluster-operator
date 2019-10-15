@@ -18,6 +18,26 @@ rules:
 - apiGroups:
   - etcd.improbable.io
   resources:
+  - etcdclusters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - etcd.improbable.io
+  resources:
+  - etcdclusters/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - etcd.improbable.io
+  resources:
   - etcdpeers
   verbs:
   - create
