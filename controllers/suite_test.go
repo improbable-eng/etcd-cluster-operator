@@ -98,4 +98,5 @@ func TestAPIs(t *testing.T) {
 	defer teardownFunc()
 
 	t.Run("PeerControllers", suite.testPeerController)
+	t.Run("ClusterControllers", suite.testClusterController)
 }
