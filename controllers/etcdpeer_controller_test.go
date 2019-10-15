@@ -99,13 +99,11 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		image := strings.Split(etcdContainer.Image, ":")[0]
 		require.Equal(t, "quay.io/coreos/etcd", image, "etcd Image was not the CoreOS one")
 
-		require.Equal(t,
-			"bees=http://bees.my-cluster.default.svc:2380,"+
-				"magic=http://magic.my-cluster.default.svc:2380,"+
-				"goose=http://goose.my-cluster.default.svc:2380",
-			requireEnvVar(t, etcdContainer.Env, "ETCD_INITIAL_CLUSTER"),
-			"ETCD_INITIAL_CLUSTER environment variable set incorrectly",
-		)
+		peers := strings.Split(requireEnvVar(t, etcdContainer.Env, "ETCD_INITIAL_CLUSTER"), ",")
+		require.Len(t, peers, 3)
+		require.Contains(t, peers, "bees=http://bees.my-cluster.default.svc:2380")
+		require.Contains(t, peers, "goose=http://goose.my-cluster.default.svc:2380")
+		require.Contains(t, peers, "magic=http://magic.my-cluster.default.svc:2380")
 
 		require.Equal(t,
 			etcdPeer.Name,
