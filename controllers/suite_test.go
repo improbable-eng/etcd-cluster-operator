@@ -65,14 +65,23 @@ func (s controllerSuite) setupTest(t *testing.T) (teardownFunc func()) {
 	mgr, err := ctrl.NewManager(s.cfg, ctrl.Options{})
 	require.NoError(t, err, "failed to create manager")
 
-	controller := EtcdPeerReconciler{
+	peerController := EtcdPeerReconciler{
 		Client: mgr.GetClient(),
 		Log: logtest.TestLogger{
 			T: t,
 		},
 	}
-	err = controller.SetupWithManager(mgr)
+	err = peerController.SetupWithManager(mgr)
 	require.NoError(t, err, "failed to set up EtcdPeer controller")
+
+	clusterController := EtcdClusterReconciler{
+		Client: mgr.GetClient(),
+		Log: logtest.TestLogger{
+			T: t,
+		},
+	}
+	err = clusterController.SetupWithManager(mgr)
+	require.NoError(t, err, "failed to setup EtcdCluster controller")
 
 	go func() {
 		err := mgr.Start(stopCh)
