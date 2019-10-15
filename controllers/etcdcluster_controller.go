@@ -68,7 +68,7 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		},
 	}
 	if err := r.Create(ctx, service); err != nil {
-		log.Error(err, "unable to create Service")
+		log.Error(err, "unable to create Service", "namespace", service.Namespace, "cluster", cluster.Name)
 		return ctrl.Result{}, err
 	}
 

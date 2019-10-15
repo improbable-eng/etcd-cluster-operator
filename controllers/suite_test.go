@@ -65,7 +65,17 @@ func setupSuite(t *testing.T) (suite *controllerSuite, teardownFunc func()) {
 func (s *controllerSuite) setupTest(t *testing.T) (teardownFunc func(), namespaceName string) {
 	stopCh := make(chan struct{})
 
-	mgr, err := ctrl.NewManager(s.cfg, ctrl.Options{})
+	namespace := &v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: petname.Generate(2, "-"),
+		},
+	}
+	err := s.k8sClient.Create(s.ctx, namespace)
+	require.NoError(t, err)
+
+	mgr, err := ctrl.NewManager(s.cfg, ctrl.Options{
+		Namespace: namespace.Name,
+	})
 	require.NoError(t, err, "failed to create manager")
 
 	peerController := EtcdPeerReconciler{
@@ -91,13 +101,6 @@ func (s *controllerSuite) setupTest(t *testing.T) (teardownFunc func(), namespac
 		require.NoError(t, err, "failed to start manager")
 	}()
 
-	namespace := &v1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: petname.Generate(2, "-"),
-		},
-	}
-	err = s.k8sClient.Create(s.ctx, namespace)
-	require.NoError(t, err)
 	return func() {
 		err := s.k8sClient.Delete(s.ctx, namespace)
 		require.NoErrorf(t, err, "Failed to delete test namespace: %#v", namespace)
