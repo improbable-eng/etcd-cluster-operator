@@ -40,5 +40,6 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 			})
 		}, time.Second*5, time.Millisecond*500)
 		require.NoError(t, err)
+		require.Lenf(t, peers.Items, 3, "wrong number of peers: %#v", peers)
 	})
 }
