@@ -3,6 +3,7 @@ module github.com/improbable-eng/etcd-cluster-operator
 go 1.13
 
 require (
+	github.com/dustinkirkland/golang-petname v0.0.0-20190613200456-11339a705ed2
 	github.com/go-logr/logr v0.1.0
 	github.com/stretchr/testify v1.3.0
 	k8s.io/api v0.0.0-20190409021203-6e4e0e4f393b
