@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/etcdenvvar"
 )
 
 // EtcdPeerReconciler reconciles a EtcdPeer object
@@ -25,16 +26,14 @@ type EtcdPeerReconciler struct {
 }
 
 const (
-	etcdImage                     = "quay.io/coreos/etcd:v3.2.27"
-	etcdAdvertiseClientURLsEnvVar = "ETCD_ADVERTISE_CLIENT_URLS"
-	etcdInitialClusterEnvVar      = "ETCD_INITIAL_CLUSTER"
-	etcdNameEnvVar                = "ETCD_NAME"
-	etcdScheme                    = "http"
-	etcdPeerPort                  = 2380
-	appName                       = "etcd"
-	appLabel                      = "app.kubernetes.io/app"
-	clusterLabel                  = "etcd.improbable.io/cluster-name"
-	peerLabel                     = "etcd.improbable.io/peer-name"
+	etcdImage      = "quay.io/coreos/etcd:v3.2.27"
+	etcdScheme     = "http"
+	etcdClientPort = 2379
+	etcdPeerPort   = 2380
+	appName        = "etcd"
+	appLabel       = "app.kubernetes.io/name"
+	clusterLabel   = "etcd.improbable.io/cluster-name"
+	peerLabel      = "etcd.improbable.io/peer-name"
 )
 
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch;create;update;patch;delete
@@ -63,15 +62,23 @@ func staticBootstrapInitialCluster(static etcdv1alpha1.StaticBootstrap) string {
 
 // advertiseURL builds the canonical URL of this peer from it's name and the
 // cluster name.
-func advertiseURL(etcdPeer etcdv1alpha1.EtcdPeer) *url.URL {
+func advertiseURL(etcdPeer etcdv1alpha1.EtcdPeer, port int32) *url.URL {
 	return &url.URL{
-		Scheme: "http",
+		Scheme: etcdScheme,
 		Host: fmt.Sprintf(
-			"%s.%s.%s.svc:2380",
+			"%s.%s.%s.svc:%d",
 			etcdPeer.Name,
-			etcdPeer.Namespace,
 			etcdPeer.Spec.ClusterName,
+			etcdPeer.Namespace,
+			port,
 		),
+	}
+}
+
+func bindAllAddress(port int) *url.URL {
+	return &url.URL{
+		Scheme: etcdScheme,
+		Host:   fmt.Sprintf("0.0.0.0:%d", port),
 	}
 }
 
@@ -114,16 +121,42 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 							Image: etcdImage,
 							Env: []corev1.EnvVar{
 								{
-									Name:  etcdInitialClusterEnvVar,
+									Name:  etcdenvvar.InitialCluster,
 									Value: staticBootstrapInitialCluster(*peer.Spec.Bootstrap.Static),
 								},
 								{
-									Name:  etcdNameEnvVar,
+									Name:  etcdenvvar.Name,
 									Value: peer.Name,
 								},
 								{
-									Name:  etcdAdvertiseClientURLsEnvVar,
-									Value: advertiseURL(peer).String(),
+									Name:  etcdenvvar.InitialAdvertisePeerURLs,
+									Value: advertiseURL(peer, etcdPeerPort).String(),
+								},
+								{
+									Name:  etcdenvvar.AdvertiseClientURLs,
+									Value: advertiseURL(peer, etcdClientPort).String(),
+								},
+								{
+									Name:  etcdenvvar.ListenPeerURLs,
+									Value: bindAllAddress(etcdPeerPort).String(),
+								},
+								{
+									Name:  etcdenvvar.ListenClientURLs,
+									Value: bindAllAddress(etcdClientPort).String(),
+								},
+								{
+									Name:  etcdenvvar.InitialClusterState,
+									Value: "new",
+								},
+							},
+							Ports: []corev1.ContainerPort{
+								{
+									Name:          "etcd-client",
+									ContainerPort: etcdClientPort,
+								},
+								{
+									Name:          "etcd-peer",
+									ContainerPort: etcdPeerPort,
 								},
 							},
 						},

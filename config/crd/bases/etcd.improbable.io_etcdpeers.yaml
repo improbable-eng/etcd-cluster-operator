@@ -41,7 +41,7 @@ spec:
                   description: Static boostrapping requires that we know the network
                     names of the other peers ahead of time.
                   properties:
-                    initalCluster:
+                    initialCluster:
                       description: InitialCluster provides details of all initial
                         cluster members, and should include ourselves.
                       items:

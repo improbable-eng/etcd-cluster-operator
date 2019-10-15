@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +15,17 @@ import (
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/test/try"
 )
+
+// requireEnvVar finds an environment variable and returns its value, or fails
+func requireEnvVar(t *testing.T, env []corev1.EnvVar, evName string) string {
+	for _, ev := range env {
+		if ev.Name == evName {
+			return ev.Value
+		}
+	}
+	require.Fail(t, fmt.Sprintf("%s environment variable unset", evName))
+	return ""
+}
 
 func (s *controllerSuite) testPeerController(t *testing.T) {
 	t.Run("TestPeerController_OnCreation_CreatesReplicaSet", func(t *testing.T) {
@@ -40,6 +52,10 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 								Name: "magic",
 								Host: "magic.my-cluster.default.svc",
 							},
+							{
+								Name: "goose",
+								Host: "goose.my-cluster.default.svc",
+							},
 						},
 					},
 				},
@@ -61,6 +77,14 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Equal(t, int32(1), *replicaSet.Spec.Replicas, "Number of replicas was not one")
+		require.Equal(t,
+			replicaSet.Spec.Template.Spec.Hostname,
+			etcdPeer.Name,
+			"Peer name not set as Pod hostname")
+		require.Equal(t,
+			replicaSet.Spec.Template.Spec.Subdomain,
+			etcdPeer.Spec.ClusterName,
+			"Cluster name not set as Pod subdomain")
 
 		// Find the etcd container
 		var etcdContainer corev1.Container
@@ -75,19 +99,52 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		image := strings.Split(etcdContainer.Image, ":")[0]
 		require.Equal(t, "quay.io/coreos/etcd", image, "etcd Image was not the CoreOS one")
 
-		// Find the environment variable for inital cluster on the etcd container
-		var etcdInitialClusterEnvVar corev1.EnvVar
-		for _, ev := range etcdContainer.Env {
-			if ev.Name == "ETCD_INITIAL_CLUSTER" {
-				etcdInitialClusterEnvVar = ev
-				break
-			}
-		}
-		require.NotNil(t, etcdInitialClusterEnvVar, "ETCD_INITIAL_CLUSTER environment variable unset")
+		peers := strings.Split(requireEnvVar(t, etcdContainer.Env, "ETCD_INITIAL_CLUSTER"), ",")
+		require.Len(t, peers, 3)
+		require.Contains(t, peers, "bees=http://bees.my-cluster.default.svc:2380")
+		require.Contains(t, peers, "goose=http://goose.my-cluster.default.svc:2380")
+		require.Contains(t, peers, "magic=http://magic.my-cluster.default.svc:2380")
+
 		require.Equal(t,
-			"bees=http://bees.my-cluster.default.svc:2380,magic=http://magic.my-cluster.default.svc:2380",
-			etcdInitialClusterEnvVar.Value,
-			"ETCD_INITIAL_CLUSTER environment variable set incorrectly",
+			etcdPeer.Name,
+			requireEnvVar(t, etcdContainer.Env, "ETCD_NAME"),
+			"ETCD_NAME environment variable set incorrectly",
+		)
+
+		require.Equal(t,
+			fmt.Sprintf("http://%s.%s.%s.svc:2380",
+				etcdPeer.Name,
+				etcdPeer.Spec.ClusterName,
+				etcdPeer.Namespace),
+			requireEnvVar(t, etcdContainer.Env, "ETCD_INITIAL_ADVERTISE_PEER_URLS"),
+			"ETCD_INITIAL_ADVERTISE_PEER_URLS environment variable set incorrectly",
+		)
+
+		require.Equal(t,
+			fmt.Sprintf("http://%s.%s.%s.svc:2379",
+				etcdPeer.Name,
+				etcdPeer.Spec.ClusterName,
+				etcdPeer.Namespace),
+			requireEnvVar(t, etcdContainer.Env, "ETCD_ADVERTISE_CLIENT_URLS"),
+			"ETCD_ADVERTISE_CLIENT_URLS environment variable set incorrectly",
+		)
+
+		require.Equal(t,
+			"http://0.0.0.0:2380",
+			requireEnvVar(t, etcdContainer.Env, "ETCD_LISTEN_PEER_URLS"),
+			"ETCD_LISTEN_PEER_URLS environment variable set incorrectly",
+		)
+
+		require.Equal(t,
+			"http://0.0.0.0:2379",
+			requireEnvVar(t, etcdContainer.Env, "ETCD_LISTEN_CLIENT_URLS"),
+			"ETCD_LISTEN_CLIENT_URLS environment variable set incorrectly",
+		)
+
+		require.Equal(t,
+			"new",
+			requireEnvVar(t, etcdContainer.Env, "ETCD_INITIAL_CLUSTER_STATE"),
+			"ETCD_INITIAL_CLUSTER_STATE environment variable set incorrectly",
 		)
 	})
 }
