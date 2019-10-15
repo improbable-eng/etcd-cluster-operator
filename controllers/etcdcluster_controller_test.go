@@ -81,16 +81,5 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 			Port:       2380,
 			TargetPort: intstr.FromInt(2380),
 		}, "Service did not declare peer port")
-
-		// Assert on peers
-		//peers := &etcdv1alpha1.EtcdPeerList{}
-		//
-		//err = try.Eventually(func() error {
-		//	return s.k8sClient.List(s.ctx, peers, &client.ListOptions{
-		//		Namespace: namespace,
-		//	})
-		//}, time.Second*5, time.Millisecond*500)
-		//require.NoError(t, err)
-		//require.Lenf(t, peers.Items, 3, "wrong number of peers: %#v", peers)
 	})
 }
