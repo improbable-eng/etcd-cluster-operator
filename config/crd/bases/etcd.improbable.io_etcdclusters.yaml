@@ -31,6 +31,15 @@ spec:
           type: object
         spec:
           description: EtcdClusterSpec defines the desired state of EtcdCluster
+          properties:
+            replicas:
+              description: 'Number of replicas in the cluster TODO: Investigate CRD
+                scale sub-resources. See: https://book.kubebuilder.io/reference/generating-crd.html#scale'
+              format: int32
+              minimum: 0
+              type: integer
+          required:
+          - replicas
           type: object
         status:
           description: EtcdClusterStatus defines the observed state of EtcdCluster
