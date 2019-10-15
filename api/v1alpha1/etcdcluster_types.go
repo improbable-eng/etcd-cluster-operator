@@ -10,8 +10,8 @@ import (
 // EtcdClusterSpec defines the desired state of EtcdCluster
 type EtcdClusterSpec struct {
 	// Number of replicas in the cluster
-	// This is a required field for now.
-	// In future it will be default to 3.
+	// TODO: Investigate CRD scale sub-resources. See:
+	// https://book.kubebuilder.io/reference/generating-crd.html#scale
 	// +kubebuilder:validation:Minimum=0
 	Replicas int32 `json:"replicas"`
 }
