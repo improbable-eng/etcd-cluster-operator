@@ -2,6 +2,7 @@ package controllers
 
 import (
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"testing"
 	"time"
 
@@ -49,6 +50,10 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 		require.Equal(t, v1.ClusterIPNone, service.Spec.ClusterIP, "service was not a headless service")
 		require.True(t, service.Spec.PublishNotReadyAddresses, "service did not publish not-ready addresses")
 
+		// Check the service's labels
+		require.Equal(t, "etcd", service.Labels["app.kubernetes.io/name"], "Service did not have app name label")
+		require.Equal(t, etcdCluster.Name, service.Labels["etcd.improbable.io/cluster-name"], "Service did not have etcd cluster name label")
+
 		// Assume single owner reference
 		require.Len(t, service.OwnerReferences, 1, "Incorrect number of owners")
 		ownerRef := service.OwnerReferences[0]
@@ -59,21 +64,23 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 
 		// Selector
 		selector := service.Spec.Selector
-		require.Equal(t, "etcd", selector["app.kubernetes.io/name"])
-		require.Equal(t, etcdCluster.Name, selector["etcd.improbable.io/cluster-name"])
+		require.Equal(t, "etcd", selector["app.kubernetes.io/name"], "Selector did not select for 'etcd' app name label")
+		require.Equal(t, etcdCluster.Name, selector["etcd.improbable.io/cluster-name"], "Selector did not select for etcd cluster name label")
 
 		// Ports
 		ports := service.Spec.Ports
 		require.Contains(t, ports, v1.ServicePort{
-			Name:     "etcd-client",
-			Protocol: "TCP",
-			Port:     2379,
-		})
+			Name:       "etcd-client",
+			Protocol:   "TCP",
+			Port:       2379,
+			TargetPort: intstr.FromInt(2379),
+		}, "Service did not declare client port")
 		require.Contains(t, ports, v1.ServicePort{
-			Name:     "etcd-peer",
-			Protocol: "TCP",
-			Port:     2380,
-		})
+			Name:       "etcd-peer",
+			Protocol:   "TCP",
+			Port:       2380,
+			TargetPort: intstr.FromInt(2380),
+		}, "Service did not declare peer port")
 
 		// Assert on peers
 		//peers := &etcdv1alpha1.EtcdPeerList{}

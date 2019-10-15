@@ -38,13 +38,31 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cluster.Name,
 			Namespace: cluster.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(&cluster, etcdv1alpha1.GroupVersion.WithKind("EtcdCluster")),
+			},
+			Labels: map[string]string{
+				appLabel:     appName,
+				clusterLabel: cluster.Name,
+			},
 		},
 		Spec: v1.ServiceSpec{
+			ClusterIP:                v1.ClusterIPNone,
+			PublishNotReadyAddresses: true,
+			Selector: map[string]string{
+				appLabel:     appName,
+				clusterLabel: cluster.Name,
+			},
 			Ports: []v1.ServicePort{
 				{
-					Name:     "foo",
+					Name:     "etcd-client",
 					Protocol: "TCP",
-					Port:     8080,
+					Port:     etcdClientPort,
+				},
+				{
+					Name:     "etcd-peer",
+					Protocol: "TCP",
+					Port:     etcdPeerPort,
 				},
 			},
 		},
