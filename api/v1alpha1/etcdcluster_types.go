@@ -9,8 +9,11 @@ import (
 
 // EtcdClusterSpec defines the desired state of EtcdCluster
 type EtcdClusterSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Number of replicas in the cluster
+	// This is a required field for now.
+	// In future it will be default to 3.
+	// +kubebuilder:validation:Minimum=0
+	Replicas int32 `json:"replicas"`
 }
 
 // EtcdClusterStatus defines the observed state of EtcdCluster
