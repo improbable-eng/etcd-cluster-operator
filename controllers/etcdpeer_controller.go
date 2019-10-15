@@ -64,7 +64,7 @@ func staticBootstrapInitialCluster(static etcdv1alpha1.StaticBootstrap) string {
 // cluster name.
 func advertiseURL(etcdPeer etcdv1alpha1.EtcdPeer, port int32) *url.URL {
 	return &url.URL{
-		Scheme: "http",
+		Scheme: etcdScheme,
 		Host: fmt.Sprintf(
 			"%s.%s.%s.svc:%d",
 			etcdPeer.Name,
@@ -77,7 +77,7 @@ func advertiseURL(etcdPeer etcdv1alpha1.EtcdPeer, port int32) *url.URL {
 
 func bindAllAddress(port int) *url.URL {
 	return &url.URL{
-		Scheme: "http",
+		Scheme: etcdScheme,
 		Host:   fmt.Sprintf("0.0.0.0:%d", port),
 	}
 }
