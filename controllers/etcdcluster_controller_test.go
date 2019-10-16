@@ -2,20 +2,19 @@ package controllers
 
 import (
 	"fmt"
-	"github.com/improbable-eng/etcd-cluster-operator/internal/util/ptr"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
-
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/test/try"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/util/ptr"
 )
 
 func (s *controllerSuite) testClusterController(t *testing.T) {

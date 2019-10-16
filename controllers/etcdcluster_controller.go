@@ -3,13 +3,13 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"k8s.io/apimachinery/pkg/runtime"
 	"time"
 
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -192,8 +192,9 @@ func expectedAdvertisePeerURLForPeer(cluster *etcdv1alpha1.EtcdCluster, peerName
 }
 
 func (r *EtcdClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	const clusterNameSpecField = "spec.clusterName"
 	if err := mgr.GetFieldIndexer().IndexField(&etcdv1alpha1.EtcdPeer{},
-		"spec.clusterName",
+		clusterNameSpecField,
 		func(obj runtime.Object) []string {
 			peer, ok := obj.(*etcdv1alpha1.EtcdPeer)
 			if !ok {
