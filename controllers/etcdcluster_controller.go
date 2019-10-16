@@ -33,7 +33,7 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		log.Error(err, "unable to fetch EtcdCluster")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	// your logic here
+
 	service := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cluster.Name,
