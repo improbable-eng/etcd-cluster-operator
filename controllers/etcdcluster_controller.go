@@ -61,6 +61,7 @@ func headlessServiceForCluster(cluster *etcdv1alpha1.EtcdCluster) *v1.Service {
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdclusters,verbs=get;list;watch
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create
+// +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch;create
 
 func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
