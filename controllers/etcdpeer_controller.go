@@ -31,7 +31,7 @@ const (
 	peerLabel  = "etcd.improbable.io/peer-name"
 )
 
-// +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=apps,resources=replicaset,verbs=get;update;patch;create
 
