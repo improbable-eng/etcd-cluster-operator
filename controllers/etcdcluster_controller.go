@@ -67,7 +67,7 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	log := r.Log.WithValues("etcdcluster", req.NamespacedName)
+	log := r.Log.WithValues("cluster", req.NamespacedName)
 
 	cluster := &etcdv1alpha1.EtcdCluster{}
 	if err := r.Get(ctx, req.NamespacedName, cluster); err != nil {
@@ -83,17 +83,17 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		}
 		service = headlessServiceForCluster(cluster)
 		if err := r.Create(ctx, service); err != nil {
-			log.Error(err, "unable to create Service", "namespace", service.Namespace, "cluster", cluster.Name)
+			log.Error(err, "unable to create Service", "service", service.Name)
 			return ctrl.Result{}, err
 		}
-		log.V(1).Info("Created Service", "service name", service.Name)
+		log.V(1).Info("Created Service", "service", service.Name)
 		return ctrl.Result{}, nil
 	}
-	log.V(2).Info("Service exists", "service name", service.Name)
+	log.V(2).Info("Service exists", "service", service.Name)
 
 	peers := &etcdv1alpha1.EtcdPeerList{}
 	if err := r.List(ctx, peers, client.MatchingFields{"spec.clusterName": cluster.Name}); err != nil {
-		log.Error(err, "unable to list peers", "namespace", service.Namespace, "cluster", cluster.Name)
+		log.Error(err, "unable to list peers")
 		return ctrl.Result{}, err
 	}
 
@@ -104,14 +104,12 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		// Create more peers
 		peerName := nextAvailablePeerName(cluster, peers.Items)
 		log.V(1).Info("Insufficient peers for replicas, adding new peer",
-			"Current number of peers", len(peers.Items),
-			"Desired number of replicas", cluster.Spec.Replicas,
-			"New peer's name", peerName)
+			"current-peers", len(peers.Items),
+			"desired-peers", cluster.Spec.Replicas,
+			"peer", peerName)
 		peer := peerForCluster(cluster, peerName)
 		if err := r.Create(ctx, peer); err != nil {
 			log.Error(err, "Failed to create peer",
-				"namespace", service.Namespace,
-				"cluster", cluster.Name,
 				"peer", peerName)
 			return ctrl.Result{}, err
 		}

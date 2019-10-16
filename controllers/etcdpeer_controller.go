@@ -166,7 +166,7 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	log := r.Log.WithValues("etcdpeer", req.NamespacedName)
+	log := r.Log.WithValues("peer", req.NamespacedName)
 
 	var peer etcdv1alpha1.EtcdPeer
 	if err := r.Get(ctx, req.NamespacedName, &peer); err != nil {
@@ -174,7 +174,7 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	log.V(2).Info("Found EtcdPeer", "name", peer.Name)
+	log.V(2).Info("Found EtcdPeer resource")
 
 	var existingReplicaSet appsv1.ReplicaSet
 	err := r.Get(
@@ -187,11 +187,11 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	)
 
 	if apierrs.IsNotFound(err) {
-		log.V(1).Info("Replica set does not exist, creating")
 		replicaSet := defineReplicaSet(peer)
-
+		log.V(1).Info("Replica set does not exist, creating",
+			"replica-set", replicaSet.Name)
 		if err := r.Create(ctx, &replicaSet); err != nil {
-			log.Error(err, "unable to create ReplicaSet for EtcdPeer", "replicaSet", replicaSet)
+			log.Error(err, "unable to create ReplicaSet for EtcdPeer", "replica-set", replicaSet)
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{}, nil
@@ -203,7 +203,7 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	log.V(2).Info("Replica set already exists")
+	log.V(2).Info("Replica set already exists", "replica-set", existingReplicaSet.Name)
 
 	// TODO Additional logic here
 
