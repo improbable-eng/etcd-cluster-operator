@@ -5,21 +5,23 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/improbable-eng/etcd-cluster-operator/internal/test/try"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	etcd "go.etcd.io/etcd/client"
 	"io/ioutil"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	etcd "go.etcd.io/etcd/client"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kindv1alpha3 "sigs.k8s.io/kind/pkg/apis/config/v1alpha3"
 	"sigs.k8s.io/kind/pkg/cluster"
 	"sigs.k8s.io/kind/pkg/cluster/create"
 	"sigs.k8s.io/kind/pkg/container/cri"
-	"testing"
-	"time"
+
+	"github.com/improbable-eng/etcd-cluster-operator/internal/test/try"
 )
 
 const (
