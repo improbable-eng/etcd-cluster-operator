@@ -5,3 +5,6 @@ resources:
 - group: etcd
   version: v1alpha1
   kind: EtcdPeer
+- group: etcd
+  version: v1alpha1
+  kind: EtcdCluster

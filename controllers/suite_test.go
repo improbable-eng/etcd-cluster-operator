@@ -6,8 +6,11 @@ import (
 	"testing"
 	"time"
 
+	petname "github.com/dustinkirkland/golang-petname"
 	logtest "github.com/go-logr/logr/testing"
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -59,20 +62,39 @@ func setupSuite(t *testing.T) (suite *controllerSuite, teardownFunc func()) {
 	}, stopFunc
 }
 
-func (s controllerSuite) setupTest(t *testing.T) (teardownFunc func()) {
+func (s *controllerSuite) setupTest(t *testing.T) (teardownFunc func(), namespaceName string) {
 	stopCh := make(chan struct{})
 
-	mgr, err := ctrl.NewManager(s.cfg, ctrl.Options{})
+	namespace := &v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: petname.Generate(2, "-"),
+		},
+	}
+	err := s.k8sClient.Create(s.ctx, namespace)
+	require.NoError(t, err)
+
+	mgr, err := ctrl.NewManager(s.cfg, ctrl.Options{
+		Namespace: namespace.Name,
+	})
 	require.NoError(t, err, "failed to create manager")
 
-	controller := EtcdPeerReconciler{
+	peerController := EtcdPeerReconciler{
 		Client: mgr.GetClient(),
 		Log: logtest.TestLogger{
 			T: t,
 		},
 	}
-	err = controller.SetupWithManager(mgr)
+	err = peerController.SetupWithManager(mgr)
 	require.NoError(t, err, "failed to set up EtcdPeer controller")
+
+	clusterController := EtcdClusterReconciler{
+		Client: mgr.GetClient(),
+		Log: logtest.TestLogger{
+			T: t,
+		},
+	}
+	err = clusterController.SetupWithManager(mgr)
+	require.NoError(t, err, "failed to setup EtcdCluster controller")
 
 	go func() {
 		err := mgr.Start(stopCh)
@@ -80,8 +102,10 @@ func (s controllerSuite) setupTest(t *testing.T) (teardownFunc func()) {
 	}()
 
 	return func() {
+		err := s.k8sClient.Delete(s.ctx, namespace)
+		require.NoErrorf(t, err, "Failed to delete test namespace: %#v", namespace)
 		close(stopCh)
-	}
+	}, namespace.Name
 }
 
 func TestAPIs(t *testing.T) {
@@ -89,4 +113,5 @@ func TestAPIs(t *testing.T) {
 	defer teardownFunc()
 
 	t.Run("PeerControllers", suite.testPeerController)
+	t.Run("ClusterControllers", suite.testClusterController)
 }

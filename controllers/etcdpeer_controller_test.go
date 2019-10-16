@@ -29,7 +29,7 @@ func requireEnvVar(t *testing.T, env []corev1.EnvVar, evName string) string {
 
 func (s *controllerSuite) testPeerController(t *testing.T) {
 	t.Run("TestPeerController_OnCreation_CreatesReplicaSet", func(t *testing.T) {
-		teardownFunc := s.setupTest(t)
+		teardownFunc, namespace := s.setupTest(t)
 		defer teardownFunc()
 
 		etcdPeer := &etcdv1alpha1.EtcdPeer{
@@ -37,7 +37,7 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 				Labels:      make(map[string]string),
 				Annotations: make(map[string]string),
 				Name:        "bees",
-				Namespace:   "default",
+				Namespace:   namespace,
 			},
 			Spec: etcdv1alpha1.EtcdPeerSpec{
 				ClusterName: "my-cluster",
@@ -46,15 +46,15 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 						InitialCluster: []etcdv1alpha1.InitialClusterMember{
 							{
 								Name: "bees",
-								Host: "bees.my-cluster.default.svc",
+								Host: fmt.Sprintf("bees.my-cluster.%s.svc", namespace),
 							},
 							{
 								Name: "magic",
-								Host: "magic.my-cluster.default.svc",
+								Host: fmt.Sprintf("magic.my-cluster.%s.svc", namespace),
 							},
 							{
 								Name: "goose",
-								Host: "goose.my-cluster.default.svc",
+								Host: fmt.Sprintf("goose.my-cluster.%s.svc", namespace),
 							},
 						},
 					},
@@ -101,9 +101,9 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 
 		peers := strings.Split(requireEnvVar(t, etcdContainer.Env, "ETCD_INITIAL_CLUSTER"), ",")
 		require.Len(t, peers, 3)
-		require.Contains(t, peers, "bees=http://bees.my-cluster.default.svc:2380")
-		require.Contains(t, peers, "goose=http://goose.my-cluster.default.svc:2380")
-		require.Contains(t, peers, "magic=http://magic.my-cluster.default.svc:2380")
+		require.Contains(t, peers, fmt.Sprintf("bees=http://bees.my-cluster.%s.svc:2380", namespace))
+		require.Contains(t, peers, fmt.Sprintf("goose=http://goose.my-cluster.%s.svc:2380", namespace))
+		require.Contains(t, peers, fmt.Sprintf("magic=http://magic.my-cluster.%s.svc:2380", namespace))
 
 		require.Equal(t,
 			etcdPeer.Name,

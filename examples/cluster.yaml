@@ -1,32 +1,9 @@
-# This service is to give the pods persistent network identity, and must have the same name as the cluster. This is
-# because the `spec.clusterName` field on the EtcdPeer resources below is used to set the `spec.subdomain` field on the
-# resulting pods. As this service is headless, pods with a subdomain that matches the name of this service will get
-# their own DNS name.
-#
-# This service can also be used for client access. If a client can load balance on the client-side, then it can use the
-# DNS records provided by this service to contact the etcd cluster.
-#
-# Therefore, using this service the etcd cluster can be communicated with by a pod in the same namespace like this:
-#
-#     etcdctl --endpoints "http://my-cluster:2379" member list
-apiVersion: v1
-kind: Service
+# The EtcdCluster here only manages the headless service required for the EtcdPeers below to bootstrap
+apiVersion: etcd.improbable.io/v1alpha1
+kind: EtcdCluster
 metadata:
   name: my-cluster
   namespace: default
-spec:
-  clusterIP: None
-  publishNotReadyAddresses: true
-  selector:
-    app.kubernetes.io/name: etcd
-    etcd.improbable.io/cluster-name: my-cluster
-  ports:
-  - name: etcd-peer
-    protocol: TCP
-    port: 2380
-  - name: etcd-client
-    protocol: TCP
-    port: 2379
 ---
 apiVersion: etcd.improbable.io/v1alpha1
 kind: EtcdPeer
