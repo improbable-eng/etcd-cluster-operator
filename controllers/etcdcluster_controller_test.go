@@ -1,10 +1,11 @@
 package controllers
 
 import (
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"testing"
 	"time"
+
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,9 +27,7 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 				Name:        "bees",
 				Namespace:   namespace,
 			},
-			Spec: etcdv1alpha1.EtcdClusterSpec{
-				Replicas: 3,
-			},
+			Spec: etcdv1alpha1.EtcdClusterSpec{},
 		}
 
 		err := s.k8sClient.Create(s.ctx, etcdCluster)
