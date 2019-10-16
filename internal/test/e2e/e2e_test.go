@@ -48,7 +48,7 @@ func TestE2E_Kind(t *testing.T) {
 	}
 
 	// Tag for running this test, for naming resources.
-	operatorImage := "etcd-operator:test"
+	operatorImage := "etcd-cluster-operator:test"
 
 	// Create Kind cluster to run the workloads.
 	kind, stopKind := setupLocalCluster(t)
@@ -70,9 +70,9 @@ func TestE2E_Kind(t *testing.T) {
 	require.NoError(t, err, string(out))
 
 	// Bundle the image to a tar.
-	tmpDir, err := ioutil.TempDir("", "etcd-operator-e2e-test")
+	tmpDir, err := ioutil.TempDir("", "etcd-cluster-operator-e2e-test")
 	require.NoError(t, err)
-	imageTar := filepath.Join(tmpDir, "etcd-operator.tar")
+	imageTar := filepath.Join(tmpDir, "etcd-cluster-operator.tar")
 
 	out, err = exec.Command("docker", "save", "-o", imageTar, operatorImage).CombinedOutput()
 	require.NoError(t, err, string(out))
@@ -97,7 +97,7 @@ func TestE2E_Kind(t *testing.T) {
 	require.NoError(t, err)
 
 	err = try.Eventually(func() error {
-		out, err := kubectl.Get("deploy", "etcd-operator", "-o=jsonpath='{.status.readyReplicas}'")
+		out, err := kubectl.Get("deploy", "etcd-cluster-operator", "-o=jsonpath='{.status.readyReplicas}'")
 		if err != nil {
 			return err
 		}
@@ -173,7 +173,10 @@ func runAllTests(t *testing.T, kubectl *kubectlContext) {
 	defer cancel()
 
 	// Deploy the cluster custom resources.
-	err := kubectl.Apply("-f", filepath.Join(*fRepoRoot, "examples", "cluster.yaml"))
+	err := kubectl.Apply(
+		"-f", filepath.Join(*fRepoRoot, "examples", "cluster.yaml"),
+		"-f", filepath.Join(*fRepoRoot, "examples", "cluster-nodeport.yaml"),
+	)
 	require.NoError(t, err)
 
 	etcdClient, err := etcd.New(etcdConfig)

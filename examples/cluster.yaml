@@ -1,20 +1,3 @@
-# A service for client access to the ETCD cluster.
-apiVersion: v1
-kind: Service
-metadata:
-  name: my-cluster-external
-  namespace: default
-spec:
-  type: NodePort
-  selector:
-    app.kubernetes.io/name: etcd
-    etcd.improbable.io/cluster-name: my-cluster
-  ports:
-    - protocol: TCP
-      port: 2379
-      nodePort: 32379
-      targetPort: 2379
----
 # The EtcdCluster here only manages the headless service required for the EtcdPeers below to bootstrap
 apiVersion: etcd.improbable.io/v1alpha1
 kind: EtcdCluster
