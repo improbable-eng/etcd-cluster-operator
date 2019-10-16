@@ -26,14 +26,9 @@ type EtcdPeerReconciler struct {
 }
 
 const (
-	etcdImage      = "quay.io/coreos/etcd:v3.2.27"
-	etcdScheme     = "http"
-	etcdClientPort = 2379
-	etcdPeerPort   = 2380
-	appName        = "etcd"
-	appLabel       = "app.kubernetes.io/name"
-	clusterLabel   = "etcd.improbable.io/cluster-name"
-	peerLabel      = "etcd.improbable.io/peer-name"
+	etcdImage  = "quay.io/coreos/etcd:v3.2.27"
+	etcdScheme = "http"
+	peerLabel  = "etcd.improbable.io/peer-name"
 )
 
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch;create;update;patch;delete
