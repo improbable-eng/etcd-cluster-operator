@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"fmt"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/util/ptr"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
@@ -29,7 +30,9 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 				Name:        "bees",
 				Namespace:   namespace,
 			},
-			Spec: etcdv1alpha1.EtcdClusterSpec{},
+			Spec: etcdv1alpha1.EtcdClusterSpec{
+				Replicas: ptr.Int32(3),
+			},
 		}
 
 		err := s.k8sClient.Create(s.ctx, etcdCluster)
@@ -92,11 +95,10 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 		for i, peer := range peers.Items {
 			expectedInitialCluster[i] = etcdv1alpha1.InitialClusterMember{
 				Name: peer.Name,
-				Host: fmt.Sprintf("http://%s.%s.%s.svc:%d",
+				Host: fmt.Sprintf("%s.%s.%s.svc",
 					peer.Name,
 					etcdCluster.Name,
-					namespace,
-					etcdPeerPort),
+					namespace),
 			}
 		}
 
@@ -122,7 +124,7 @@ func assertOwnedByCluster(t *testing.T, etcdCluster *etcdv1alpha1.EtcdCluster, o
 
 func assertPeer(t *testing.T, cluster *etcdv1alpha1.EtcdCluster, peer *etcdv1alpha1.EtcdPeer) {
 	require.Equal(t, cluster.Namespace, peer.Namespace, "Peer is not in same namespace as cluster")
-	require.Contains(t, cluster.Name, peer.Name, "Peer name did not contain cluster's name")
+	require.Contains(t, peer.Name, cluster.Name, "Peer name did not contain cluster's name")
 	require.Equal(t, cluster.Name, peer.Spec.ClusterName, "Cluster name not set on peer")
 
 	require.Equal(t, appName, peer.Labels[appLabel])
