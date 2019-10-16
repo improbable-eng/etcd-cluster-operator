@@ -10,6 +10,9 @@ kind: EtcdPeer
 metadata:
   name: one
   namespace: default
+  labels:
+    app.kubernetes.io/name: etcd
+    etcd.improbable.io/cluster-name: my-cluster
 spec:
   clusterName: my-cluster
   bootstrap:
@@ -27,6 +30,9 @@ kind: EtcdPeer
 metadata:
   name: two
   namespace: default
+  labels:
+    app.kubernetes.io/name: etcd
+    etcd.improbable.io/cluster-name: my-cluster
 spec:
   clusterName: my-cluster
   bootstrap:
@@ -44,6 +50,9 @@ kind: EtcdPeer
 metadata:
   name: three
   namespace: default
+  labels:
+    app.kubernetes.io/name: etcd
+    etcd.improbable.io/cluster-name: my-cluster
 spec:
   clusterName: my-cluster
   bootstrap:

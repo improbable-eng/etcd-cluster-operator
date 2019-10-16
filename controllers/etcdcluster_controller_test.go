@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"fmt"
+	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 
@@ -54,12 +56,7 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 		require.Equal(t, etcdCluster.Name, service.Labels["etcd.improbable.io/cluster-name"], "Service did not have etcd cluster name label")
 
 		// Assume single owner reference
-		require.Len(t, service.OwnerReferences, 1, "Incorrect number of owners")
-		ownerRef := service.OwnerReferences[0]
-		require.True(t, *ownerRef.Controller, "Service did not have a controller owner reference")
-		require.Equal(t, "etcd.improbable.io/v1alpha1", ownerRef.APIVersion)
-		require.Equal(t, "EtcdCluster", ownerRef.Kind)
-		require.Equal(t, etcdCluster.Name, ownerRef.Name)
+		assertOwnedByCluster(t, etcdCluster, service)
 
 		// Selector
 		selector := service.Spec.Selector
@@ -80,5 +77,56 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 			Port:       2380,
 			TargetPort: intstr.FromInt(2380),
 		}, "Service did not declare peer port")
+
+		// Assert on peers
+		peers := &etcdv1alpha1.EtcdPeerList{}
+		err = try.Eventually(func() error {
+			return s.k8sClient.List(s.ctx, peers, &client.ListOptions{
+				Namespace: namespace,
+			})
+		}, time.Second*5, time.Millisecond*500)
+		require.NoError(t, err)
+		require.Lenf(t, peers.Items, 3, "wrong number of peers: %#v", peers)
+
+		expectedInitialCluster := make([]etcdv1alpha1.InitialClusterMember, len(peers.Items))
+		for i, peer := range peers.Items {
+			expectedInitialCluster[i] = etcdv1alpha1.InitialClusterMember{
+				Name: peer.Name,
+				Host: fmt.Sprintf("http://%s.%s.%s.svc:%d",
+					peer.Name,
+					etcdCluster.Name,
+					namespace,
+					etcdPeerPort),
+			}
+		}
+
+		for _, peer := range peers.Items {
+			assertPeer(t, etcdCluster, &peer)
+
+			assert.Equal(t,
+				expectedInitialCluster,
+				peer.Spec.Bootstrap.Static.InitialCluster,
+				"Peer did not have expected static bootstrap instructions")
+		}
 	})
+}
+
+func assertOwnedByCluster(t *testing.T, etcdCluster *etcdv1alpha1.EtcdCluster, obj metav1.Object) {
+	require.Len(t, obj.GetOwnerReferences(), 1, "Incorrect number of owners")
+	ownerRef := obj.GetOwnerReferences()[0]
+	require.True(t, *ownerRef.Controller, "Did not have a controller owner reference")
+	require.Equal(t, "etcd.improbable.io/v1alpha1", ownerRef.APIVersion)
+	require.Equal(t, "EtcdCluster", ownerRef.Kind)
+	require.Equal(t, etcdCluster.Name, ownerRef.Name)
+}
+
+func assertPeer(t *testing.T, cluster *etcdv1alpha1.EtcdCluster, peer *etcdv1alpha1.EtcdPeer) {
+	require.Equal(t, cluster.Namespace, peer.Namespace, "Peer is not in same namespace as cluster")
+	require.Contains(t, cluster.Name, peer.Name, "Peer name did not contain cluster's name")
+	require.Equal(t, cluster.Name, peer.Spec.ClusterName, "Cluster name not set on peer")
+
+	require.Equal(t, appName, peer.Labels[appLabel])
+	require.Equal(t, cluster.Name, peer.Labels[clusterLabel])
+
+	assertOwnedByCluster(t, cluster, peer)
 }
