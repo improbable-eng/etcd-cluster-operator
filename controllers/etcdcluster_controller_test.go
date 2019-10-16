@@ -16,7 +16,7 @@ import (
 )
 
 func (s *controllerSuite) testClusterController(t *testing.T) {
-	t.Run("TestClusterController_OnCreation_CreatesReplicaSet", func(t *testing.T) {
+	t.Run("TestClusterController_OnCreation_CreatesService", func(t *testing.T) {
 		teardownFunc, namespace := s.setupTest(t)
 		defer teardownFunc()
 
