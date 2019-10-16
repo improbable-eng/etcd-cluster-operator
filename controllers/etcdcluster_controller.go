@@ -83,8 +83,11 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 			log.Error(err, "unable to create Service", "namespace", service.Namespace, "cluster", cluster.Name)
 			return ctrl.Result{}, err
 		}
+		log.V(1).Info("Created Service", "service name", service.Name)
 		return ctrl.Result{}, nil
 	}
+	log.V(2).Info("Service exists", "service name", service.Name)
+
 	return ctrl.Result{}, nil
 }
 
