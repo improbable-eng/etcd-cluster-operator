@@ -16,6 +16,10 @@ import (
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
 )
 
+const (
+	clusterNameSpecField = "spec.clusterName"
+)
+
 // EtcdClusterReconciler reconciles a EtcdCluster object
 type EtcdClusterReconciler struct {
 	client.Client
@@ -92,7 +96,7 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	log.V(2).Info("Service exists", "service", service.Name)
 
 	peers := &etcdv1alpha1.EtcdPeerList{}
-	if err := r.List(ctx, peers, client.MatchingFields{"spec.clusterName": cluster.Name}); err != nil {
+	if err := r.List(ctx, peers, client.MatchingFields{clusterNameSpecField: cluster.Name}); err != nil {
 		log.Error(err, "unable to list peers")
 		return ctrl.Result{}, err
 	}
@@ -192,7 +196,6 @@ func expectedAdvertisePeerURLForPeer(cluster *etcdv1alpha1.EtcdCluster, peerName
 }
 
 func (r *EtcdClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	const clusterNameSpecField = "spec.clusterName"
 	if err := mgr.GetFieldIndexer().IndexField(&etcdv1alpha1.EtcdPeer{},
 		clusterNameSpecField,
 		func(obj runtime.Object) []string {
