@@ -132,3 +132,32 @@ following:
    peer that the cluster does not know about and deletes one.
 4. A deletion hook for the peer resource removes the replica set, but
    not any PVCs associated with the pod.
+
+
+## Persistence
+
+Notes:
+
+- etcd containers need a `volumeMount` for the default etcd data directory
+- etcd pods need a `volume` referencing a `persistentVolumeClaim`
+
+
+New Peer:
+- EtcdPeer controller creates a `PVC` for each peer with values from:
+  - New spec fields:
+    - ``EtcdPeerSpec.StorageClassName``
+    - ``EtcdPeerSpec.StorageSize``
+  - OR
+    - ``EtcdPeerSpec.volumeClaimTemplate`` (as per volumeClaimTemplates in https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.16/#statefulset-v1-apps)
+ - EtcdPeer controller adds the name of that PVC as the `claimName` in the ReplicaSet PodTemplate.
+ - ReplicaSet controller a Pod (unschedulable until PV is ready and PVC is bound)
+ - PVC triggers dynamic volume provisioning of a PV
+ - When PVC is bound, Pod is scheduled to a kubelet node where the PV is attached / available.
+ - Etcd starts and initializes its datastore
+
+Peer Pod is pre-empted / evicted / rescheduled from a kubelet node:
+
+- Scheduler requests a Pod with a fixed PVC name.
+- PVC exists and is bound to a cloud volume.
+- Storage scheduler re-attaches storage to a new node
+-
