@@ -27,11 +27,13 @@ spec:
 **NOTE**: The `volumeClaimTemplate` field is immutable, because the ``improbable-eng/etcd-cluster-operator`` can not currently reconcile changes to the node storage settings.
 
 
-## Bootstrap Operations
+## Operations
 
-Given the ``EtcdCluster`` above and assuming that this is a new cluster, the ``improbable-eng/etcd-cluster-operator`` will perform the following operations:
+Here are some examples of day-to-day operations and how the Etcd data is handled in each case.
 
-### Create PersistentVolumeClaim
+### Bootstrap a new cluster
+
+Given the ``EtcdCluster`` above and assuming that this is a new cluster, the ``improbable-eng/etcd-cluster-operator`` will perform the following operations.
 
 The operator will create new ``EtcdPeer``, ``PersistentVolumeClaim``, ``ReplicaSet`` resources for each ``EtcdCluster`` node, in the same namespace as the ``EtcdCluster``.
 Here is an example of these resources for a single Etcd node:
@@ -99,7 +101,22 @@ It will then be scheduled and started on the same Kubernetes node as the PV.
 
 Eventually, you will have an empty Etcd cluster of three nodes, with a total of 300Gi SSD storage available.
 
-## Restart Operations
+### Reboot a Kubernetes Node
+
+Assuming you are using [Local Persistent Volumes](https://kubernetes.io/docs/concepts/storage/volumes/#local),
+if you reboot a Kubernetes node, what happens to the ``EtcdCluster`` and the pods and data that are on that server?
+
+Kubernetes will delete the current `Pod` (it will be scheduled for deletion), but the PVC, the PV, will remain.
+
+Kubernetes ``ReplicaSet`` controller will ensure that a new ``Pod`` is created, but it will remain un-schedulable until the Kubernetes node reboots.
+This is because the Kubernetes Scheduler knows that the `Pod` placement is constrained by the location of the existing PVC and bound PV.
+
+When the server has rebooted, Kubernetes will be able to schedule the ``Pod`` it will start up, with the existing data and rejoin the Etcd cluster.
+
+**NOTE:** This operation   **does not**  require the ``improbable-eng/etcd-cluster-operator``to be running.
+The Etcd peer ``ReplicaSets`` ensure that the cluster can function even without the operator which created them.
+
+### Drain a Kubernetes Node
 
 TODO
 
