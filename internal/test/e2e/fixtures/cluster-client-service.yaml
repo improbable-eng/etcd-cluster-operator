@@ -1,4 +1,5 @@
-# A service for client access to the ETCD cluster.
+# A service for client access to the ETCD cluster. This is used during testing to ensure that the etcd cluster is
+# reachable after it has been deployed.
 apiVersion: v1
 kind: Service
 metadata:

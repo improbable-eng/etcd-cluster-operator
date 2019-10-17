@@ -1,33 +1,26 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  labels:
-    control-plane: controller-manager
-  name: system
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: controller-manager
-  namespace: system
+  name: etcd-cluster-operator
+  namespace: default
   labels:
-    control-plane: controller-manager
+    control-plane: etcd-cluster-operator
 spec:
   selector:
     matchLabels:
-      control-plane: controller-manager
+      control-plane: etcd-cluster-operator
   replicas: 1
   template:
     metadata:
       labels:
-        control-plane: controller-manager
+        control-plane: etcd-cluster-operator
     spec:
       containers:
       - command:
         - /manager
         args:
         - --enable-leader-election
-        image: controller:latest
+        image: etcd-cluster-operator:latest
         name: manager
         resources:
           limits:

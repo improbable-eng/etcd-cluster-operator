@@ -8,7 +8,7 @@ metadata:
   labels:
     control-plane: controller-manager
   name: controller-manager-metrics-service
-  namespace: system
+  namespace: default
 spec:
   ports:
   - name: https

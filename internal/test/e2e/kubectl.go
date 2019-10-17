@@ -27,6 +27,13 @@ func (k *kubectlContext) Apply(args ...string) error {
 	return err
 }
 
+// Patch wraps `kubectl patch', returning any error that occurred.
+func (k *kubectlContext) Patch(args ...string) error {
+	out, err := k.do(append([]string{"patch"}, args...)...)
+	k.t.Log(string(out))
+	return err
+}
+
 // Get wraps `kubectl get', returning the unparsed output & any error that occurred.
 func (k *kubectlContext) Get(args ...string) (string, error) {
 	out, err := k.do(append([]string{"get"}, args...)...)

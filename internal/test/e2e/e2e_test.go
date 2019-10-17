@@ -91,11 +91,33 @@ func TestE2E_Kind(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// Deploy the image, and ensure it starts.
+	// Deploy the operator.
 	t.Log("Applying operator")
-	err = kubectl.Apply("-f", filepath.Join(*fRepoRoot, "examples", "operator.yaml"))
+	err = kubectl.Apply("--kustomize", filepath.Join(*fRepoRoot, "config", "rbac"))
+	require.NoError(t, err)
+	err = kubectl.Apply("--kustomize", filepath.Join(*fRepoRoot, "config", "manager"))
 	require.NoError(t, err)
 
+	// Patch in our test image to the operator.
+	err = kubectl.Patch(
+		"--kustomize", filepath.Join(*fRepoRoot, "config", "manager"),
+		"--type", "json",
+		"--patch", fmt.Sprintf(`[
+			{
+				"op": "replace", 
+				"path": "/spec/template/spec/containers/0/image", 
+				"value": %q,
+			},
+			{
+				"op": "replace", 
+				"path": "/spec/template/spec/containers/0/imagePullPolicy", 
+				"value": "Never",
+			},
+		]`, operatorImage),
+	)
+	require.NoError(t, err)
+
+	// Ensure the operator starts.
 	err = try.Eventually(func() error {
 		out, err := kubectl.Get("deploy", "etcd-cluster-operator", "-o=jsonpath='{.status.readyReplicas}'")
 		if err != nil {
@@ -172,10 +194,15 @@ func runAllTests(t *testing.T, kubectl *kubectlContext) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
 	defer cancel()
 
-	// Deploy the cluster custom resources.
+	// Deploy a service to expose the cluster to the host machine.
 	err := kubectl.Apply(
-		"-f", filepath.Join(*fRepoRoot, "examples", "cluster.yaml"),
-		"-f", filepath.Join(*fRepoRoot, "examples", "cluster-nodeport.yaml"),
+		"--filename", filepath.Join(*fRepoRoot, "internal", "test", "e2e", "fixtures", "cluster-client-service.yaml"),
+	)
+	require.NoError(t, err)
+
+	// Deploy the cluster custom resources.
+	err = kubectl.Apply(
+		"--filename", filepath.Join(*fRepoRoot, "config", "samples", "etcd_v1alpha1_etcdcluster.yaml"),
 	)
 	require.NoError(t, err)
 
