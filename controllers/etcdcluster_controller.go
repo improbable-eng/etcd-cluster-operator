@@ -154,7 +154,7 @@ func nthPeerName(cluster *etcdv1alpha1.EtcdCluster, i int) string {
 func initialClusterMembers(cluster *etcdv1alpha1.EtcdCluster) []etcdv1alpha1.InitialClusterMember {
 	names := expectedPeerNamesForCluster(cluster)
 	members := make([]etcdv1alpha1.InitialClusterMember, len(names))
-	for i, _ := range members {
+	for i := range members {
 		members[i] = etcdv1alpha1.InitialClusterMember{
 			Name: names[i],
 			Host: expectedAdvertisePeerURLForPeer(cluster, names[i]),
@@ -181,7 +181,7 @@ func nextAvailablePeerName(cluster *etcdv1alpha1.EtcdCluster, peers []etcdv1alph
 
 func expectedPeerNamesForCluster(cluster *etcdv1alpha1.EtcdCluster) (names []string) {
 	names = make([]string, int(*cluster.Spec.Replicas))
-	for i, _ := range names {
+	for i := range names {
 		names[i] = nthPeerName(cluster, i)
 	}
 	return names
