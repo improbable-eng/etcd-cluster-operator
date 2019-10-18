@@ -1,7 +1,6 @@
 package try
 
 import (
-	"bytes"
 	"errors"
 	"testing"
 	"time"
@@ -55,9 +54,8 @@ func CheckStructFields(t *testing.T, expectations map[string]interface{}, actual
 		jp := jsonpath.New(path)
 		err := jp.Parse("{" + path + "}")
 		require.NoError(t, err, "failed to parse jsonpath")
-		buf := new(bytes.Buffer)
-		err = jp.Execute(buf, actual)
+		results, err := jp.FindResults(actual)
 		require.NoError(t, err, "failed to execute jsonpath")
-		assert.Equal(t, expectedValue, buf.String(), "unexpected struct value")
+		assert.Equal(t, expectedValue, results[0][0].Interface(), "unexpected struct value")
 	}
 }

@@ -139,17 +139,19 @@ func TestCheckStructFields(t *testing.T) {
 		name          string
 		path          string
 		expectedValue interface{}
-		actualStruct  interface{}
+		actual        interface{}
 	}{
 		{
 			name:          "int",
-			path:          ".Foo",
+			path:          "",
 			expectedValue: 123,
-			actualStruct: struct {
-				Foo resource.Quantity
-			}{
-				Foo: resource.MustParse("100Gi"),
-			},
+			actual:        123,
+		},
+		{
+			name:          "quantity",
+			path:          "",
+			expectedValue: resource.MustParse("123Gi"),
+			actual:        resource.MustParse("123Gi"),
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -158,7 +160,7 @@ func TestCheckStructFields(t *testing.T) {
 				map[string]interface{}{
 					tc.path: tc.expectedValue,
 				},
-				tc.actualStruct,
+				tc.actual,
 			)
 		})
 	}
