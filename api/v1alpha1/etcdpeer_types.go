@@ -1,6 +1,7 @@
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -53,6 +54,13 @@ type EtcdPeerSpec struct {
 	// instructions if it already knows where it's peers are.
 	// +optional
 	Bootstrap *Bootstrap `json:"bootstrap,omitempty"`
+
+	// VolumeClaimTemplates is a claim that pods are allowed to reference.
+	// The EtcdPeer controller will create a new PersistentVolumeClaim using the StorageClass
+	// and the Storage Resource Request in this template.
+	// That PVC will then be mounted in the Pod for this EtcdPeer
+	// and the Etcd process when it starts will persist its data to the PV bound to that PVC.
+	VolumeClaimTemplate *corev1.PersistentVolumeClaim `json:"volumeClaimTemplate,omitempty"`
 }
 
 // EtcdPeerStatus defines the observed state of EtcdPeer
