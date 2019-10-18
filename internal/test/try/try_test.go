@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 func TestConsistently(t *testing.T) {
@@ -129,6 +130,36 @@ func TestEventually(t *testing.T) {
 			} else {
 				require.NoError(t, err, "an error was found, but not expected")
 			}
+		})
+	}
+}
+
+func TestCheckStructFields(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		path          string
+		expectedValue interface{}
+		actualStruct  interface{}
+	}{
+		{
+			name:          "int",
+			path:          ".Foo",
+			expectedValue: 123,
+			actualStruct: struct {
+				Foo resource.Quantity
+			}{
+				Foo: resource.MustParse("100Gi"),
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			CheckStructFields(
+				t,
+				map[string]interface{}{
+					tc.path: tc.expectedValue,
+				},
+				tc.actualStruct,
+			)
 		})
 	}
 }

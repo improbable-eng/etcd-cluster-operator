@@ -1,8 +1,14 @@
 package try
 
 import (
+	"bytes"
 	"errors"
+	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"k8s.io/client-go/util/jsonpath"
 )
 
 // Consistently checks that `fn' consistently returns no error each `tick' for `duration'. It returns an error if any
@@ -41,5 +47,17 @@ func Eventually(fn func() error, duration time.Duration, tick time.Duration) err
 				return nil
 			}
 		}
+	}
+}
+
+func CheckStructFields(t *testing.T, expectations map[string]interface{}, actual interface{}) {
+	for path, expectedValue := range expectations {
+		jp := jsonpath.New(path)
+		err := jp.Parse("{" + path + "}")
+		require.NoError(t, err, "failed to parse jsonpath")
+		buf := new(bytes.Buffer)
+		err = jp.Execute(buf, actual)
+		require.NoError(t, err, "failed to execute jsonpath")
+		assert.Equal(t, expectedValue, buf.String(), "unexpected struct value")
 	}
 }
