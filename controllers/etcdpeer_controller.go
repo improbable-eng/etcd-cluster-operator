@@ -13,6 +13,7 @@ import (
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -181,7 +182,7 @@ func pvcForPeer(peer *etcdv1alpha1.EtcdPeer) *corev1.PersistentVolumeClaim {
 					"storage": resource.MustParse("100Gi"),
 				},
 			},
-			// StorageClassName: ptr.String("local-ssd"),
+			StorageClassName: pointer.StringPtr("local-ssd"),
 		},
 	}
 }
