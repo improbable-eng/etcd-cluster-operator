@@ -153,6 +153,15 @@ func TestCheckStructFields(t *testing.T) {
 			expectedValue: resource.MustParse("123Gi"),
 			actual:        resource.MustParse("123Gi"),
 		},
+		// TODO: This currently panics if you supply two different pointers.
+		// See https://github.com/stretchr/testify/pull/680
+		// And https://github.com/stretchr/testify/issues/677
+		// {
+		//	name:          "pointer",
+		//	path:          "",
+		//	expectedValue: pointer.StringPtr("foo"),
+		//	actual:        pointer.StringPtr("foox"),
+		// },
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			CheckStructFields(
