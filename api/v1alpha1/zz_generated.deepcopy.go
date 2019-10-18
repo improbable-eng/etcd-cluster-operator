@@ -5,6 +5,7 @@
 package v1alpha1
 
 import (
+	"k8s.io/api/core/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -182,6 +183,11 @@ func (in *EtcdPeerSpec) DeepCopyInto(out *EtcdPeerSpec) {
 	if in.Bootstrap != nil {
 		in, out := &in.Bootstrap, &out.Bootstrap
 		*out = new(Bootstrap)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.VolumeClaimTemplate != nil {
+		in, out := &in.VolumeClaimTemplate, &out.VolumeClaimTemplate
+		*out = new(v1.PersistentVolumeClaim)
 		(*in).DeepCopyInto(*out)
 	}
 }
