@@ -9,9 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
@@ -171,8 +169,8 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		expectations := map[string]interface{}{
 			".metadata.name":                   peer.Name,
 			".metadata.namespace":              peer.Namespace,
-			".spec.resources.requests.storage": resource.MustParse("100Gi"),
-			".spec.storageClassName":           pointer.StringPtr("local-ssd"),
+			".spec.resources.requests.storage": peer.Spec.VolumeClaimTemplate.Spec.Resources.Requests["storage"],
+			".spec.storageClassName":           peer.Spec.VolumeClaimTemplate.Spec.StorageClassName,
 		}
 		try.CheckStructFields(t, expectations, actualPvc)
 	})
