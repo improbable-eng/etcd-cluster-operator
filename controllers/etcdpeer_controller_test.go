@@ -166,12 +166,12 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 			time.Second*5, time.Millisecond*500,
 		)
 		require.NoError(t, err, "PVC was not created")
-		expectedPvc := &corev1.PersistentVolumeClaim{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      peer.Name,
-				Namespace: peer.Namespace,
-			},
+		expectations := map[string]string{
+			".metadata.name":                   peer.Name,
+			".metadata.namespace":              peer.Namespace,
+			".spec.resources.requests.storage": "100Gi",
+			".spec.storageClassName":           "local-ssd",
 		}
-		require.Equal(t, expectedPvc, actualPvc, "Unexpected PVC")
+		try.CheckStructFields(t, expectations, actualPvc)
 	})
 }
