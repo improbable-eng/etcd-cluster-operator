@@ -9,7 +9,9 @@ import (
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
@@ -49,6 +51,16 @@ func exampleEtcdPeer(namespace string) *etcdv1alpha1.EtcdPeer {
 						{
 							Name: "goose",
 							Host: fmt.Sprintf("goose.my-cluster.%s.svc", namespace),
+						},
+					},
+				},
+			},
+			VolumeClaimTemplate: &corev1.PersistentVolumeClaim{
+				Spec: corev1.PersistentVolumeClaimSpec{
+					StorageClassName: pointer.StringPtr("local-ssd"),
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							"storage": resource.MustParse("100Gi"),
 						},
 					},
 				},
