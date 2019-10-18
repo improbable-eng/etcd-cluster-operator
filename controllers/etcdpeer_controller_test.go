@@ -57,10 +57,10 @@ func exampleEtcdPeer(namespace string) *etcdv1alpha1.EtcdPeer {
 			},
 			VolumeClaimTemplate: &corev1.PersistentVolumeClaim{
 				Spec: corev1.PersistentVolumeClaimSpec{
-					StorageClassName: pointer.StringPtr("local-ssd"),
+					StorageClassName: pointer.StringPtr("example-class"),
 					Resources: corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
-							"storage": resource.MustParse("100Gi"),
+							"storage": resource.MustParse("999Gi"),
 						},
 					},
 				},
