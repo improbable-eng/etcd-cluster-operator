@@ -149,4 +149,29 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 			"ETCD_INITIAL_CLUSTER_STATE environment variable set incorrectly",
 		)
 	})
+	t.Run("CreatesPersistentVolumeClaim", func(t *testing.T) {
+		teardown, namespace := s.setupTest(t)
+		defer teardown()
+		peer := exampleEtcdPeer(namespace)
+		err := s.k8sClient.Create(s.ctx, peer)
+		require.NoError(t, err, "failed to create EtcdPeer resource")
+		actualPvc := &corev1.PersistentVolumeClaim{}
+		err = try.Eventually(
+			func() error {
+				return s.k8sClient.Get(s.ctx, client.ObjectKey{
+					Name:      peer.Name,
+					Namespace: peer.Namespace,
+				}, actualPvc)
+			},
+			time.Second*5, time.Millisecond*500,
+		)
+		require.NoError(t, err, "PVC was not created")
+		expectedPvc := &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      peer.Name,
+				Namespace: peer.Namespace,
+			},
+		}
+		require.Equal(t, expectedPvc, actualPvc, "Unexpected PVC")
+	})
 }
