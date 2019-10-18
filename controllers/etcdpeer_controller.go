@@ -11,6 +11,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -162,6 +163,53 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 	}
 }
 
+func pvcForPeer(peer *etcdv1alpha1.EtcdPeer) *corev1.PersistentVolumeClaim {
+	return &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      peer.Name,
+			Namespace: peer.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(peer, etcdv1alpha1.GroupVersion.WithKind("EtcdPeer")),
+			},
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				corev1.ReadWriteMany,
+			},
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					"storage": resource.MustParse("100Gi"),
+				},
+			},
+			// StorageClassName: ptr.String("local-ssd"),
+		},
+	}
+}
+
+func (r *EtcdPeerReconciler) getOrCreatePvc(ctx context.Context, peer *etcdv1alpha1.EtcdPeer) (pvc *corev1.PersistentVolumeClaim, created bool, err error) {
+	objectKey := client.ObjectKey{
+		Name:      peer.Name,
+		Namespace: peer.Namespace,
+	}
+	// Check for existing object
+	pvc = &corev1.PersistentVolumeClaim{}
+	err = r.Get(ctx, objectKey, pvc)
+	// Object exists
+	if err == nil {
+		return
+	}
+	// Error when fetching the object
+	if !apierrs.IsNotFound(err) {
+		return
+	}
+	// Object does not exist
+	err = r.Create(ctx, pvcForPeer(peer))
+	if err == nil {
+		created = true
+	}
+	return
+}
+
 func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -176,8 +224,13 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	log.V(2).Info("Found EtcdPeer", "name", peer.Name)
 
+	_, created, err := r.getOrCreatePvc(ctx, &peer)
+	if err != nil || created {
+		return ctrl.Result{}, err
+	}
+
 	var existingReplicaSet appsv1.ReplicaSet
-	err := r.Get(
+	err = r.Get(
 		ctx,
 		client.ObjectKey{
 			Namespace: peer.Namespace,
@@ -215,5 +268,6 @@ func (r *EtcdPeerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&etcdv1alpha1.EtcdPeer{}).
 		// Watch for changes to ReplicaSet resources that an EtcdPeer owns.
 		Owns(&appsv1.ReplicaSet{}).
+		Owns(&corev1.PersistentVolumeClaim{}).
 		Complete(r)
 }
