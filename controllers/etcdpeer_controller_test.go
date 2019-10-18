@@ -27,40 +27,42 @@ func requireEnvVar(t *testing.T, env []corev1.EnvVar, evName string) string {
 	return ""
 }
 
+func exampleEtcdPeer(namespace string) *etcdv1alpha1.EtcdPeer {
+	return &etcdv1alpha1.EtcdPeer{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "bees",
+			Namespace: namespace,
+		},
+		Spec: etcdv1alpha1.EtcdPeerSpec{
+			ClusterName: "my-cluster",
+			Bootstrap: &etcdv1alpha1.Bootstrap{
+				Static: &etcdv1alpha1.StaticBootstrap{
+					InitialCluster: []etcdv1alpha1.InitialClusterMember{
+						{
+							Name: "bees",
+							Host: fmt.Sprintf("bees.my-cluster.%s.svc", namespace),
+						},
+						{
+							Name: "magic",
+							Host: fmt.Sprintf("magic.my-cluster.%s.svc", namespace),
+						},
+						{
+							Name: "goose",
+							Host: fmt.Sprintf("goose.my-cluster.%s.svc", namespace),
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func (s *controllerSuite) testPeerController(t *testing.T) {
 	t.Run("TestPeerController_OnCreation_CreatesReplicaSet", func(t *testing.T) {
 		teardownFunc, namespace := s.setupTest(t)
 		defer teardownFunc()
 
-		etcdPeer := &etcdv1alpha1.EtcdPeer{
-			ObjectMeta: metav1.ObjectMeta{
-				Labels:      make(map[string]string),
-				Annotations: make(map[string]string),
-				Name:        "bees",
-				Namespace:   namespace,
-			},
-			Spec: etcdv1alpha1.EtcdPeerSpec{
-				ClusterName: "my-cluster",
-				Bootstrap: &etcdv1alpha1.Bootstrap{
-					Static: &etcdv1alpha1.StaticBootstrap{
-						InitialCluster: []etcdv1alpha1.InitialClusterMember{
-							{
-								Name: "bees",
-								Host: fmt.Sprintf("bees.my-cluster.%s.svc", namespace),
-							},
-							{
-								Name: "magic",
-								Host: fmt.Sprintf("magic.my-cluster.%s.svc", namespace),
-							},
-							{
-								Name: "goose",
-								Host: fmt.Sprintf("goose.my-cluster.%s.svc", namespace),
-							},
-						},
-					},
-				},
-			},
-		}
+		etcdPeer := exampleEtcdPeer(namespace)
 
 		err := s.k8sClient.Create(s.ctx, etcdPeer)
 		require.NoError(t, err, "failed to create EtcdPeer resource")
