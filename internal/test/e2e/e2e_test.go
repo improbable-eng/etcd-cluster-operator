@@ -8,7 +8,9 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 
@@ -29,8 +31,8 @@ const (
 )
 
 var (
-	fUseKind           = flag.Bool("kind", false, "Creates a Kind cluster to run the tests against")
-	fUseCurrentContext = flag.Bool("current-context", false, "Runs the tests against the current kubernetes context, the path to kube config defaults to ~/.kube/config, unless overridden by the KUBECONFIG environment variable")
+	fUseKind           = flag.Bool("kind", false, "Creates a Kind cluster to run the tests against.")
+	fUseCurrentContext = flag.Bool("current-context", false, "Runs the tests against the current Kubernetes context, the path to kube config defaults to ~/.kube/config, unless overridden by the KUBECONFIG environment variable.")
 	fRepoRoot          = flag.String("repo-root", "", "The absolute path to the root of the etcd-cluster-operator git repository.")
 	fCleanup           = flag.Bool("cleanup", true, "Tears down the Kind cluster once the test is finished.")
 
@@ -53,6 +55,14 @@ func TestE2E_Kind(t *testing.T) {
 	// Create Kind cluster to run the workloads.
 	kind, stopKind := setupLocalCluster(t)
 	defer stopKind()
+
+	// Ensure Kind gets stopped on SIGINT/SIGTERM.
+	sigs := make(chan os.Signal)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigs
+		stopKind()
+	}()
 
 	kubectl := &kubectlContext{
 		t:          t,
@@ -124,7 +134,7 @@ func TestE2E_Kind(t *testing.T) {
 			return err
 		}
 		if out != "'1'" {
-			return errors.New("expected at least 1 replica of the operator to be available, got: " + out)
+			return errors.New("expected exactly 1 replica of the operator to be available, got: " + out)
 		}
 		return nil
 	}, time.Minute, time.Second*5)
