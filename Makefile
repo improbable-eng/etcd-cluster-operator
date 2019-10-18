@@ -19,7 +19,7 @@ bin/kubebuilder:
 
 # Run tests
 test: generate fmt vet manifests bin/kubebuilder
-	KUBEBUILDER_ASSETS="$(shell pwd)/bin/kubebuilder/bin" go test ./... -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell pwd)/bin/kubebuilder/bin" go test -v ./... -coverprofile cover.out
 
 # Build manager binary
 manager: generate fmt vet
