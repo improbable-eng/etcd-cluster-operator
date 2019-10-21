@@ -1,7 +1,0 @@
-apiVersion: etcd.improbable.io/v1alpha1
-kind: EtcdCluster
-metadata:
-  name: my-cluster
-  namespace: default
-spec:
-  replicas: 3
