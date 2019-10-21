@@ -3,3 +3,5 @@ kind: EtcdCluster
 metadata:
   name: my-cluster
   namespace: default
+spec:
+  replicas: 3
