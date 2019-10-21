@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -212,4 +213,24 @@ func runAllTests(t *testing.T, kubectl *kubectlContext) {
 	}, time.Minute*2, time.Second*10)
 	require.NoError(t, err)
 	t.Log("ETCD is reachable from host machine")
+
+	err = try.Eventually(func() error {
+		t.Log("Checking if the EtcdCluster resource has the correct status")
+		members, err := kubectl.Get("--namespace", "default", "etcdcluster", "my-cluster", "-o=jsonpath='{.status.members...name}'")
+
+		if err != nil {
+			return err
+		}
+		for _, expectedMemberName := range []string{
+			"my-cluster-0",
+			"my-cluster-1",
+			"my-cluster-2",
+		} {
+			if !strings.Contains(members, expectedMemberName) {
+				return errors.New(fmt.Sprintf("Expected etcd member list '%s' to contain member name '%s'", members, expectedMemberName))
+			}
+		}
+		return nil
+	}, time.Minute*2, time.Second*10)
+	require.NoError(t, err)
 }

@@ -98,6 +98,7 @@ func (s *controllerSuite) setupTest(t *testing.T) (teardownFunc func(), namespac
 		Log: logtest.TestLogger{
 			T: t,
 		},
+		Recorder: mgr.GetEventRecorderFor("etcdcluster-reconciler"),
 	}
 	err = clusterController.SetupWithManager(mgr)
 	require.NoError(t, err, "failed to setup EtcdCluster controller")

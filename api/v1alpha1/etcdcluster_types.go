@@ -16,13 +16,20 @@ type EtcdClusterSpec struct {
 	Storage *EtcdPeerStorage `json:"storage,omitempty"`
 }
 
+type EtcdMember struct {
+	Name string `json:"name"`
+	ID   string `json:"ID"`
+}
+
 // EtcdClusterStatus defines the observed state of EtcdCluster
 type EtcdClusterStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Members contains information about each member from the etcd cluster.
+	// +optional
+	Members []EtcdMember `json:"members"`
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 
 // EtcdCluster is the Schema for the etcdclusters API
 type EtcdCluster struct {

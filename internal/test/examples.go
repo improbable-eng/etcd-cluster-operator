@@ -31,6 +31,9 @@ func ExampleEtcdCluster(namespace string) *v1alpha1.EtcdCluster {
 				},
 			},
 		},
+		Status: v1alpha1.EtcdClusterStatus{
+			Members:  make([]v1alpha1.EtcdMember, 0),
+		},
 	}
 }
 

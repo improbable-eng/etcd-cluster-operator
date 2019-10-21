@@ -55,8 +55,9 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&controllers.EtcdClusterReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("EtcdCluster"),
+		Client:   mgr.GetClient(),
+		Log:      ctrl.Log.WithName("controllers").WithName("EtcdCluster"),
+		Recorder: mgr.GetEventRecorderFor("etcdcluster-reconciler"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "EtcdCluster")
 		os.Exit(1)
