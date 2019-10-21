@@ -10,11 +10,11 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/test/try"
-	"github.com/improbable-eng/etcd-cluster-operator/internal/util/ptr"
 )
 
 func (s *controllerSuite) testClusterController(t *testing.T) {
@@ -30,7 +30,7 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 				Namespace:   namespace,
 			},
 			Spec: etcdv1alpha1.EtcdClusterSpec{
-				Replicas: ptr.Int32(3),
+				Replicas: pointer.Int32Ptr(3),
 			},
 		}
 
