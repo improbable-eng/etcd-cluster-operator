@@ -4,17 +4,31 @@
 version: 2
 jobs:
   build:
-    docker:
-      # CircleCI maintains a library of pre-built images
-      # documented at https://circleci.com/docs/2.0/circleci-images/
-      - image: circleci/golang:1.13.1
-
-    #### TEMPLATE_NOTE: go expects specific checkout path representing url
-    #### expecting it in the form of
-    ####   /go/src/github.com/circleci/go-tool
-    ####   /go/src/bitbucket.org/circleci/go-tool
-    working_directory: /go/src/github.com/{{ORG_NAME}}/{{REPO_NAME}}
+    machine:
+      image: circleci/classic:latest
+    working_directory: ~/go/src/github.com/improbable-eng/etcd-cluster-operator
     steps:
+      - run:
+          name: Install Go
+          command: |
+            sudo rm -rf /usr/local/go
+            curl -sSL "https://dl.google.com/go/go1.13.1.linux-amd64.tar.gz" | sudo tar -xz -C /usr/local/
+            echo "export PATH=$PATH:/usr/local/go/bin" >> $BASH_ENV
+            echo 'export GOPATH=$HOME/go' >> $BASH_ENV 
+      - run:
+          name: Install kubectl
+          command: |
+            # Get latest kubectl release
+            KUBECTL_VERSION=$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
+            # Download kubectl 
+            curl -LO https://storage.googleapis.com/kubernetes-release/release/$KUBECTL_VERSION/bin/linux/amd64/kubectl
+            # Mark it executable & move to /bin
+            sudo chmod +x ./kubectl
+            sudo mv ./kubectl /usr/local/bin
       - checkout
-
-      - run: make test
+      - run: 
+         name: Unit tests
+         command: make test
+      - run:
+         name: End to end tests
+         command: make e2e

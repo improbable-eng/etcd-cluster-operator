@@ -17,10 +17,11 @@ all: manager
 bin/kubebuilder:
 	hack/download-kubebuilder-local.sh
 
-# Run tests
+# Run unit tests
 test: generate fmt vet manifests bin/kubebuilder
 	KUBEBUILDER_ASSETS="$(shell pwd)/bin/kubebuilder/bin" go test ./... -coverprofile cover.out
 
+# Run end to end tests in a local Kind cluster
 kind: generate fmt vet manifests
 	go test ./internal/test/e2e --kind --repo-root ${CURDIR} -v
 
