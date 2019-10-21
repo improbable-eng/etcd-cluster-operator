@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -11,12 +12,22 @@ import (
 type kubectlContext struct {
 	t          *testing.T
 	configPath string
+	homeDir    string
 }
 
 func (k *kubectlContext) do(args ...string) ([]byte, error) {
+	if k.homeDir == "" {
+		hd, err := os.UserHomeDir()
+		if err != nil {
+			return nil, err
+		}
+		k.homeDir = hd
+	}
+
 	k.t.Log("Running kubectl " + strings.Join(args, " "))
 	cmd := exec.Command("kubectl", args...)
 	cmd.Env = append(cmd.Env, "KUBECONFIG="+k.configPath)
+	cmd.Env = append(cmd.Env, "HOME="+k.homeDir)
 	return cmd.CombinedOutput()
 }
 
