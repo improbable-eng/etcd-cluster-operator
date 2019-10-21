@@ -103,7 +103,7 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 
 	// Assume we can't communicate with the cluster
 	log.V(1).Info("Unable to communicate with etcd cluster")
-	if int32(len(peers.Items)) < *cluster.Spec.Replicas {
+	if cluster.Spec.Replicas != nil && int32(len(peers.Items)) < *cluster.Spec.Replicas {
 
 		// Create more peers
 		peerName := nextAvailablePeerName(cluster, peers.Items)
