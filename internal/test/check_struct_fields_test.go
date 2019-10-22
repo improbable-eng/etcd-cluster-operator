@@ -75,6 +75,63 @@ func TestCheckStructFields(t *testing.T) {
 			expectErr:     true,
 		},
 		{
+			name:          "simple path match",
+			path:          ".Bar",
+			expectedValue: "BAR",
+			actual: struct {
+				Foo string
+				Bar string
+			}{
+				Foo: "FOO",
+				Bar: "BAR",
+			},
+		},
+		{
+			name:          "simple path missing",
+			path:          ".Baz",
+			expectedValue: nil,
+			actual: struct {
+				Foo string
+				Bar string
+			}{
+				Foo: "FOO",
+				Bar: "BAR",
+			},
+			expectErr: true,
+		},
+		{
+			name:          "simple map key match",
+			path:          ".bar",
+			expectedValue: "BAR",
+			actual: map[string]string{
+				"foo": "FOO",
+				"bar": "BAR",
+			},
+		},
+		{
+			name:          "simple map key missing",
+			path:          ".baz",
+			expectedValue: "BAZ",
+			actual: map[string]string{
+				"foo": "FOO",
+				"bar": "BAR",
+			},
+			expectErr: true,
+		},
+		{
+			name:          "simple list index match",
+			path:          "[1]",
+			expectedValue: "bar",
+			actual:        []string{"foo", "bar"},
+		},
+		{
+			name:          "simple list index missing",
+			path:          "[2]",
+			expectedValue: nil,
+			actual:        []string{"foo", "bar"},
+			expectErr:     true,
+		},
+		{
 			name:          "struct paths with maps",
 			path:          ".spec.resources.requests.storage",
 			expectedValue: resource.MustParse("101Gi"),

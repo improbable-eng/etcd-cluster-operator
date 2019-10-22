@@ -24,7 +24,11 @@ func CheckStructFields(expectations map[string]interface{}, actual interface{}) 
 		}
 		results, err := jp.FindResults(actual)
 		if err != nil {
-			return nil, fmt.Errorf("failure in FindResults for path %s: %v", path, err)
+			allErrs = append(
+				allErrs,
+				field.NotFound(fldPath, fmt.Sprintf("%s", err)),
+			)
+			continue
 		}
 		if len(results[0]) == 0 {
 			allErrs = append(
