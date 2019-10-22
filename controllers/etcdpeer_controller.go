@@ -157,6 +157,16 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 							},
 						},
 					},
+					Volumes: []corev1.Volume{
+						{
+							Name: "etcd-data",
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: peer.Name,
+								},
+							},
+						},
+					},
 				},
 			},
 		},
