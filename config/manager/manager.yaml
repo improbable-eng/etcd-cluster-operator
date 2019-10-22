@@ -1,19 +1,19 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: etcd-cluster-operator
+  name: manager
   namespace: default
   labels:
-    control-plane: etcd-cluster-operator
+    control-plane: manager
 spec:
   selector:
     matchLabels:
-      control-plane: etcd-cluster-operator
+      control-plane: manager
   replicas: 1
   template:
     metadata:
       labels:
-        control-plane: etcd-cluster-operator
+        control-plane: manager
     spec:
       containers:
       - command:
