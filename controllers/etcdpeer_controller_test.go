@@ -105,7 +105,7 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 			`.spec.template.spec.volumes[?(@.name=="etcd-data")].persistentVolumeClaim.claimName`:              etcdPeer.Name,
 			`.spec.template.spec.containers[?(@.name=="etcd")].volumeMounts[?(@.name=="etcd-data")].mountPath`: "/var/lib/etcd",
 		}
-		test.CheckStructFields(t, expectations, replicaSet)
+		test.AssertStructFields(t, expectations, replicaSet)
 
 		// Find the etcd container
 		var etcdContainer corev1.Container
@@ -191,6 +191,6 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 			".spec.resources.requests.storage": peer.Spec.VolumeClaimTemplate.Spec.Resources.Requests["storage"],
 			".spec.storageClassName":           peer.Spec.VolumeClaimTemplate.Spec.StorageClassName,
 		}
-		test.CheckStructFields(t, expectations, actualPvc)
+		test.AssertStructFields(t, expectations, actualPvc)
 	})
 }

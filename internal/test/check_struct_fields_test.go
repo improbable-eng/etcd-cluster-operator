@@ -3,8 +3,10 @@ package test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/utils/pointer"
 )
 
 // TODO(wallrj): Add tests for failure cases.
@@ -17,6 +19,7 @@ func TestCheckStructFields(t *testing.T) {
 		path          string
 		expectedValue interface{}
 		actual        interface{}
+		expectErr     bool
 	}{
 		{
 			name:          "int values",
@@ -36,15 +39,12 @@ func TestCheckStructFields(t *testing.T) {
 			expectedValue: resource.MustParse("123Gi"),
 			actual:        resource.MustParse("123Gi"),
 		},
-		// TODO: This currently panics if you supply two different pointers.
-		// See https://github.com/stretchr/testify/pull/680
-		// And https://github.com/stretchr/testify/issues/677
-		// {
-		//	name:          "pointer",
-		//	path:          "",
-		//	expectedValue: pointer.StringPtr("foo"),
-		//	actual:        pointer.StringPtr("foox"),
-		// },
+		{
+			name:          "pointer",
+			path:          "",
+			expectedValue: pointer.StringPtr("foo"),
+			actual:        pointer.StringPtr("foo"),
+		},
 		{
 			name:          "struct paths with maps",
 			path:          ".spec.resources.requests.storage",
@@ -78,13 +78,18 @@ func TestCheckStructFields(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			CheckStructFields(
-				t,
+			validationErrors, err := CheckStructFields(
 				map[string]interface{}{
 					tc.path: tc.expectedValue,
 				},
 				tc.actual,
 			)
+			if tc.expectErr {
+				require.Errorf(t, err, "missing error: %#v", tc)
+			} else {
+				require.NoErrorf(t, err, "unexpected error: %#v", tc)
+			}
+			t.Log(validationErrors)
 		})
 	}
 }

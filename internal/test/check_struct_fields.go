@@ -1,9 +1,13 @@
 package test
 
 import (
+	"fmt"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/client-go/util/jsonpath"
 )
 
@@ -12,21 +16,39 @@ import (
 // TODO: This currently panics if you supply two different pointers.
 // See https://github.com/stretchr/testify/pull/680
 // And https://github.com/stretchr/testify/issues/677
-func CheckStructFields(t *testing.T, expectations map[string]interface{}, actual interface{}) {
+func CheckStructFields(expectations map[string]interface{}, actual interface{}) (field.ErrorList, error) {
+	var allErrs field.ErrorList
 	for path, expectedValue := range expectations {
+		fldPath := field.NewPath(path)
 		jp := jsonpath.New(path)
 		err := jp.Parse("{" + path + "}")
-		if !assert.NoErrorf(t, err, "jsonpath: %v", path) {
-			continue
+		if err != nil {
+			return nil, fmt.Errorf("failure in Parse for path %s: %v", path, err)
 		}
 		results, err := jp.FindResults(actual)
-		if !assert.NoErrorf(t, err, "jsonpath: %v", path) {
-			continue
+		if err != nil {
+			return nil, fmt.Errorf("failure in FindResults for path %s: %v", path, err)
 		}
 		if len(results[0]) == 0 {
-			assert.Failf(t, "field not found", "jsonpath: %v", path)
+			allErrs = append(
+				allErrs,
+				field.Required(fldPath, fmt.Sprintf("no results for path: %s", path)),
+			)
 			continue
 		}
-		assert.Equalf(t, expectedValue, results[0][0].Interface(), "jsonpath: %v", path)
+		actualValue := results[0][0].Interface()
+		if diff := cmp.Diff(expectedValue, actualValue); diff != "" {
+			allErrs = append(
+				allErrs,
+				field.Invalid(fldPath, actualValue, fmt.Sprintf("mismatch (-expected +actual):\n%s", diff)),
+			)
+		}
 	}
+	return allErrs, nil
+}
+
+func AssertStructFields(t *testing.T, expectations map[string]interface{}, actual interface{}) bool {
+	fieldErrors, err := CheckStructFields(expectations, actual)
+	require.NoError(t, err)
+	return assert.NoError(t, fieldErrors.ToAggregate())
 }
