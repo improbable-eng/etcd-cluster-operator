@@ -68,6 +68,6 @@ func CheckStructFields(t *testing.T, expectations map[string]interface{}, actual
 			assert.Failf(t, "field not found", "jsonpath: %v", path)
 			continue
 		}
-		assert.Equal(t, expectedValue, results[0][0].Interface(), "unexpected struct value")
+		assert.Equalf(t, expectedValue, results[0][0].Interface(), "jsonpath: %v", path)
 	}
 }
