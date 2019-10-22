@@ -101,8 +101,8 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 			"Cluster name not set as Pod subdomain")
 
 		expectations := map[string]interface{}{
-			".spec.template.spec.volumes[?(@.name=etcd-data)].persistentVolumeClaim.claimName":           etcdPeer.Name,
-			".spec.template.spec.containers[?(@.name=etcd)].volumeMounts[?(@.name=etcd-data)].mountPath": "/var/lib/etcd",
+			`.spec.template.spec.volumes[?(@.name=="etcd-data")].persistentVolumeClaim.claimName`:              etcdPeer.Name,
+			`.spec.template.spec.containers[?(@.name=="etcd")].volumeMounts[?(@.name=="etcd-data")].mountPath`: "/var/lib/etcd",
 		}
 		try.CheckStructFields(t, expectations, replicaSet)
 
