@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"k8s.io/client-go/util/jsonpath"
 )
 
@@ -58,9 +57,17 @@ func CheckStructFields(t *testing.T, expectations map[string]interface{}, actual
 	for path, expectedValue := range expectations {
 		jp := jsonpath.New(path)
 		err := jp.Parse("{" + path + "}")
-		require.NoError(t, err, "failed to parse jsonpath")
+		if !assert.NoErrorf(t, err, "jsonpath: %v", path) {
+			continue
+		}
 		results, err := jp.FindResults(actual)
-		require.NoError(t, err, "failed to execute jsonpath")
+		if !assert.NoErrorf(t, err, "jsonpath: %v", path) {
+			continue
+		}
+		if len(results[0]) == 0 {
+			assert.Failf(t, "field not found", "jsonpath: %v", path)
+			continue
+		}
 		assert.Equal(t, expectedValue, results[0][0].Interface(), "unexpected struct value")
 	}
 }
