@@ -1,4 +1,3 @@
-
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
@@ -19,7 +18,7 @@ bin/kubebuilder:
 
 # Run tests
 test: generate fmt vet manifests bin/kubebuilder
-	KUBEBUILDER_ASSETS="$(shell pwd)/bin/kubebuilder/bin" go test -v ./... -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell pwd)/bin/kubebuilder/bin" go test ./... -coverprofile cover.out
 
 # Build manager binary
 manager: generate fmt vet
