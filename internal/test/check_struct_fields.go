@@ -13,9 +13,6 @@ import (
 
 // CheckStructFields asserts that the struct fields referenced by the supplied expectation path,
 // have a value equal to the expectation value.
-// TODO: This currently panics if you supply two different pointers.
-// See https://github.com/stretchr/testify/pull/680
-// And https://github.com/stretchr/testify/issues/677
 func CheckStructFields(expectations map[string]interface{}, actual interface{}) (field.ErrorList, error) {
 	var allErrs field.ErrorList
 	for path, expectedValue := range expectations {
