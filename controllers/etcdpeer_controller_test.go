@@ -100,6 +100,12 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 			etcdPeer.Spec.ClusterName,
 			"Cluster name not set as Pod subdomain")
 
+		expectations := map[string]interface{}{
+			".spec.template.spec.volumes[?(@.name=etcd-data)].persistentVolumeClaim.claimName":           etcdPeer.Name,
+			".spec.template.spec.containers[?(@.name=etcd)].volumeMounts[?(@.name=etcd-data)].mountPath": "/var/lib/etcd",
+		}
+		try.CheckStructFields(t, expectations, replicaSet)
+
 		// Find the etcd container
 		var etcdContainer corev1.Container
 		for _, container := range replicaSet.Spec.Template.Spec.Containers {
