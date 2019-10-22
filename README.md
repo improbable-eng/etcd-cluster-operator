@@ -61,6 +61,16 @@ You can remove the testing pod with `kubectl delete po etcd-shell`.
 The cluster can be removed with `kubectl delete -f config/samples/etcd_v1alpha1_etcdcluster.yaml`, or by manually
 specifying the `EtcdCluster` resource to delete.
 
+## Developing
+
+Use `make test` to run the tests. This will download the Kubebuilder binaries for your platform (only x86-64 Linux and
+x86-64 macOS supported) to `bin/kubebuilder` and use those to run tests.
+
+Use `make kind` to run the [Kubernetes in Docker (KIND)](https://github.com/kubernetes-sigs/kind) end to end tests. You
+don't need to have the `kind` binary installed to run these, but you do need `docker`. These tests build the controller
+Docker Image from the `Dockerfile`, push it into the KIND cluster, and then ensure that the etcd cluster actually comes
+up.
+
 ## Design
 
 Designs are documented in [docs/design](https://github.com/improbable-eng/etcd-cluster-operator/tree/master/docs/design).
