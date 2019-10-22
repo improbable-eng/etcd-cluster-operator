@@ -202,28 +202,31 @@ func pvcForPeer(peer *etcdv1alpha1.EtcdPeer) *corev1.PersistentVolumeClaim {
 	}
 }
 
-func (r *EtcdPeerReconciler) getOrCreatePvc(ctx context.Context, peer *etcdv1alpha1.EtcdPeer) (pvc *corev1.PersistentVolumeClaim, created bool, err error) {
+func (r *EtcdPeerReconciler) maybeCreatePvc(ctx context.Context, peer *etcdv1alpha1.EtcdPeer) (created bool, err error) {
 	objectKey := client.ObjectKey{
 		Name:      peer.Name,
 		Namespace: peer.Namespace,
 	}
 	// Check for existing object
-	pvc = &corev1.PersistentVolumeClaim{}
+	pvc := &corev1.PersistentVolumeClaim{}
 	err = r.Get(ctx, objectKey, pvc)
 	// Object exists
 	if err == nil {
-		return
+		return false, nil
 	}
 	// Error when fetching the object
 	if !apierrs.IsNotFound(err) {
-		return
+		return false, err
 	}
 	// Object does not exist
 	err = r.Create(ctx, pvcForPeer(peer))
-	if err == nil {
-		created = true
+	if apierrs.IsAlreadyExists(err) {
+		return false, nil
 	}
-	return
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
@@ -240,7 +243,7 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	log.V(2).Info("Found EtcdPeer", "name", peer.Name)
 
-	_, created, err := r.getOrCreatePvc(ctx, &peer)
+	created, err := r.maybeCreatePvc(ctx, &peer)
 	if err != nil || created {
 		return ctrl.Result{}, err
 	}
