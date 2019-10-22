@@ -158,7 +158,7 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "etcd-data",
-									MountPath: "/var/lib/etcd",
+									MountPath: etcdDataMountPath,
 								},
 							},
 						},

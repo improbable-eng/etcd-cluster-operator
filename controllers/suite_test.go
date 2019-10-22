@@ -68,6 +68,9 @@ func (s *controllerSuite) setupTest(t *testing.T) (teardownFunc func(), namespac
 	logger := logtest.TestLogger{
 		T: t,
 	}
+	// This allows us to see controller-runtime logs in the test results.
+	// E.g. controller-runtime will log any error that we return from the Reconcile function,
+	// so this saves us having to log those errors again, inside Reconcile.
 	ctrl.SetLogger(logger)
 
 	namespace := &v1.Namespace{
