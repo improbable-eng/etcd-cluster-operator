@@ -155,6 +155,12 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 									ContainerPort: etcdPeerPort,
 								},
 							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "etcd-data",
+									MountPath: "/var/lib/etcd",
+								},
+							},
 						},
 					},
 					Volumes: []corev1.Volume{
