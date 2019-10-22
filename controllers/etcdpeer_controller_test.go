@@ -15,6 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/test"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/test/try"
 )
 
@@ -104,7 +105,7 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 			`.spec.template.spec.volumes[?(@.name=="etcd-data")].persistentVolumeClaim.claimName`:              etcdPeer.Name,
 			`.spec.template.spec.containers[?(@.name=="etcd")].volumeMounts[?(@.name=="etcd-data")].mountPath`: "/var/lib/etcd",
 		}
-		try.CheckStructFields(t, expectations, replicaSet)
+		test.CheckStructFields(t, expectations, replicaSet)
 
 		// Find the etcd container
 		var etcdContainer corev1.Container
@@ -190,6 +191,6 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 			".spec.resources.requests.storage": peer.Spec.VolumeClaimTemplate.Spec.Resources.Requests["storage"],
 			".spec.storageClassName":           peer.Spec.VolumeClaimTemplate.Spec.StorageClassName,
 		}
-		try.CheckStructFields(t, expectations, actualPvc)
+		test.CheckStructFields(t, expectations, actualPvc)
 	})
 }
