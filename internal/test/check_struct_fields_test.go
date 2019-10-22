@@ -3,6 +3,7 @@ package test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -22,28 +23,56 @@ func TestCheckStructFields(t *testing.T) {
 		expectErr     bool
 	}{
 		{
-			name:          "int values",
+			name:          "int match",
 			path:          "",
 			expectedValue: 123,
 			actual:        123,
 		},
 		{
-			name:          "string values",
+			name:          "int mismatch",
+			path:          "",
+			expectedValue: 123,
+			actual:        124,
+			expectErr:     true,
+		},
+		{
+			name:          "string match",
 			path:          "",
 			expectedValue: "foo",
 			actual:        "foo",
 		},
 		{
-			name:          "quantity values",
+			name:          "string mismatch",
+			path:          "",
+			expectedValue: "foo",
+			actual:        "fOo",
+			expectErr:     true,
+		},
+		{
+			name:          "quantity match",
 			path:          "",
 			expectedValue: resource.MustParse("123Gi"),
 			actual:        resource.MustParse("123Gi"),
 		},
 		{
-			name:          "pointer",
+			name:          "quantity mismatch",
+			path:          "",
+			expectedValue: resource.MustParse("123Gi"),
+			actual:        resource.MustParse("123Mi"),
+			expectErr:     true,
+		},
+		{
+			name:          "pointer match",
 			path:          "",
 			expectedValue: pointer.StringPtr("foo"),
 			actual:        pointer.StringPtr("foo"),
+		},
+		{
+			name:          "pointer mismatch",
+			path:          "",
+			expectedValue: pointer.StringPtr("foo"),
+			actual:        pointer.StringPtr("fOo"),
+			expectErr:     true,
 		},
 		{
 			name:          "struct paths with maps",
@@ -84,12 +113,13 @@ func TestCheckStructFields(t *testing.T) {
 				},
 				tc.actual,
 			)
+			require.NoError(t, err)
 			if tc.expectErr {
-				require.Errorf(t, err, "missing error: %#v", tc)
+				assert.Errorf(t, validationErrors.ToAggregate(), "missing errors")
+				t.Log(validationErrors)
 			} else {
-				require.NoErrorf(t, err, "unexpected error: %#v", tc)
+				assert.NoErrorf(t, validationErrors.ToAggregate(), "unexpected errors")
 			}
-			t.Log(validationErrors)
 		})
 	}
 }
