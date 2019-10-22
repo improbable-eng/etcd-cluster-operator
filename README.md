@@ -12,7 +12,7 @@ cluster in Kubernetes resources, and manage clusters with native Kubernetes tool
 To build and run the images yourself, you'll need a Docker registry that you have push access to and your Kubernetes
 nodes have pull access from. First clone this git repository to your local disk.
 
-You will need `make`, `docker`, `go`, and `kubectl` installed.
+You will need `make`, `docker`, `go`, `kustomize`, and `kubectl` installed.
 
 ### Building Docker Images
 
@@ -32,9 +32,10 @@ The `IMG` environment variable is used by the `Makefile`.
 Make sure that your desired cluster is your default context in `kubectl`, and that `IMG` from above is still exported.
 
 ```bash
-make install
 make deploy
 ```
+
+This will leave changes on disk in your `config` directory, take care not to commit them.
 
 ### Deploying an etcd cluster
 
