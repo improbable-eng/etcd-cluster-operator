@@ -31,4 +31,4 @@ jobs:
          command: make test
       - run:
          name: End to end tests
-         command: make e2e
+         command: make kind
