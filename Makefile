@@ -11,8 +11,6 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
-ROOTDIR=$(shell pwd)
-
 all: manager
 
 # Get binary dependencies
@@ -24,7 +22,7 @@ test: generate fmt vet manifests bin/kubebuilder
 	KUBEBUILDER_ASSETS="$(shell pwd)/bin/kubebuilder/bin" go test ./... -coverprofile cover.out
 
 kind: generate fmt vet manifests
-	go test ./internal/test/e2e --kind --repo-root ${ROOTDIR} -v
+	go test ./internal/test/e2e --kind --repo-root ${CURDIR} -v
 
 # Build manager binary
 manager: generate fmt vet
