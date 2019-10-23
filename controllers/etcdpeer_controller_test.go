@@ -185,10 +185,7 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 			time.Second*5, time.Millisecond*500,
 		)
 		require.NoError(t, err, "PVC was not created")
-		expectations := map[string]interface{}{
-			".spec.resources.requests.storage": peer.Spec.Storage.VolumeClaimTemplate.Resources.Requests["storage"],
-			".spec.storageClassName":           peer.Spec.Storage.VolumeClaimTemplate.StorageClassName,
-		}
-		test.AssertStructFields(t, expectations, actualPvc)
+
+		require.Equal(t, *peer.Spec.Storage.VolumeClaimTemplate, actualPvc.Spec, "Unexpected PVC spec")
 	})
 }
