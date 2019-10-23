@@ -3,6 +3,8 @@ package v1alpha1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	runtime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
@@ -68,6 +70,50 @@ type EtcdPeerStorage struct {
 	VolumeClaimTemplate *corev1.PersistentVolumeClaimSpec `json:"volumeClaimTemplate,omitempty"`
 }
 
+func ValidatePersistentVolumeClaimSpec(path *field.Path, o *corev1.PersistentVolumeClaimSpec) field.ErrorList {
+	var allErrs field.ErrorList
+	if o == nil {
+		allErrs = append(allErrs, field.Required(path, ""))
+		return allErrs
+	}
+	if o.StorageClassName == nil {
+		allErrs = append(allErrs, field.Required(path.Child("storageClassName"), ""))
+		return allErrs
+	}
+	if _, ok := o.Resources.Requests["storage"]; !ok {
+		allErrs = append(allErrs, field.Required(path.Child("resources", "requests", "storage"), ""))
+		return allErrs
+	}
+	return allErrs
+}
+
+func (o *EtcdPeerStorage) Validate(path *field.Path) field.ErrorList {
+	var allErrs field.ErrorList
+	if o == nil {
+		allErrs = append(allErrs, field.Required(path, ""))
+		return allErrs
+	}
+	allErrs = append(
+		allErrs,
+		ValidatePersistentVolumeClaimSpec(path.Child("volumeClaimTemplate"), o.VolumeClaimTemplate)...,
+	)
+	return allErrs
+}
+
+func (o *EtcdPeerStorage) Default() {
+	if o.VolumeClaimTemplate != nil {
+		if o.VolumeClaimTemplate.AccessModes == nil {
+			o.VolumeClaimTemplate.AccessModes = []corev1.PersistentVolumeAccessMode{
+				corev1.ReadWriteOnce,
+			}
+		}
+
+		if o.VolumeClaimTemplate.VolumeMode == nil {
+			o.VolumeClaimTemplate.VolumeMode = &defaultVolumeMode
+		}
+	}
+}
+
 // EtcdPeerStatus defines the observed state of EtcdPeer
 type EtcdPeerStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
@@ -94,6 +140,31 @@ type EtcdPeerList struct {
 	Items           []EtcdPeer `json:"items"`
 }
 
+var _ webhook.Validator = &EtcdPeer{}
+
+func (o *EtcdPeer) ValidateCreate() error {
+	path := field.NewPath("spec")
+	var allErrs field.ErrorList
+
+	allErrs = append(
+		allErrs,
+		o.Spec.Storage.Validate(path.Child("storage"))...,
+	)
+	return allErrs.ToAggregate()
+}
+
+func (o *EtcdPeer) ValidateDelete() error {
+	// TODO: Not yet implemented
+	var allErrs field.ErrorList
+	return allErrs.ToAggregate()
+}
+
+func (o *EtcdPeer) ValidateUpdate(old runtime.Object) error {
+	// TODO: Not yet implemented
+	var allErrs field.ErrorList
+	return allErrs.ToAggregate()
+}
+
 var _ webhook.Defaulter = &EtcdPeer{}
 
 // Default sets default values for optional EtcdPeer fields.
@@ -101,14 +172,8 @@ var _ webhook.Defaulter = &EtcdPeer{}
 // have been replaced with concrete pointers.
 // This avoids nil pointer panics later on.
 func (o *EtcdPeer) Default() {
-	if o.Spec.Storage.VolumeClaimTemplate.AccessModes == nil {
-		o.Spec.Storage.VolumeClaimTemplate.AccessModes = []corev1.PersistentVolumeAccessMode{
-			corev1.ReadWriteOnce,
-		}
-	}
-
-	if o.Spec.Storage.VolumeClaimTemplate.VolumeMode == nil {
-		o.Spec.Storage.VolumeClaimTemplate.VolumeMode = &defaultVolumeMode
+	if o.Spec.Storage != nil {
+		o.Spec.Storage.Default()
 	}
 }
 
