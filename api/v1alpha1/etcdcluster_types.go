@@ -9,6 +9,8 @@ import (
 
 // EtcdClusterSpec defines the desired state of EtcdCluster
 type EtcdClusterSpec struct {
+	// Number of instances of etcd to assemble into this cluster
+	Replicas *int32 `json:"replicas"`
 }
 
 // EtcdClusterStatus defines the observed state of EtcdCluster

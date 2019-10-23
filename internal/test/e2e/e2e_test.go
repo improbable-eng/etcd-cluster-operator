@@ -103,33 +103,12 @@ func TestE2E_Kind(t *testing.T) {
 
 	// Deploy the operator.
 	t.Log("Applying operator")
-	err = kubectl.Apply("--kustomize", filepath.Join(*fRepoRoot, "config", "rbac"))
-	require.NoError(t, err)
-	err = kubectl.Apply("--kustomize", filepath.Join(*fRepoRoot, "config", "manager"))
-	require.NoError(t, err)
-
-	// Patch in our test image to the operator.
-	err = kubectl.Patch(
-		"--kustomize", filepath.Join(*fRepoRoot, "config", "manager"),
-		"--type", "json",
-		"--patch", fmt.Sprintf(`[
-			{
-				"op": "replace", 
-				"path": "/spec/template/spec/containers/0/image", 
-				"value": %q,
-			},
-			{
-				"op": "replace", 
-				"path": "/spec/template/spec/containers/0/imagePullPolicy", 
-				"value": "Never",
-			},
-		]`, operatorImage),
-	)
+	err = kubectl.Apply("--kustomize", filepath.Join(*fRepoRoot, "config", "test"))
 	require.NoError(t, err)
 
 	// Ensure the operator starts.
 	err = try.Eventually(func() error {
-		out, err := kubectl.Get("deploy", "etcd-cluster-operator", "-o=jsonpath='{.status.readyReplicas}'")
+		out, err := kubectl.Get("--namespace", "etcd-cluster-operator-system", "deploy", "etcd-cluster-operator-manager", "-o=jsonpath='{.status.readyReplicas}'")
 		if err != nil {
 			return err
 		}

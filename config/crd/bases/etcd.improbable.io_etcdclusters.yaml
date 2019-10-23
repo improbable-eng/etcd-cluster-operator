@@ -31,6 +31,13 @@ spec:
           type: object
         spec:
           description: EtcdClusterSpec defines the desired state of EtcdCluster
+          properties:
+            replicas:
+              description: Number of instances of etcd to assemble into this cluster
+              format: int32
+              type: integer
+          required:
+          - replicas
           type: object
         status:
           description: EtcdClusterStatus defines the observed state of EtcdCluster

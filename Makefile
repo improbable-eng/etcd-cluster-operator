@@ -21,6 +21,9 @@ bin/kubebuilder:
 test: generate fmt vet manifests bin/kubebuilder
 	KUBEBUILDER_ASSETS="$(shell pwd)/bin/kubebuilder/bin" go test ./... -coverprofile cover.out
 
+kind: generate fmt vet manifests
+	go test ./internal/test/e2e --kind --repo-root ${CURDIR} -v
+
 # Build manager binary
 manager: generate fmt vet
 	go build -o bin/manager main.go
