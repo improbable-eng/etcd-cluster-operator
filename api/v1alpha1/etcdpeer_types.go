@@ -3,10 +3,12 @@ package v1alpha1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+var (
+	defaultVolumeMode corev1.PersistentVolumeMode
+)
 
 // InitialClusterMemeber describes a single member of the initial cluster.
 type InitialClusterMember struct {
@@ -92,6 +94,25 @@ type EtcdPeerList struct {
 	Items           []EtcdPeer `json:"items"`
 }
 
+var _ webhook.Defaulter = &EtcdPeer{}
+
+// Default sets default values for optional EtcdPeer fields.
+// This is used in webhooks and in the Reconciler to ensure that nil pointers
+// have been replaced with concrete pointers.
+// This avoids nil pointer panics later on.
+func (o *EtcdPeer) Default() {
+	if o.Spec.Storage.VolumeClaimTemplate.AccessModes == nil {
+		o.Spec.Storage.VolumeClaimTemplate.AccessModes = []corev1.PersistentVolumeAccessMode{
+			corev1.ReadWriteOnce,
+		}
+	}
+
+	if o.Spec.Storage.VolumeClaimTemplate.VolumeMode == nil {
+		o.Spec.Storage.VolumeClaimTemplate.VolumeMode = &defaultVolumeMode
+	}
+}
+
 func init() {
 	SchemeBuilder.Register(&EtcdPeer{}, &EtcdPeerList{})
+	defaultVolumeMode = corev1.PersistentVolumeFilesystem
 }

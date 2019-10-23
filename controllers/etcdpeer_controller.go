@@ -232,6 +232,9 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	log.V(2).Info("Found EtcdPeer", "name", peer.Name)
 
+	// Apply defaults in case a defaulting webhook has not been deployed.
+	peer.Default()
+
 	created, err := r.maybeCreatePvc(ctx, &peer)
 	if err != nil || created {
 		return ctrl.Result{}, err

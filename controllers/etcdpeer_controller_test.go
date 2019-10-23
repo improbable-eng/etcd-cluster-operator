@@ -186,6 +186,10 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		)
 		require.NoError(t, err, "PVC was not created")
 
+		// Apply defaults here so that our expected object has all the same
+		// defaults as those used in the Reconcile function
+		peer.Default()
+
 		require.Equal(t, *peer.Spec.Storage.VolumeClaimTemplate, actualPvc.Spec, "Unexpected PVC spec")
 	})
 }
