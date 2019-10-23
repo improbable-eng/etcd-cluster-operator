@@ -10,10 +10,6 @@ import (
 	"k8s.io/utils/pointer"
 )
 
-// TODO(wallrj): Add tests for failure cases.
-// For this I searched for a way to modify / wrap `testing.T` so that it fails
-// if the there are no assertion errors, and succeeds if there are errors, with
-// some way to check the assertion message.
 func TestCheckStructFields(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
