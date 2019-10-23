@@ -60,7 +60,7 @@ func (in *EtcdCluster) DeepCopyObject() runtime.Object {
 func (in *EtcdClusterList) DeepCopyInto(out *EtcdClusterList) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	out.ListMeta = in.ListMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
 		*out = make([]EtcdCluster, len(*in))
@@ -149,7 +149,7 @@ func (in *EtcdPeer) DeepCopyObject() runtime.Object {
 func (in *EtcdPeerList) DeepCopyInto(out *EtcdPeerList) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	out.ListMeta = in.ListMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
 		*out = make([]EtcdPeer, len(*in))
