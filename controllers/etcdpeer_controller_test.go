@@ -186,8 +186,6 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		)
 		require.NoError(t, err, "PVC was not created")
 		expectations := map[string]interface{}{
-			".metadata.name":                   peer.Name,
-			".metadata.namespace":              peer.Namespace,
 			".spec.resources.requests.storage": peer.Spec.Storage.VolumeClaimTemplate.Resources.Requests["storage"],
 			".spec.storageClassName":           peer.Spec.Storage.VolumeClaimTemplate.StorageClassName,
 		}
