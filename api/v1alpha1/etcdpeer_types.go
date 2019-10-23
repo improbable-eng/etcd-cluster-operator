@@ -65,6 +65,7 @@ type EtcdPeerSpec struct {
 	Storage *EtcdPeerStorage `json:"storage,omitempty"`
 }
 
+// EtcdPeerStorage defines the desired storage for an EtcdPeer
 type EtcdPeerStorage struct {
 	// VolumeClaimTemplates is a claim that pods are allowed to reference.
 	// The EtcdPeer controller will create a new PersistentVolumeClaim using the
@@ -74,7 +75,7 @@ type EtcdPeerStorage struct {
 	VolumeClaimTemplate *corev1.PersistentVolumeClaimSpec `json:"volumeClaimTemplate,omitempty"`
 }
 
-func ValidatePersistentVolumeClaimSpec(path *field.Path, o *corev1.PersistentVolumeClaimSpec) field.ErrorList {
+func validatePersistentVolumeClaimSpec(path *field.Path, o *corev1.PersistentVolumeClaimSpec) field.ErrorList {
 	var allErrs field.ErrorList
 	if o == nil {
 		allErrs = append(allErrs, field.Required(path, ""))
@@ -91,7 +92,7 @@ func ValidatePersistentVolumeClaimSpec(path *field.Path, o *corev1.PersistentVol
 	return allErrs
 }
 
-func (o *EtcdPeerStorage) Validate(path *field.Path) field.ErrorList {
+func (o *EtcdPeerStorage) validate(path *field.Path) field.ErrorList {
 	var allErrs field.ErrorList
 	if o == nil {
 		allErrs = append(allErrs, field.Required(path, ""))
@@ -99,12 +100,12 @@ func (o *EtcdPeerStorage) Validate(path *field.Path) field.ErrorList {
 	}
 	allErrs = append(
 		allErrs,
-		ValidatePersistentVolumeClaimSpec(path.Child("volumeClaimTemplate"), o.VolumeClaimTemplate)...,
+		validatePersistentVolumeClaimSpec(path.Child("volumeClaimTemplate"), o.VolumeClaimTemplate)...,
 	)
 	return allErrs
 }
 
-func (o *EtcdPeerStorage) Default() {
+func (o *EtcdPeerStorage) setDefaults() {
 	if o.VolumeClaimTemplate != nil {
 		if o.VolumeClaimTemplate.AccessModes == nil {
 			o.VolumeClaimTemplate.AccessModes = []corev1.PersistentVolumeAccessMode{
@@ -120,8 +121,6 @@ func (o *EtcdPeerStorage) Default() {
 
 // EtcdPeerStatus defines the observed state of EtcdPeer
 type EtcdPeerStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
 }
 
 // +kubebuilder:object:root=true
@@ -153,7 +152,7 @@ func (o *EtcdPeer) ValidateCreate() error {
 
 	allErrs = append(
 		allErrs,
-		o.Spec.Storage.Validate(path.Child("storage"))...,
+		o.Spec.Storage.validate(path.Child("storage"))...,
 	)
 	return allErrs.ToAggregate()
 }
@@ -180,11 +179,11 @@ var _ webhook.Defaulter = &EtcdPeer{}
 // This avoids nil pointer panics later on.
 func (o *EtcdPeer) Default() {
 	if o.Spec.Storage != nil {
-		o.Spec.Storage.Default()
+		o.Spec.Storage.setDefaults()
 	}
 }
 
-// ExampleEtcdPeer returns an valid example for testing purposes
+// ExampleEtcdPeer returns a valid example for testing purposes
 func ExampleEtcdPeer(namespace string) *EtcdPeer {
 	return &EtcdPeer{
 		ObjectMeta: metav1.ObjectMeta{
