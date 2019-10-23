@@ -146,6 +146,7 @@ type EtcdPeerList struct {
 
 var _ webhook.Validator = &EtcdPeer{}
 
+// ValidateCreate validates that all required fields are present and valid.
 func (o *EtcdPeer) ValidateCreate() error {
 	path := field.NewPath("spec")
 	var allErrs field.ErrorList
@@ -157,14 +158,16 @@ func (o *EtcdPeer) ValidateCreate() error {
 	return allErrs.ToAggregate()
 }
 
+// ValidateCreate validates that deletion is allowed
+// TODO: Not yet implemented
 func (o *EtcdPeer) ValidateDelete() error {
-	// TODO: Not yet implemented
 	var allErrs field.ErrorList
 	return allErrs.ToAggregate()
 }
 
+// ValidateCreate validates that only supported fields are changed
+// TODO: Not yet implemented
 func (o *EtcdPeer) ValidateUpdate(old runtime.Object) error {
-	// TODO: Not yet implemented
 	var allErrs field.ErrorList
 	return allErrs.ToAggregate()
 }
