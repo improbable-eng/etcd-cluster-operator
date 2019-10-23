@@ -106,7 +106,7 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 			for _, peer := range peers.Items {
 				assertPeer(t, etcdCluster, &peer)
 
-				assert.Equal(t,
+				assert.ElementsMatch(t,
 					expectedInitialCluster,
 					peer.Spec.Bootstrap.Static.InitialCluster,
 					"Peer did not have expected static bootstrap instructions")
