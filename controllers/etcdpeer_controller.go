@@ -194,10 +194,10 @@ func pvcForPeer(peer *etcdv1alpha1.EtcdPeer) *corev1.PersistentVolumeClaim {
 			},
 			Resources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
-					"storage": peer.Spec.VolumeClaimTemplate.Spec.Resources.Requests["storage"],
+					"storage": peer.Spec.Storage.VolumeClaimTemplate.Resources.Requests["storage"],
 				},
 			},
-			StorageClassName: pointer.StringPtr(*peer.Spec.VolumeClaimTemplate.Spec.StorageClassName),
+			StorageClassName: pointer.StringPtr(*peer.Spec.Storage.VolumeClaimTemplate.StorageClassName),
 		},
 	}
 }
