@@ -103,12 +103,7 @@ func TestE2E_Kind(t *testing.T) {
 
 	// Deploy the operator.
 	t.Log("Applying operator")
-	kustomizeEdit := exec.Command("kustomize", "edit", "set", "image", fmt.Sprintf("controller=%s", operatorImage))
-	kustomizeEdit.Dir = filepath.Join(*fRepoRoot, "config", "manager")
-	out, err = kustomizeEdit.CombinedOutput()
-	require.NoError(t, err, string(out))
-
-	err = kubectl.Apply("--kustomize", filepath.Join(*fRepoRoot, "config", "default"))
+	err = kubectl.Apply("--kustomize", filepath.Join(*fRepoRoot, "config", "test"))
 	require.NoError(t, err)
 
 	// Ensure the operator starts.
