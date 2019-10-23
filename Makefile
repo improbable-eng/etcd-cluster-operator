@@ -11,6 +11,12 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
+ifeq ($(CIRCLECI),"true")
+CLEANUP="false"
+else
+CLEANUP="true"
+endif
+
 all: manager
 
 # Get binary dependencies
@@ -25,7 +31,8 @@ test: generate fmt vet manifests bin/kubebuilder
 #  a) speed up the test run time slightly
 #  b) allow debug sessions to be attached to figure out what caused failures
 kind: generate fmt vet manifests
-	go test ./internal/test/e2e --kind --repo-root ${CURDIR} -v --cleanup=false
+	echo ${CLEANUP}
+	go test ./internal/test/e2e --kind --repo-root ${CURDIR} -v --cleanup=${CLEANUP}
 
 # Build manager binary
 manager: generate fmt vet
