@@ -12,7 +12,9 @@ jobs:
           name: Install Go
           command: |
             sudo rm -rf /usr/local/go
-            curl -sSL "https://dl.google.com/go/go1.13.1.linux-amd64.tar.gz" | sudo tar -xz -C /usr/local/
+            curl -sSL "https://dl.google.com/go/go1.13.1.linux-amd64.tar.gz" -o go.tar.gz 
+            echo "94f874037b82ea5353f4061e543681a0e79657f787437974214629af8407d124  go.tar.gz" | sha256sum -c
+            sudo tar -xzf go.tar.gz -C /usr/local/
             echo "export PATH=$PATH:/usr/local/go/bin" >> $BASH_ENV
             echo 'export GOPATH=$HOME/go' >> $BASH_ENV 
       - run:
