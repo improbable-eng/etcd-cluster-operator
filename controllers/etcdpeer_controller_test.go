@@ -9,9 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
@@ -31,43 +28,7 @@ func requireEnvVar(t *testing.T, env []corev1.EnvVar, evName string) string {
 }
 
 func exampleEtcdPeer(namespace string) *etcdv1alpha1.EtcdPeer {
-	return &etcdv1alpha1.EtcdPeer{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "bees",
-			Namespace: namespace,
-		},
-		Spec: etcdv1alpha1.EtcdPeerSpec{
-			ClusterName: "my-cluster",
-			Bootstrap: &etcdv1alpha1.Bootstrap{
-				Static: &etcdv1alpha1.StaticBootstrap{
-					InitialCluster: []etcdv1alpha1.InitialClusterMember{
-						{
-							Name: "bees",
-							Host: fmt.Sprintf("bees.my-cluster.%s.svc", namespace),
-						},
-						{
-							Name: "magic",
-							Host: fmt.Sprintf("magic.my-cluster.%s.svc", namespace),
-						},
-						{
-							Name: "goose",
-							Host: fmt.Sprintf("goose.my-cluster.%s.svc", namespace),
-						},
-					},
-				},
-			},
-			Storage: &etcdv1alpha1.EtcdPeerStorage{
-				VolumeClaimTemplate: &corev1.PersistentVolumeClaimSpec{
-					StorageClassName: pointer.StringPtr("example-class"),
-					Resources: corev1.ResourceRequirements{
-						Requests: corev1.ResourceList{
-							"storage": resource.MustParse("999Gi"),
-						},
-					},
-				},
-			},
-		},
-	}
+	return etcdv1alpha1.ExampleEtcdPeer(namespace)
 }
 
 func (s *controllerSuite) testPeerController(t *testing.T) {
