@@ -9,12 +9,12 @@ rules:
 - apiGroups:
   - apps
   resources:
-  - replicaset
+  - replicasets
   verbs:
   - create
   - get
-  - patch
-  - update
+  - list
+  - watch
 - apiGroups:
   - ""
   resources:
@@ -46,11 +46,8 @@ rules:
   - etcdpeers
   verbs:
   - create
-  - delete
   - get
   - list
-  - patch
-  - update
   - watch
 - apiGroups:
   - etcd.improbable.io

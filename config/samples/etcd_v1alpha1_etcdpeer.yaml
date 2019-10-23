@@ -3,5 +3,4 @@ kind: EtcdPeer
 metadata:
   name: etcdpeer-sample
 spec:
-  # Add fields here
-  foo: bar
+  clusterName: bees
