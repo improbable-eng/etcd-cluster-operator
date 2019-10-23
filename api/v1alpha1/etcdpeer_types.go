@@ -40,9 +40,6 @@ type Bootstrap struct {
 
 // EtcdPeerSpec defines the desired state of EtcdPeer
 type EtcdPeerSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
 	// The name of the etcd cluster that this peer should join. This will be
 	// used to set the `spec.subdomain` field and the
 	// `etcd.improbable.io/cluster-name` label on the Pod running etcd.
@@ -55,12 +52,18 @@ type EtcdPeerSpec struct {
 	// +optional
 	Bootstrap *Bootstrap `json:"bootstrap,omitempty"`
 
+	// Storage is the configuration of the disks and mount points of the Etcd
+	// pod.
+	Storage *EtcdPeerStorage `json:"storage,omitempty"`
+}
+
+type EtcdPeerStorage struct {
 	// VolumeClaimTemplates is a claim that pods are allowed to reference.
-	// The EtcdPeer controller will create a new PersistentVolumeClaim using the StorageClass
-	// and the Storage Resource Request in this template.
-	// That PVC will then be mounted in the Pod for this EtcdPeer
-	// and the Etcd process when it starts will persist its data to the PV bound to that PVC.
-	VolumeClaimTemplate *corev1.PersistentVolumeClaim `json:"volumeClaimTemplate,omitempty"`
+	// The EtcdPeer controller will create a new PersistentVolumeClaim using the
+	// StorageClass and the Storage Resource Request in this template.
+	// That PVC will then be mounted in the Pod for this EtcdPeer and the Etcd
+	// process when it starts will persist its data to the PV bound to that PVC.
+	VolumeClaimTemplate *corev1.PersistentVolumeClaimSpec `json:"volumeClaimTemplate,omitempty"`
 }
 
 // EtcdPeerStatus defines the observed state of EtcdPeer
