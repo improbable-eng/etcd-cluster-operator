@@ -56,8 +56,8 @@ func exampleEtcdPeer(namespace string) *etcdv1alpha1.EtcdPeer {
 					},
 				},
 			},
-			VolumeClaimTemplate: &corev1.PersistentVolumeClaim{
-				Spec: corev1.PersistentVolumeClaimSpec{
+			Storage: &etcdv1alpha1.EtcdPeerStorage{
+				VolumeClaimTemplate: &corev1.PersistentVolumeClaimSpec{
 					StorageClassName: pointer.StringPtr("example-class"),
 					Resources: corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
@@ -188,8 +188,8 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		expectations := map[string]interface{}{
 			".metadata.name":                   peer.Name,
 			".metadata.namespace":              peer.Namespace,
-			".spec.resources.requests.storage": peer.Spec.VolumeClaimTemplate.Spec.Resources.Requests["storage"],
-			".spec.storageClassName":           peer.Spec.VolumeClaimTemplate.Spec.StorageClassName,
+			".spec.resources.requests.storage": peer.Spec.Storage.VolumeClaimTemplate.Resources.Requests["storage"],
+			".spec.storageClassName":           peer.Spec.Storage.VolumeClaimTemplate.StorageClassName,
 		}
 		test.AssertStructFields(t, expectations, actualPvc)
 	})
