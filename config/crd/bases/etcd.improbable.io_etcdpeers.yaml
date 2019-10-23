@@ -73,32 +73,17 @@ spec:
                 label on the Pod running etcd.
               maxLength: 64
               type: string
-            volumeClaimTemplate:
-              description: VolumeClaimTemplates is a claim that pods are allowed to
-                reference. The EtcdPeer controller will create a new PersistentVolumeClaim
-                using the StorageClass and the Storage Resource Request in this template.
-                That PVC will then be mounted in the Pod for this EtcdPeer and the
-                Etcd process when it starts will persist its data to the PV bound
-                to that PVC.
+            storage:
+              description: Storage is the configuration of the disks and mount points
+                of the Etcd pod.
               properties:
-                apiVersion:
-                  description: 'APIVersion defines the versioned schema of this representation
-                    of an object. Servers should convert recognized schemas to the
-                    latest internal value, and may reject unrecognized values. More
-                    info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources'
-                  type: string
-                kind:
-                  description: 'Kind is a string value representing the REST resource
-                    this object represents. Servers may infer this from the endpoint
-                    the client submits requests to. Cannot be updated. In CamelCase.
-                    More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds'
-                  type: string
-                metadata:
-                  description: 'Standard object''s metadata. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#metadata'
-                  type: object
-                spec:
-                  description: 'Spec defines the desired characteristics of a volume
-                    requested by a pod author. More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims'
+                volumeClaimTemplate:
+                  description: VolumeClaimTemplates is a claim that pods are allowed
+                    to reference. The EtcdPeer controller will create a new PersistentVolumeClaim
+                    using the StorageClass and the Storage Resource Request in this
+                    template. That PVC will then be mounted in the Pod for this EtcdPeer
+                    and the Etcd process when it starts will persist its data to the
+                    PV bound to that PVC.
                   properties:
                     accessModes:
                       description: 'AccessModes contains the desired access modes
@@ -209,64 +194,6 @@ spec:
                     volumeName:
                       description: VolumeName is the binding reference to the PersistentVolume
                         backing this claim.
-                      type: string
-                  type: object
-                status:
-                  description: 'Status represents the current information/status of
-                    a persistent volume claim. Read-only. More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims'
-                  properties:
-                    accessModes:
-                      description: 'AccessModes contains the actual access modes the
-                        volume backing the PVC has. More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#access-modes-1'
-                      items:
-                        type: string
-                      type: array
-                    capacity:
-                      additionalProperties:
-                        type: string
-                      description: Represents the actual resources of the underlying
-                        volume.
-                      type: object
-                    conditions:
-                      description: Current Condition of persistent volume claim. If
-                        underlying persistent volume is being resized then the Condition
-                        will be set to 'ResizeStarted'.
-                      items:
-                        description: PersistentVolumeClaimCondition contails details
-                          about state of pvc
-                        properties:
-                          lastProbeTime:
-                            description: Last time we probed the condition.
-                            format: date-time
-                            type: string
-                          lastTransitionTime:
-                            description: Last time the condition transitioned from
-                              one status to another.
-                            format: date-time
-                            type: string
-                          message:
-                            description: Human-readable message indicating details
-                              about last transition.
-                            type: string
-                          reason:
-                            description: Unique, this should be a short, machine understandable
-                              string that gives the reason for condition's last transition.
-                              If it reports "ResizeStarted" that means the underlying
-                              persistent volume is being resized.
-                            type: string
-                          status:
-                            type: string
-                          type:
-                            description: PersistentVolumeClaimConditionType is a valid
-                              value of PersistentVolumeClaimCondition.Type
-                            type: string
-                        required:
-                        - status
-                        - type
-                        type: object
-                      type: array
-                    phase:
-                      description: Phase represents the current phase of PersistentVolumeClaim.
                       type: string
                   type: object
               type: object
