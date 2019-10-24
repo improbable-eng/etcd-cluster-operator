@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	defaultVolumeMode corev1.PersistentVolumeMode
+	defaultVolumeMode = corev1.PersistentVolumeFilesystem
 )
 
 // InitialClusterMemeber describes a single member of the initial cluster.
@@ -226,5 +226,4 @@ func ExampleEtcdPeer(namespace string) *EtcdPeer {
 
 func init() {
 	SchemeBuilder.Register(&EtcdPeer{}, &EtcdPeerList{})
-	defaultVolumeMode = corev1.PersistentVolumeFilesystem
 }
