@@ -240,7 +240,7 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// Validate in case a validating webhook has not been deployed
 	err := peer.ValidateCreate()
 	if err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, fmt.Errorf("invalid peer: %w", err)
 	}
 
 	// Apply defaults in case a defaulting webhook has not been deployed.
