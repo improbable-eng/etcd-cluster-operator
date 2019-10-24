@@ -43,7 +43,7 @@ manifests: controller-gen
 	./hack/update-manifests.sh
 
 verify-manifests: controller-gen
-	./hack/verify.sh ./hack/update-manifests.sh
+	./hack/verify.sh make manifests
 
 # Run go fmt against code
 fmt:
@@ -61,7 +61,7 @@ generate: controller-gen
 	./hack/update-codegen.sh
 
 verify-generate: controller-gen
-	./hack/verify.sh ./hack/update-codegen.sh
+	./hack/verify.sh make generate
 
 # Build the docker image
 docker-build: test
