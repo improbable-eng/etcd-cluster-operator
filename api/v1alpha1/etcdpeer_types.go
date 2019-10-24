@@ -7,11 +7,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
-)
-
-var (
-	defaultVolumeMode = corev1.PersistentVolumeFilesystem
 )
 
 // InitialClusterMemeber describes a single member of the initial cluster.
@@ -73,20 +68,6 @@ type EtcdPeerStorage struct {
 	VolumeClaimTemplate *corev1.PersistentVolumeClaimSpec `json:"volumeClaimTemplate,omitempty"`
 }
 
-func (o *EtcdPeerStorage) setDefaults() {
-	if o.VolumeClaimTemplate != nil {
-		if o.VolumeClaimTemplate.AccessModes == nil {
-			o.VolumeClaimTemplate.AccessModes = []corev1.PersistentVolumeAccessMode{
-				corev1.ReadWriteOnce,
-			}
-		}
-
-		if o.VolumeClaimTemplate.VolumeMode == nil {
-			o.VolumeClaimTemplate.VolumeMode = &defaultVolumeMode
-		}
-	}
-}
-
 // EtcdPeerStatus defines the observed state of EtcdPeer
 type EtcdPeerStatus struct {
 }
@@ -109,18 +90,6 @@ type EtcdPeerList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []EtcdPeer `json:"items"`
-}
-
-var _ webhook.Defaulter = &EtcdPeer{}
-
-// Default sets default values for optional EtcdPeer fields.
-// This is used in webhooks and in the Reconciler to ensure that nil pointers
-// have been replaced with concrete pointers.
-// This avoids nil pointer panics later on.
-func (o *EtcdPeer) Default() {
-	if o.Spec.Storage != nil {
-		o.Spec.Storage.setDefaults()
-	}
 }
 
 // ExampleEtcdPeer returns a valid example for testing purposes
