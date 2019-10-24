@@ -9,16 +9,16 @@ rules:
 - apiGroups:
   - apps
   resources:
-  - persistentvolumeclaims
+  - replicasets
   verbs:
   - create
   - get
   - list
   - watch
 - apiGroups:
-  - apps
+  - ""
   resources:
-  - replicasets
+  - persistentvolumeclaims
   verbs:
   - create
   - get
