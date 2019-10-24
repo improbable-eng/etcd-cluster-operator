@@ -79,6 +79,12 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	// Validate in case a validating webhook has not been deployed
+	err := cluster.ValidateCreate()
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("invalid cluster: %w", err)
+	}
+
 	service := &v1.Service{}
 	if err := r.Get(ctx, req.NamespacedName, service); err != nil {
 		if !apierrors.IsNotFound(err) {
