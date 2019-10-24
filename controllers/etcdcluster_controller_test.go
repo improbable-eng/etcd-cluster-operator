@@ -133,4 +133,11 @@ func assertPeer(t *testing.T, cluster *etcdv1alpha1.EtcdCluster, peer *etcdv1alp
 	require.Equal(t, cluster.Name, peer.Labels[clusterLabel])
 
 	assertOwnedByCluster(t, cluster, peer)
+
+	assert.Equal(
+		t,
+		cluster.Spec.Storage.VolumeClaimTemplate,
+		peer.Spec.Storage.VolumeClaimTemplate,
+		"unexpected peer VolumeClaimTemplate",
+	)
 }
