@@ -149,6 +149,7 @@ func peerForCluster(cluster *etcdv1alpha1.EtcdCluster, peerName string) *etcdv1a
 					InitialCluster: initialClusterMembers(cluster),
 				},
 			},
+			Storage: cluster.Spec.Storage.DeepCopy(),
 		},
 	}
 }
