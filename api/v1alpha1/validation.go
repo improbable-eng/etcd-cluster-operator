@@ -7,6 +7,28 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
+var _ webhook.Validator = &EtcdCluster{}
+
+// ValidateCreate validates that all required fields are present and valid.
+func (o *EtcdCluster) ValidateCreate() error {
+	var allErrs field.ErrorList
+	return allErrs.ToAggregate()
+}
+
+// ValidateCreate validates that deletion is allowed
+// TODO: Not yet implemented
+func (o *EtcdCluster) ValidateDelete() error {
+	var allErrs field.ErrorList
+	return allErrs.ToAggregate()
+}
+
+// ValidateCreate validates that only supported fields are changed
+// TODO: Not yet implemented
+func (o *EtcdCluster) ValidateUpdate(old runtime.Object) error {
+	var allErrs field.ErrorList
+	return allErrs.ToAggregate()
+}
+
 var _ webhook.Validator = &EtcdPeer{}
 
 // ValidateCreate validates that all required fields are present and valid.
