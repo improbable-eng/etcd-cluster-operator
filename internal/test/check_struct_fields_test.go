@@ -19,59 +19,59 @@ func TestCheckStructFields(t *testing.T) {
 		expectErr     bool
 	}{
 		{
-			name:          "int match",
+			name:          "IntMatch",
 			path:          "",
 			expectedValue: 123,
 			actual:        123,
 		},
 		{
-			name:          "int mismatch",
+			name:          "IntMismatch",
 			path:          "",
 			expectedValue: 123,
 			actual:        124,
 			expectErr:     true,
 		},
 		{
-			name:          "string match",
+			name:          "StringMatch",
 			path:          "",
 			expectedValue: "foo",
 			actual:        "foo",
 		},
 		{
-			name:          "string mismatch",
+			name:          "StringMismatch",
 			path:          "",
 			expectedValue: "foo",
 			actual:        "fOo",
 			expectErr:     true,
 		},
 		{
-			name:          "quantity match",
+			name:          "QuantityMatch",
 			path:          "",
 			expectedValue: resource.MustParse("123Gi"),
 			actual:        resource.MustParse("123Gi"),
 		},
 		{
-			name:          "quantity mismatch",
+			name:          "QuantityMismatch",
 			path:          "",
 			expectedValue: resource.MustParse("123Gi"),
 			actual:        resource.MustParse("123Mi"),
 			expectErr:     true,
 		},
 		{
-			name:          "pointer match",
+			name:          "PointerMatch",
 			path:          "",
 			expectedValue: pointer.StringPtr("foo"),
 			actual:        pointer.StringPtr("foo"),
 		},
 		{
-			name:          "pointer mismatch",
+			name:          "PointerMismatch",
 			path:          "",
 			expectedValue: pointer.StringPtr("foo"),
 			actual:        pointer.StringPtr("fOo"),
 			expectErr:     true,
 		},
 		{
-			name:          "simple path match",
+			name:          "SimplePathMatch",
 			path:          ".Bar",
 			expectedValue: "BAR",
 			actual: struct {
@@ -83,7 +83,7 @@ func TestCheckStructFields(t *testing.T) {
 			},
 		},
 		{
-			name:          "simple path missing",
+			name:          "SimplePathMissing",
 			path:          ".Baz",
 			expectedValue: nil,
 			actual: struct {
@@ -96,7 +96,7 @@ func TestCheckStructFields(t *testing.T) {
 			expectErr: true,
 		},
 		{
-			name:          "simple map key match",
+			name:          "SimpleMapKeyMatch",
 			path:          ".bar",
 			expectedValue: "BAR",
 			actual: map[string]string{
@@ -105,7 +105,7 @@ func TestCheckStructFields(t *testing.T) {
 			},
 		},
 		{
-			name:          "simple map key missing",
+			name:          "SimpleMapKeyMissing",
 			path:          ".baz",
 			expectedValue: "BAZ",
 			actual: map[string]string{
@@ -115,20 +115,20 @@ func TestCheckStructFields(t *testing.T) {
 			expectErr: true,
 		},
 		{
-			name:          "simple list index match",
+			name:          "SimpleListIndexMatch",
 			path:          "[1]",
 			expectedValue: "bar",
 			actual:        []string{"foo", "bar"},
 		},
 		{
-			name:          "simple list index missing",
+			name:          "SimpleListIndexMissing",
 			path:          "[2]",
 			expectedValue: nil,
 			actual:        []string{"foo", "bar"},
 			expectErr:     true,
 		},
 		{
-			name:          "struct paths with maps",
+			name:          "StructPathsWithMaps",
 			path:          ".spec.resources.requests.storage",
 			expectedValue: resource.MustParse("101Gi"),
 			actual: &corev1.PersistentVolumeClaim{
@@ -142,7 +142,7 @@ func TestCheckStructFields(t *testing.T) {
 			},
 		},
 		{
-			name:          "struct paths with lists",
+			name:          "StructPathsWithLists",
 			path:          `.containers[?(@.name=="container2")].image`,
 			expectedValue: "example.com/image2:v1",
 			actual: &corev1.PodSpec{
