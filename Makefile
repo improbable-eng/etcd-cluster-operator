@@ -10,6 +10,12 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
+ifeq ($(CIRCLECI),"true")
+CLEANUP="false"
+else
+CLEANUP="true"
+endif
+
 all: verify test manager
 
 # Get binary dependencies
@@ -19,12 +25,15 @@ bin/kubebuilder:
 # Run all static checks
 verify: verify-gomod verify-manifests verify-generate verify-fmt vet
 
-# Run tests
+# Run unit tests
 test: bin/kubebuilder
 	KUBEBUILDER_ASSETS="$(shell pwd)/bin/kubebuilder/bin" go test ./... -coverprofile cover.out
 
+# Run end to end tests in a local Kind cluster. We do not clean up after running the tests to
+#  a) speed up the test run time slightly
+#  b) allow debug sessions to be attached to figure out what caused failures
 kind:
-	go test ./internal/test/e2e --kind --repo-root ${CURDIR} -v
+	go test ./internal/test/e2e --kind --repo-root ${CURDIR} -v --cleanup=${CLEANUP}
 
 # Build manager binary
 manager:
