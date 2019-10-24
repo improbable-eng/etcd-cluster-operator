@@ -14,7 +14,7 @@ all: manager
 bin/kubebuilder:
 	hack/download-kubebuilder-local.sh
 
-verify: verify-manifests verify-generate verify-fmt
+verify: verify-manifests verify-generate verify-fmt vet
 
 # Run tests
 test: generate fmt vet verify-manifests bin/kubebuilder
