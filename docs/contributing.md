@@ -51,10 +51,14 @@ controller, or directly communicate with the controller in any way.
 
 ### End to End tests
 
-The end to end tests run, by default, using Kubernetes in Docker (KIND) and are capable of actually executing `etcd` 
+The end to end tests run, by default, using Kubernetes in Docker (KIND) and are capable of actually executing `etcd`
 pods. These tests are under `internal/test/e2e`. These tests should be limited in scope and should only focus on
 externally visible changes to etcd itself. This is to avoid the tests causing the implementation becoming too rigid.
 
 For example an end to end test may create an `EtcdCluster` and assert that it can connect to it from inside the cluster
 using the expected DNS name. Elements of the Kuberentes API that a user might interact with, such as the `status` field
 on an `EtcdCluster` resource, may also be interacted with.
+
+### Static checks
+
+You can run ``make verify`` to perform static checks on the code and manifests.
