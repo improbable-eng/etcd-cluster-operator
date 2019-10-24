@@ -14,6 +14,8 @@ all: manager
 bin/kubebuilder:
 	hack/download-kubebuilder-local.sh
 
+verify: verify-manifests verify-generate verify-fmt
+
 # Run tests
 test: generate fmt vet verify-manifests bin/kubebuilder
 	KUBEBUILDER_ASSETS="$(shell pwd)/bin/kubebuilder/bin" go test ./... -coverprofile cover.out
