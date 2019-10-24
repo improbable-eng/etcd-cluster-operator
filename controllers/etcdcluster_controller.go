@@ -79,15 +79,15 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	// Apply defaults in case a defaulting webhook has not been deployed.
+	cluster.Default()
+
 	// Validate in case a validating webhook has not been deployed
 	err := cluster.ValidateCreate()
 	if err != nil {
 		log.Error(err, "invalid EtcdCluster")
 		return ctrl.Result{}, nil
 	}
-
-	// Apply defaults in case a defaulting webhook has not been deployed.
-	cluster.Default()
 
 	service := &v1.Service{}
 	if err := r.Get(ctx, req.NamespacedName, service); err != nil {
