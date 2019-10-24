@@ -6,8 +6,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	runtime "k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
@@ -75,36 +73,6 @@ type EtcdPeerStorage struct {
 	VolumeClaimTemplate *corev1.PersistentVolumeClaimSpec `json:"volumeClaimTemplate,omitempty"`
 }
 
-func validatePersistentVolumeClaimSpec(path *field.Path, o *corev1.PersistentVolumeClaimSpec) field.ErrorList {
-	var allErrs field.ErrorList
-	if o == nil {
-		allErrs = append(allErrs, field.Required(path, ""))
-		return allErrs
-	}
-	if o.StorageClassName == nil {
-		allErrs = append(allErrs, field.Required(path.Child("storageClassName"), ""))
-		return allErrs
-	}
-	if _, ok := o.Resources.Requests["storage"]; !ok {
-		allErrs = append(allErrs, field.Required(path.Child("resources", "requests", "storage"), ""))
-		return allErrs
-	}
-	return allErrs
-}
-
-func (o *EtcdPeerStorage) validate(path *field.Path) field.ErrorList {
-	var allErrs field.ErrorList
-	if o == nil {
-		allErrs = append(allErrs, field.Required(path, ""))
-		return allErrs
-	}
-	allErrs = append(
-		allErrs,
-		validatePersistentVolumeClaimSpec(path.Child("volumeClaimTemplate"), o.VolumeClaimTemplate)...,
-	)
-	return allErrs
-}
-
 func (o *EtcdPeerStorage) setDefaults() {
 	if o.VolumeClaimTemplate != nil {
 		if o.VolumeClaimTemplate.AccessModes == nil {
@@ -141,34 +109,6 @@ type EtcdPeerList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []EtcdPeer `json:"items"`
-}
-
-var _ webhook.Validator = &EtcdPeer{}
-
-// ValidateCreate validates that all required fields are present and valid.
-func (o *EtcdPeer) ValidateCreate() error {
-	path := field.NewPath("spec")
-	var allErrs field.ErrorList
-
-	allErrs = append(
-		allErrs,
-		o.Spec.Storage.validate(path.Child("storage"))...,
-	)
-	return allErrs.ToAggregate()
-}
-
-// ValidateCreate validates that deletion is allowed
-// TODO: Not yet implemented
-func (o *EtcdPeer) ValidateDelete() error {
-	var allErrs field.ErrorList
-	return allErrs.ToAggregate()
-}
-
-// ValidateCreate validates that only supported fields are changed
-// TODO: Not yet implemented
-func (o *EtcdPeer) ValidateUpdate(old runtime.Object) error {
-	var allErrs field.ErrorList
-	return allErrs.ToAggregate()
 }
 
 var _ webhook.Defaulter = &EtcdPeer{}
