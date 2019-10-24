@@ -65,6 +65,14 @@ func setupSuite(t *testing.T) (suite *controllerSuite, teardownFunc func()) {
 func (s *controllerSuite) setupTest(t *testing.T) (teardownFunc func(), namespaceName string) {
 	stopCh := make(chan struct{})
 
+	logger := logtest.TestLogger{
+		T: t,
+	}
+	// This allows us to see controller-runtime logs in the test results.
+	// E.g. controller-runtime will log any error that we return from the Reconcile function,
+	// so this saves us having to log those errors again, inside Reconcile.
+	ctrl.SetLogger(logger)
+
 	namespace := &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: petname.Generate(2, "-"),
@@ -80,9 +88,7 @@ func (s *controllerSuite) setupTest(t *testing.T) (teardownFunc func(), namespac
 
 	peerController := EtcdPeerReconciler{
 		Client: mgr.GetClient(),
-		Log: logtest.TestLogger{
-			T: t,
-		},
+		Log:    logger,
 	}
 	err = peerController.SetupWithManager(mgr)
 	require.NoError(t, err, "failed to set up EtcdPeer controller")

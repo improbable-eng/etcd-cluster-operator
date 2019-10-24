@@ -1,11 +1,9 @@
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // InitialClusterMemeber describes a single member of the initial cluster.
 type InitialClusterMember struct {
@@ -39,9 +37,6 @@ type Bootstrap struct {
 
 // EtcdPeerSpec defines the desired state of EtcdPeer
 type EtcdPeerSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
 	// The name of the etcd cluster that this peer should join. This will be
 	// used to set the `spec.subdomain` field and the
 	// `etcd.improbable.io/cluster-name` label on the Pod running etcd.
@@ -53,12 +48,24 @@ type EtcdPeerSpec struct {
 	// instructions if it already knows where it's peers are.
 	// +optional
 	Bootstrap *Bootstrap `json:"bootstrap,omitempty"`
+
+	// Storage is the configuration of the disks and mount points of the Etcd
+	// pod.
+	Storage *EtcdPeerStorage `json:"storage,omitempty"`
+}
+
+// EtcdPeerStorage defines the desired storage for an EtcdPeer
+type EtcdPeerStorage struct {
+	// VolumeClaimTemplates is a claim that pods are allowed to reference.
+	// The EtcdPeer controller will create a new PersistentVolumeClaim using the
+	// StorageClass and the Storage Resource Request in this template.
+	// That PVC will then be mounted in the Pod for this EtcdPeer and the Etcd
+	// process when it starts will persist its data to the PV bound to that PVC.
+	VolumeClaimTemplate *corev1.PersistentVolumeClaimSpec `json:"volumeClaimTemplate,omitempty"`
 }
 
 // EtcdPeerStatus defines the observed state of EtcdPeer
 type EtcdPeerStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
 }
 
 // +kubebuilder:object:root=true
