@@ -28,7 +28,7 @@ func requireEnvVar(t *testing.T, env []corev1.EnvVar, evName string) string {
 }
 
 func exampleEtcdPeer(namespace string) *etcdv1alpha1.EtcdPeer {
-	return etcdv1alpha1.ExampleEtcdPeer(namespace)
+	return test.ExampleEtcdPeer(namespace)
 }
 
 func (s *controllerSuite) testPeerController(t *testing.T) {

@@ -1,12 +1,8 @@
 package v1alpha1
 
 import (
-	"fmt"
-
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
 )
 
 // InitialClusterMemeber describes a single member of the initial cluster.
@@ -90,47 +86,6 @@ type EtcdPeerList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []EtcdPeer `json:"items"`
-}
-
-// ExampleEtcdPeer returns a valid example for testing purposes
-func ExampleEtcdPeer(namespace string) *EtcdPeer {
-	return &EtcdPeer{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "bees",
-			Namespace: namespace,
-		},
-		Spec: EtcdPeerSpec{
-			ClusterName: "my-cluster",
-			Bootstrap: &Bootstrap{
-				Static: &StaticBootstrap{
-					InitialCluster: []InitialClusterMember{
-						{
-							Name: "bees",
-							Host: fmt.Sprintf("bees.my-cluster.%s.svc", namespace),
-						},
-						{
-							Name: "magic",
-							Host: fmt.Sprintf("magic.my-cluster.%s.svc", namespace),
-						},
-						{
-							Name: "goose",
-							Host: fmt.Sprintf("goose.my-cluster.%s.svc", namespace),
-						},
-					},
-				},
-			},
-			Storage: &EtcdPeerStorage{
-				VolumeClaimTemplate: &corev1.PersistentVolumeClaimSpec{
-					StorageClassName: pointer.StringPtr("example-class"),
-					Resources: corev1.ResourceRequirements{
-						Requests: corev1.ResourceList{
-							"storage": resource.MustParse("999Gi"),
-						},
-					},
-				},
-			},
-		},
-	}
 }
 
 func init() {
