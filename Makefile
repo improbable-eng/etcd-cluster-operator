@@ -46,14 +46,14 @@ manifests: controller-gen
 	./hack/update-manifests.sh
 
 verify-manifests: controller-gen
-	./hack/verify.sh make manifests
+	./hack/verify.sh make -s manifests
 
 # Run go fmt against code
 fmt:
 	go fmt ./...
 
 verify-fmt:
-	./hack/verify.sh make fmt
+	./hack/verify.sh make -s fmt
 
 # Run go vet against code
 vet:
@@ -64,7 +64,7 @@ generate: controller-gen
 	./hack/update-codegen.sh
 
 verify-generate: controller-gen
-	./hack/verify.sh make generate
+	./hack/verify.sh make -s generate
 
 # Build the docker image
 docker-build: test
