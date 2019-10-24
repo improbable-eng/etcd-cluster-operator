@@ -143,10 +143,10 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 									Name:  etcdenvvar.InitialClusterState,
 									Value: "new",
 								},
-								// {
-								//	Name:  etcdenvvar.DataDir,
-								//	Value: etcdDataMountPath,
-								// },
+								{
+									Name:  etcdenvvar.DataDir,
+									Value: etcdDataMountPath,
+								},
 							},
 							Ports: []corev1.ContainerPort{
 								{
