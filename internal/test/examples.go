@@ -11,6 +11,29 @@ import (
 	"github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
 )
 
+// ExampleEtcdCluster returns a valid example for testing purposes
+func ExampleEtcdCluster(namespace string) *v1alpha1.EtcdCluster {
+	return &v1alpha1.EtcdCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cluster1",
+			Namespace: namespace,
+		},
+		Spec: v1alpha1.EtcdClusterSpec{
+			Replicas: pointer.Int32Ptr(3),
+			Storage: &v1alpha1.EtcdPeerStorage{
+				VolumeClaimTemplate: &corev1.PersistentVolumeClaimSpec{
+					StorageClassName: pointer.StringPtr("example-class"),
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							"storage": resource.MustParse("999Gi"),
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 // ExampleEtcdPeer returns a valid example for testing purposes
 func ExampleEtcdPeer(namespace string) *v1alpha1.EtcdPeer {
 	return &v1alpha1.EtcdPeer{
