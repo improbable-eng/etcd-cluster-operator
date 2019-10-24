@@ -22,10 +22,8 @@ pushd "${tmp}" >/dev/null
 
 popd >/dev/null
 
-if diff --new-file --text --unified --show-c-function --recursive "${tmp}" "${projectdir}"
+if ! diff --new-file --text --unified --show-c-function --recursive "${tmp}" "${projectdir}"
 then
-    echo "Project '${projectdir}' is up to date."
-else
     echo
     echo "Project '${projectdir}' is out of date."
     echo "Please run '${*}'"
