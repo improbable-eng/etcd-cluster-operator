@@ -15,7 +15,7 @@ bin/kubebuilder:
 	hack/download-kubebuilder-local.sh
 
 # Run tests
-test: generate fmt vet manifests bin/kubebuilder
+test: generate fmt vet verify-manifests bin/kubebuilder
 	KUBEBUILDER_ASSETS="$(shell pwd)/bin/kubebuilder/bin" go test ./... -coverprofile cover.out
 
 kind: generate fmt vet manifests
