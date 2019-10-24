@@ -1,5 +1,7 @@
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
+# Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
+CRD_OPTIONS ?= "crd:trivialVersions=true"
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -43,7 +45,7 @@ deploy:
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
-	./hack/update-manifests.sh
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 verify-manifests: controller-gen
 	./hack/verify.sh make -s manifests
@@ -61,7 +63,7 @@ vet:
 
 # Generate code
 generate: controller-gen
-	./hack/update-codegen.sh
+	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths="./..."
 
 verify-generate: controller-gen
 	./hack/verify.sh make -s generate
