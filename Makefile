@@ -8,7 +8,7 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
-all: manager
+all: verify test manager
 
 # Get binary dependencies
 bin/kubebuilder:
@@ -18,26 +18,26 @@ bin/kubebuilder:
 verify: verify-manifests verify-generate verify-fmt vet
 
 # Run tests
-test: generate fmt vet verify-manifests bin/kubebuilder
+test: bin/kubebuilder
 	KUBEBUILDER_ASSETS="$(shell pwd)/bin/kubebuilder/bin" go test ./... -coverprofile cover.out
 
-kind: generate fmt vet manifests
+kind:
 	go test ./internal/test/e2e --kind --repo-root ${CURDIR} -v
 
 # Build manager binary
-manager: generate fmt vet
+manager:
 	go build -o bin/manager main.go
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
-run: generate fmt vet manifests
+run:
 	go run ./main.go
 
 # Install CRDs into a cluster
-install: manifests
+install:
 	kustomize build config/crd | kubectl apply -f -
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
-deploy: manifests
+deploy:
 	cd config/manager && kustomize edit set image controller=${IMG}
 	kustomize build config/default | kubectl apply -f -
 
