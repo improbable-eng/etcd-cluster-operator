@@ -213,8 +213,9 @@ func (r *EtcdPeerReconciler) maybeCreatePvc(ctx context.Context, peer *etcdv1alp
 	}
 	// Object does not exist
 	err = r.Create(ctx, pvcForPeer(peer))
+	// Maybe a stale cache.
 	if apierrs.IsAlreadyExists(err) {
-		return false, nil
+		return false, fmt.Errorf("stale cache error: object was not found in cache but creation failed with AlreadyExists error: %w", err)
 	}
 	if err != nil {
 		return false, err
