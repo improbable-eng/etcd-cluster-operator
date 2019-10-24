@@ -50,10 +50,10 @@ verify-manifests: controller-gen
 
 # Run go fmt against code
 fmt:
-	go fmt ./...
+	gofmt -w .
 
 verify-fmt:
-	./hack/verify.sh make -s fmt
+	gofmt -d .
 
 # Run go vet against code
 vet:
