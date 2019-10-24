@@ -10,18 +10,27 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
+ifeq ($(CIRCLECI),"true")
+CLEANUP="false"
+else
+CLEANUP="true"
+endif
+
 all: manager
 
 # Get binary dependencies
 bin/kubebuilder:
 	hack/download-kubebuilder-local.sh
 
-# Run tests
+# Run unit tests
 test: generate fmt vet manifests bin/kubebuilder
 	KUBEBUILDER_ASSETS="$(shell pwd)/bin/kubebuilder/bin" go test ./... -coverprofile cover.out
 
+# Run end to end tests in a local Kind cluster. We do not clean up after running the tests to
+#  a) speed up the test run time slightly
+#  b) allow debug sessions to be attached to figure out what caused failures
 kind: generate fmt vet manifests
-	go test ./internal/test/e2e --kind --repo-root ${CURDIR} -v
+	go test ./internal/test/e2e --kind --repo-root ${CURDIR} -v --cleanup=${CLEANUP}
 
 # Build manager binary
 manager: generate fmt vet
