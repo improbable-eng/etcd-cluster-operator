@@ -58,3 +58,21 @@ externally visible changes to etcd itself. This is to avoid the tests causing th
 For example an end to end test may create an `EtcdCluster` and assert that it can connect to it from inside the cluster
 using the expected DNS name. Elements of the Kuberentes API that a user might interact with, such as the `status` field
 on an `EtcdCluster` resource, may also be interacted with.
+
+## Release Process
+
+Releases of the operator occur whenever the team feel there is sufficient new features to produce a release. The version
+string will be prefixed with `v` and use semver.
+
+### Pre-release tasks
+
+* Sanity check documentation under `docs` and `README.md`.
+* Compile and prepare release notes under `docs/release-notes/$VERSION.md`. For example version v0.1.0 would have a file
+  `docs/release-notes/v0.1.0.md`.
+
+### Process
+
+1. Tag the repository with the new version, e.g., `git tag v0.1.0` and push the tag to GitHub.
+2. Mark the tag as a release on GitHub.
+3. Build a Docker Image from the repository at that tag and push it to Docker Hub.
+4. Build a version of the deployment YAML with the image tag, attach it to the GitHub release as a YAML file.
