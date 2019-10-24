@@ -64,7 +64,8 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 
 		expectations := map[string]interface{}{
 			`.spec.template.spec.volumes[?(@.name=="etcd-data")].persistentVolumeClaim.claimName`:              etcdPeer.Name,
-			`.spec.template.spec.containers[?(@.name=="etcd")].volumeMounts[?(@.name=="etcd-data")].mountPath`: "/var/lib/etcd",
+			`.spec.template.spec.containers[?(@.name=="etcd")].volumeMounts[?(@.name=="etcd-data")].mountPath`: etcdDataMountPath,
+			`.spec.template.spec.containers[?(@.name=="etcd")].env[?(@.name=="ETCD_DATA_DIR")].value`:          etcdDataMountPath,
 		}
 		test.AssertStructFields(t, expectations, replicaSet)
 
