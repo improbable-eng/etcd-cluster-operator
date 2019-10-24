@@ -9,6 +9,18 @@ var (
 	defaultVolumeMode = corev1.PersistentVolumeFilesystem
 )
 
+var _ webhook.Defaulter = &EtcdCluster{}
+
+// Default sets default values for optional EtcdPeer fields.
+// This is used in webhooks and in the Reconciler to ensure that nil pointers
+// have been replaced with concrete pointers.
+// This avoids nil pointer panics later on.
+func (o *EtcdCluster) Default() {
+	if o.Spec.Storage != nil {
+		o.Spec.Storage.setDefaults()
+	}
+}
+
 var _ webhook.Defaulter = &EtcdPeer{}
 
 // Default sets default values for optional EtcdPeer fields.

@@ -85,6 +85,9 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		return ctrl.Result{}, fmt.Errorf("invalid cluster: %w", err)
 	}
 
+	// Apply defaults in case a defaulting webhook has not been deployed.
+	cluster.Default()
+
 	service := &v1.Service{}
 	if err := r.Get(ctx, req.NamespacedName, service); err != nil {
 		if !apierrors.IsNotFound(err) {

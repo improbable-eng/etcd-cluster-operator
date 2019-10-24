@@ -27,6 +27,10 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 		err := s.k8sClient.Create(s.ctx, etcdCluster)
 		require.NoError(t, err, "failed to create EtcdCluster resource")
 
+		// Apply defaults here so that our expected object has all the same
+		// defaults as those used in the Reconcile function
+		etcdCluster.Default()
+
 		t.Run("CreatesService", func(t *testing.T) {
 			service := &v1.Service{}
 			err = try.Eventually(func() error {
