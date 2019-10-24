@@ -17,7 +17,7 @@ bin/kubebuilder:
 	hack/download-kubebuilder-local.sh
 
 # Run all static checks
-verify: verify-manifests verify-generate verify-fmt vet
+verify: verify-gomod verify-manifests verify-generate verify-fmt vet
 
 # Run tests
 test: bin/kubebuilder
@@ -67,6 +67,12 @@ generate: controller-gen
 
 verify-generate: controller-gen
 	./hack/verify.sh make -s generate
+
+gomod:
+	go mod tidy
+
+verify-gomod:
+	./hack/verify.sh make -s gomod
 
 # Build the docker image
 docker-build: test
