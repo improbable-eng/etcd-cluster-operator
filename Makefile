@@ -55,7 +55,10 @@ vet:
 
 # Generate code
 generate: controller-gen
-	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths="./..."
+	./hack/update-codegen.sh
+
+verify-generate: controller-gen
+	./hack/verify.sh ./hack/update-codegen.sh
 
 # Build the docker image
 docker-build: test
