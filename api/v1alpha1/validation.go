@@ -11,7 +11,12 @@ var _ webhook.Validator = &EtcdCluster{}
 
 // ValidateCreate validates that all required fields are present and valid.
 func (o *EtcdCluster) ValidateCreate() error {
+	path := field.NewPath("spec")
 	var allErrs field.ErrorList
+	allErrs = append(
+		allErrs,
+		o.Spec.Storage.validate(path.Child("storage"))...,
+	)
 	return allErrs.ToAggregate()
 }
 
