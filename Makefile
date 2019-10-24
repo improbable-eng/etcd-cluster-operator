@@ -49,6 +49,9 @@ verify-manifests: controller-gen
 fmt:
 	go fmt ./...
 
+verify-fmt:
+	./hack/verify.sh make fmt
+
 # Run go vet against code
 vet:
 	go vet ./...
