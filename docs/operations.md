@@ -2,8 +2,7 @@
 
 ## Configuring Persistence Settings
 
-The persistence settings for an `EtcdCluster` are configured with the `volumeClaimTemplate` field.
-The value of this field should be a [PersistentVolumeClaim](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.16/#persistentvolumeclaim-v1-core).
+The persistence settings for an `EtcdCluster` are configured with the `storage` field.
 
 Here's an example of the configuration for a 3-node Etcd cluster where each Etcd node has 100Gi of local SSD storage.
 
@@ -15,16 +14,15 @@ metadata:
   namespace: default
 spec:
   replicas: 3
-  volumeClaimTemplate:
-    spec:
-      accessModes: [ "ReadWriteOnce" ]
+  storage:
+    volumeClaimTemplate:
       storageClassName: "local-ssd"
       resources:
         requests:
           storage: 100Gi
 ```
 
-**NOTE**: The `volumeClaimTemplate` field is immutable, because the ``improbable-eng/etcd-cluster-operator`` can not currently reconcile changes to the node storage settings.
+**NOTE**: The `storage` field is immutable, because the ``improbable-eng/etcd-cluster-operator`` can not currently reconcile changes to the node storage settings.
 
 ## Operations
 
@@ -55,9 +53,8 @@ metadata:
   namespace: default
 spec:
   clusterName: my-cluster
-  volumeClaimTemplate:
-    spec:
-      accessModes: [ "ReadWriteOnce" ]
+  storage:
+    volumeClaimTemplate:
       storageClassName: "local-ssd"
       resources:
         requests:
