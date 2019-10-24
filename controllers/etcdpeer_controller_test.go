@@ -9,10 +9,10 @@ import (
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/test"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/test/try"
 )
 
@@ -27,40 +27,16 @@ func requireEnvVar(t *testing.T, env []corev1.EnvVar, evName string) string {
 	return ""
 }
 
+func exampleEtcdPeer(namespace string) *etcdv1alpha1.EtcdPeer {
+	return test.ExampleEtcdPeer(namespace)
+}
+
 func (s *controllerSuite) testPeerController(t *testing.T) {
 	t.Run("TestPeerController_OnCreation_CreatesReplicaSet", func(t *testing.T) {
 		teardownFunc, namespace := s.setupTest(t)
 		defer teardownFunc()
 
-		etcdPeer := &etcdv1alpha1.EtcdPeer{
-			ObjectMeta: metav1.ObjectMeta{
-				Labels:      make(map[string]string),
-				Annotations: make(map[string]string),
-				Name:        "bees",
-				Namespace:   namespace,
-			},
-			Spec: etcdv1alpha1.EtcdPeerSpec{
-				ClusterName: "my-cluster",
-				Bootstrap: &etcdv1alpha1.Bootstrap{
-					Static: &etcdv1alpha1.StaticBootstrap{
-						InitialCluster: []etcdv1alpha1.InitialClusterMember{
-							{
-								Name: "bees",
-								Host: fmt.Sprintf("bees.my-cluster.%s.svc", namespace),
-							},
-							{
-								Name: "magic",
-								Host: fmt.Sprintf("magic.my-cluster.%s.svc", namespace),
-							},
-							{
-								Name: "goose",
-								Host: fmt.Sprintf("goose.my-cluster.%s.svc", namespace),
-							},
-						},
-					},
-				},
-			},
-		}
+		etcdPeer := exampleEtcdPeer(namespace)
 
 		err := s.k8sClient.Create(s.ctx, etcdPeer)
 		require.NoError(t, err, "failed to create EtcdPeer resource")
@@ -85,6 +61,13 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 			replicaSet.Spec.Template.Spec.Subdomain,
 			etcdPeer.Spec.ClusterName,
 			"Cluster name not set as Pod subdomain")
+
+		expectations := map[string]interface{}{
+			`.spec.template.spec.volumes[?(@.name=="etcd-data")].persistentVolumeClaim.claimName`:              etcdPeer.Name,
+			`.spec.template.spec.containers[?(@.name=="etcd")].volumeMounts[?(@.name=="etcd-data")].mountPath`: etcdDataMountPath,
+			`.spec.template.spec.containers[?(@.name=="etcd")].env[?(@.name=="ETCD_DATA_DIR")].value`:          etcdDataMountPath,
+		}
+		test.AssertStructFields(t, expectations, replicaSet)
 
 		// Find the etcd container
 		var etcdContainer corev1.Container
@@ -146,5 +129,29 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 			requireEnvVar(t, etcdContainer.Env, "ETCD_INITIAL_CLUSTER_STATE"),
 			"ETCD_INITIAL_CLUSTER_STATE environment variable set incorrectly",
 		)
+	})
+	t.Run("CreatesPersistentVolumeClaim", func(t *testing.T) {
+		teardown, namespace := s.setupTest(t)
+		defer teardown()
+		peer := exampleEtcdPeer(namespace)
+		err := s.k8sClient.Create(s.ctx, peer)
+		require.NoError(t, err, "failed to create EtcdPeer resource")
+		actualPvc := &corev1.PersistentVolumeClaim{}
+		err = try.Eventually(
+			func() error {
+				return s.k8sClient.Get(s.ctx, client.ObjectKey{
+					Name:      peer.Name,
+					Namespace: peer.Namespace,
+				}, actualPvc)
+			},
+			time.Second*5, time.Millisecond*500,
+		)
+		require.NoError(t, err, "PVC was not created")
+
+		// Apply defaults here so that our expected object has all the same
+		// defaults as those used in the Reconcile function
+		peer.Default()
+
+		require.Equal(t, *peer.Spec.Storage.VolumeClaimTemplate, actualPvc.Spec, "Unexpected PVC spec")
 	})
 }

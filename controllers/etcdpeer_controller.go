@@ -143,6 +143,10 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 									Name:  etcdenvvar.InitialClusterState,
 									Value: "new",
 								},
+								{
+									Name:  etcdenvvar.DataDir,
+									Value: etcdDataMountPath,
+								},
 							},
 							Ports: []corev1.ContainerPort{
 								{
@@ -154,12 +158,69 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 									ContainerPort: etcdPeerPort,
 								},
 							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "etcd-data",
+									MountPath: etcdDataMountPath,
+								},
+							},
+						},
+					},
+					Volumes: []corev1.Volume{
+						{
+							Name: "etcd-data",
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: peer.Name,
+								},
+							},
 						},
 					},
 				},
 			},
 		},
 	}
+}
+
+func pvcForPeer(peer *etcdv1alpha1.EtcdPeer) *corev1.PersistentVolumeClaim {
+	return &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      peer.Name,
+			Namespace: peer.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(peer, etcdv1alpha1.GroupVersion.WithKind("EtcdPeer")),
+			},
+		},
+		Spec: *peer.Spec.Storage.VolumeClaimTemplate.DeepCopy(),
+	}
+}
+
+func (r *EtcdPeerReconciler) maybeCreatePvc(ctx context.Context, peer *etcdv1alpha1.EtcdPeer) (created bool, err error) {
+	objectKey := client.ObjectKey{
+		Name:      peer.Name,
+		Namespace: peer.Namespace,
+	}
+	// Check for existing object
+	pvc := &corev1.PersistentVolumeClaim{}
+	err = r.Get(ctx, objectKey, pvc)
+	// Object exists
+	if err == nil {
+		return false, nil
+	}
+	// Error when fetching the object
+	if !apierrs.IsNotFound(err) {
+		return false, err
+	}
+	// Object does not exist
+	err = r.Create(ctx, pvcForPeer(peer))
+	// Maybe a stale cache.
+	if apierrs.IsAlreadyExists(err) {
+		return false, fmt.Errorf("stale cache error: object was not found in cache but creation failed with AlreadyExists error: %w", err)
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
@@ -176,8 +237,22 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	log.V(2).Info("Found EtcdPeer resource")
 
+	// Validate in case a validating webhook has not been deployed
+	err := peer.ValidateCreate()
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Apply defaults in case a defaulting webhook has not been deployed.
+	peer.Default()
+
+	created, err := r.maybeCreatePvc(ctx, &peer)
+	if err != nil || created {
+		return ctrl.Result{}, err
+	}
+
 	var existingReplicaSet appsv1.ReplicaSet
-	err := r.Get(
+	err = r.Get(
 		ctx,
 		client.ObjectKey{
 			Namespace: peer.Namespace,
@@ -215,5 +290,6 @@ func (r *EtcdPeerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&etcdv1alpha1.EtcdPeer{}).
 		// Watch for changes to ReplicaSet resources that an EtcdPeer owns.
 		Owns(&appsv1.ReplicaSet{}).
+		Owns(&corev1.PersistentVolumeClaim{}).
 		Complete(r)
 }
