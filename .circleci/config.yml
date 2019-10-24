@@ -7,8 +7,6 @@ jobs:
     machine:
       image: circleci/classic:latest
     working_directory: ~/go/src/github.com/improbable-eng/etcd-cluster-operator
-    environment:
-      GOFLAGS=-mod=readonly
     steps:
       - run:
           name: Install Go

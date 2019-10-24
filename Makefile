@@ -10,6 +10,12 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
+# Make sure GOBIN is on the PATH
+export PATH := $(GOBIN):$(PATH)
+
+# Stop go build tools from silently modifying go.mod and go.sum
+export GOFLAGS := -mod=readonly
+
 ifeq ($(CIRCLECI),"true")
 CLEANUP="false"
 else
