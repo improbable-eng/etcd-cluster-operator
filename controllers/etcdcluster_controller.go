@@ -82,7 +82,8 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	// Validate in case a validating webhook has not been deployed
 	err := cluster.ValidateCreate()
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("invalid cluster: %w", err)
+		log.Error(err, "invalid EtcdCluster")
+		return ctrl.Result{}, nil
 	}
 
 	// Apply defaults in case a defaulting webhook has not been deployed.
