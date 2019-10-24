@@ -14,6 +14,7 @@ all: manager
 bin/kubebuilder:
 	hack/download-kubebuilder-local.sh
 
+# Run all static checks
 verify: verify-manifests verify-generate verify-fmt vet
 
 # Run tests
