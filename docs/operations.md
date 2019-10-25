@@ -2,8 +2,8 @@
 
 ## Configuring an `EtcdCluster`
 
-There is an example of the configuration for a 3-node Etcd cluster in `config/samples/etcd_v1alpha1_etcdcluster.yaml`.
-In this example each Etcd node has 50Mi of "standard" storage.
+There is a configuration file for a 3-node Etcd cluster at `config/samples/etcd_v1alpha1_etcdcluster.yaml`.
+In this example each Etcd node has 50Mi storage and uses a [Storage Class](https://kubernetes.io/docs/concepts/storage/storage-classes/#the-storageclass-resource) called "standard".
 
 **NOTE**: The `etcd-cluster-operator` can not currently reconcile changes to the storage settings.
 Do not make changes to this field after you have applied the manifest.
