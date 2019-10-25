@@ -118,7 +118,7 @@ Assuming you are using [Local Persistent Volumes](https://kubernetes.io/docs/con
 which are contstrained to a particular Kubernetes node.
 How do you **reboot** a Kubernetes node, without disrupting the ``EtcdCluster`` ?
 
-**NOTE:** This operation   **does not**  require the ``improbable-eng/etcd-cluster-operator``to be running.
+**NOTE:** This operation **does not** require the `improbable-eng/etcd-cluster-operator` to be running.
 The Etcd peer ``ReplicaSets`` ensure that the cluster can function even without the operator which created them.
 
 **NOTE:** Ensure that your ``EtcdCluster`` has sufficient peers on other Kubernetes nodes, to maintain quorum.
