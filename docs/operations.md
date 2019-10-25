@@ -15,32 +15,36 @@ Here are some examples of day-to-day operations and explanations of Etcd data is
 
 ### Bootstrap a New Cluster
 
-Apply the the manifest above, using `kubectl apply -f `.
+Apply the the manifest above:
 
-The `etcd-cluster-operator` will create a the following API resources for each Etcd node:
+```
+kubectl apply -f config/samples/etcd_v1alpha1_etcdcluster.yaml
+```
+
+The `etcd-cluster-operator` will create the following new API resources for each Etcd node:
 
 1. EtcdPeer
 2. PersistentVolumeClaim
 3. ReplicaSet
 
 Kubernetes will then dynamically provision a `PersistentVolume` of 50Mi,
-using the [Provisioner](https://kubernetes.io/docs/concepts/storage/storage-classes/#provisioner) of "default" `StorageClass`.
-It will "bind" that `PersistentVolume` to the `PersistentVolumeClaim` above.
+using the [Provisioner](https://kubernetes.io/docs/concepts/storage/storage-classes/#provisioner) of the "default" `StorageClass`.
+It will "bind" that `PersistentVolume` to the `PersistentVolumeClaim`.
 
-Kubernetes will also create a `Pod` based on the `ReplicaSet` template above.
+Kubernetes will also create a `Pod` based on the `ReplicaSet` template.
 This `Pod` will remain unscheduled until the `PersistentVolumeClaim` is bound.
-It will then be scheduled and started on the same Kubernetes node as the PV.
+It will then be scheduled and started on the same Kubernetes node as the `PersistentVolume`.
 
-Eventually, you will have an empty Etcd cluster of three nodes, with a total of 300Gi SSD storage available.
+Eventually, you will have an empty Etcd cluster of three nodes, with a total of 50Mi storage available.
 
 ### Reboot a Kubernetes Node
 
-How do you **reboot** a Kubernetes node, without disrupting the `EtcdCluster`?
+How do you **reboot** a Kubernetes node, without disrupting the Etcd cluster?
 
 **NOTE:** This operation **does not** require the `etcd-cluster-operator` to be running.
-The Etcd peer `ReplicaSet` ensures that the cluster can function even without the operator which created them.
+The `ReplicaSet` for each Etcd node ensures that the cluster can function even without the operator which created them.
 
-**NOTE:** Ensure that your `EtcdCluster` has sufficient peers on other Kubernetes nodes, to maintain quorum.
+**NOTE:** Ensure that your Etcd cluster has sufficient peers on other Kubernetes nodes, to maintain quorum.
 
 1. Reboot the Kubernetes node
    1. Kubernetes will schedule the current `Pod` for deletion, but the `PersistentVolumeClaim` and the `PersistentVolume` will remain.
