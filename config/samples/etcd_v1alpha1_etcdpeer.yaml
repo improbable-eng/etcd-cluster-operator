@@ -4,3 +4,9 @@ metadata:
   name: etcdpeer-sample
 spec:
   clusterName: bees
+  storage:
+    volumeClaimTemplate:
+      storageClassName: standard
+      resources:
+        requests:
+          storage: 50Mi

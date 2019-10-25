@@ -34,6 +34,7 @@ const (
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=apps,resources=replicasets,verbs=list;get;create;watch
+// +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=list;get;create;watch
 
 func initialMemberURL(member etcdv1alpha1.InitialClusterMember) *url.URL {
 	return &url.URL{
@@ -237,14 +238,15 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	log.V(2).Info("Found EtcdPeer resource")
 
+	// Apply defaults in case a defaulting webhook has not been deployed.
+	peer.Default()
+
 	// Validate in case a validating webhook has not been deployed
 	err := peer.ValidateCreate()
 	if err != nil {
-		return ctrl.Result{}, err
+		log.Error(err, "invalid EtcdPeer")
+		return ctrl.Result{}, nil
 	}
-
-	// Apply defaults in case a defaulting webhook has not been deployed.
-	peer.Default()
 
 	created, err := r.maybeCreatePvc(ctx, &peer)
 	if err != nil || created {

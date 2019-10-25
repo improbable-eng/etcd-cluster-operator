@@ -23,7 +23,7 @@ jobs:
             # Download & verify kubectl
             curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.16.2/bin/linux/amd64/kubectl
             echo "3ff48e12f9c768ad548e4221d805281ea28dfcda5c18b3cd1797fe37aee3012e  kubectl" | sha256sum -c
-            # Mark it executable & move to /bin
+            # Mark it executable & move to /bin
             sudo chmod +x ./kubectl
             sudo mv ./kubectl /usr/local/bin
       - checkout
