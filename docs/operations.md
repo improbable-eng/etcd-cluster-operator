@@ -38,7 +38,7 @@ How do you **bootstrap** a new ``EtcdCluster`` ?
 
 1. On each target Kubernetes node, create a `/mnt/local-ssd` directory
 1. Mount at least one 100Gi SSD partition at e.g. `/mnt/local-ssd/<partition-UUID>`
-1. Configure and deploy the [Local Static Provisioner](https://github.com/kubernetes-sigs/sig-storage-local-static-provisioner/blob/master/docs/getting-started.md), with a `classes` configuration which contains a `local-ssd` name and which  scans the ``/mnt/local-ssd` directory.
+1. Configure and deploy the [Local Static Provisioner](https://github.com/kubernetes-sigs/sig-storage-local-static-provisioner/blob/master/docs/getting-started.md), with a `classes` configuration which contains a `local-ssd` name and which  scans the `/mnt/local-ssd` directory.
 1. Wait for a StorageClass called `local-ssd`
 1. Wait for unbound PVs with this class to appear in the Kubernetes cluster.
 1. `kubectl apply -f ` the manifest above.
