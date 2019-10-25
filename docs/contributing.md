@@ -61,7 +61,7 @@ on an `EtcdCluster` resource, may also be interacted with.
 
 ### Static checks
 
-You can run ``make verify`` to perform static checks on the code and manifests.
+You can run ``make verify`` to perform static checks on the code and to ensure that the manifest files are up to date.
 
 ## Release Process
 
