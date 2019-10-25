@@ -2,23 +2,8 @@
 
 ## Configuring an `EtcdCluster`
 
-Here's an example of the configuration for a 3-node Etcd cluster where each Etcd node has 100Gi of local SSD storage.
-
-```
-apiVersion: etcd.improbable.io/v1alpha1
-kind: EtcdCluster
-metadata:
-  name: my-cluster
-  namespace: default
-spec:
-  replicas: 3
-  storage:
-    volumeClaimTemplate:
-      storageClassName: "local-ssd"
-      resources:
-        requests:
-          storage: 100Gi
-```
+There is an example of the configuration for a 3-node Etcd cluster in `config/samples/etcd_v1alpha1_etcdcluster.yaml`.
+In this example each Etcd node has 50Mi of "standard" storage.
 
 **NOTE**: The `etcd-cluster-operator` can not currently reconcile changes to the storage settings.
 Do not make changes to this field after you have applied the manifest.
@@ -30,91 +15,27 @@ Here are some examples of day-to-day operations and explanations of Etcd data is
 
 ### Bootstrap a New Cluster
 
-Assuming you are using [Local Persistent Volumes](https://kubernetes.io/docs/concepts/storage/volumes/#local),
-which are contstrained to a particular Kubernetes node.
-How do you **bootstrap** a new `EtcdCluster` ?
+Apply the the manifest above, using `kubectl apply -f `.
 
-1. On each target Kubernetes node, create a `/mnt/local-ssd` directory
-1. Mount at least one 100Gi SSD partition at e.g. `/mnt/local-ssd/<partition-UUID>`
-1. Configure and deploy the [Local Static Provisioner](https://github.com/kubernetes-sigs/sig-storage-local-static-provisioner/blob/master/docs/getting-started.md), with a `classes` configuration which contains a `local-ssd` name and which  scans the `/mnt/local-ssd` directory.
-1. Wait for a `StorageClass` called `local-ssd`
-1. Wait for unbound `PersistentVolume` resources to be created. They should be assigned the `StorageClass` `local-ssd`.
-1. Apply the the manifest above, using `kubectl apply -f `.
+The `etcd-cluster-operator` will create a the following API resources for each Etcd node:
 
-The `etcd-cluster-operator` will create a various API resources for each Etcd node:
+1. EtcdPeer
+2. PersistentVolumeClaim
+3. ReplicaSet
 
-#### EtcdPeer
-
-```
-apiVersion: etcd.improbable.io/v1alpha1
-kind: EtcdPeer
-metadata:
-  name: my-cluster-0
-  namespace: default
-spec:
-  clusterName: my-cluster
-  storage:
-    volumeClaimTemplate:
-      storageClassName: "local-ssd"
-      resources:
-        requests:
-          storage: 100Gi
-```
-
-#### PersistentVolumeClaim
-
-```
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: my-cluster-0
-  namespace: default
-spec:
-  storageClassName: "local-ssd"
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 100Gi
-```
-
-#### ReplicaSet
-
-```
-apiVersion: v1
-kind: ReplicaSet
-metadata:
-  name: my-cluster-0
-  namespace: default
-spec:
-  podTemplate:
-    volumes:
-      - name: etcd-storage
-        persistentVolumeClaim:
-          claimName: my-cluster-0
-    containers:
-      - name: etcd
-        volumeMounts:
-          - mountPath: "/var/lib/etcd"
-            name: etcd-storage
-```
-
-Kubernetes will then dynamically provision a `PersistentVolume` of 100Gi backed by an SSD,
-and "bind" that PV to the PVC above.
-(or it will bind a pre-provisioned PV to that PVC).
+Kubernetes will then dynamically provision a `PersistentVolume` of 50Mi,
+using the [Provisioner](https://kubernetes.io/docs/concepts/storage/storage-classes/#provisioner) of "default" `StorageClass`.
+It will "bind" that `PersistentVolume` to the `PersistentVolumeClaim` above.
 
 Kubernetes will also create a `Pod` based on the `ReplicaSet` template above.
-
-This `Pod` will remain unscheduled until the PVC is bound to a PV.
+This `Pod` will remain unscheduled until the `PersistentVolumeClaim` is bound.
 It will then be scheduled and started on the same Kubernetes node as the PV.
 
 Eventually, you will have an empty Etcd cluster of three nodes, with a total of 300Gi SSD storage available.
 
 ### Reboot a Kubernetes Node
 
-Assuming you are using [Local Persistent Volumes](https://kubernetes.io/docs/concepts/storage/volumes/#local),
-which are contstrained to a particular Kubernetes node.
-How do you **reboot** a Kubernetes node, without disrupting the `EtcdCluster` ?
+How do you **reboot** a Kubernetes node, without disrupting the `EtcdCluster`?
 
 **NOTE:** This operation **does not** require the `etcd-cluster-operator` to be running.
 The Etcd peer `ReplicaSet` ensures that the cluster can function even without the operator which created them.
@@ -122,9 +43,9 @@ The Etcd peer `ReplicaSet` ensures that the cluster can function even without th
 **NOTE:** Ensure that your `EtcdCluster` has sufficient peers on other Kubernetes nodes, to maintain quorum.
 
 1. Reboot the Kubernetes node
-   1. Kubernetes will delete the current `Pod` (it will be scheduled for deletion), but the PVC, the PV, will remain.
-   1. Kubernetes will ensure that a new `Pod` is created, but it will remain un-schedulable until the Kubernetes node reboots.
+   1. Kubernetes will schedule the current `Pod` for deletion, but the `PersistentVolumeClaim` and the `PersistentVolume` will remain.
+   1. Kubernetes will create a new `Pod`, but it will remain un-schedulable until the Kubernetes node reboots.
       1. This is because the Kubernetes Scheduler knows that the `Pod` placement is constrained
-         by the location of the existing PVC and bound PV.
-   1. When the server has rebooted, Kubernetes will be able to schedule the `Pod` and it will start up, with the existing data
-      and rejoin the Etcd cluster.
+         by the location of the existing `PersistentVolumeClaim`and its bound `PersistentVolume`.
+   1. When the server has rebooted, Kubernetes will be able to schedule the `Pod` and it will start.
+      The Etcd process inside the `Pod` will use the existing data and it will rejoin the Etcd cluster.
