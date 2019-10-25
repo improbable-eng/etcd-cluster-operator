@@ -28,7 +28,7 @@ In future this field will be made immutable. See https://github.com/improbable-e
 
 ## Operations
 
-Here are some examples of day-to-day operations and how the Etcd data is handled in each case.
+Here are some examples of day-to-day operations and explanations of Etcd data is handled in each case.
 
 ### Bootstrap a new cluster
 
