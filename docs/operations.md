@@ -22,7 +22,7 @@ spec:
           storage: 100Gi
 ```
 
-**NOTE**: The ``improbable-eng/etcd-cluster-operator`` can not currently reconcile changes to the storage settings.
+**NOTE**: The `improbable-eng/etcd-cluster-operator` can not currently reconcile changes to the storage settings.
 Do not make changes to this field after you have applied the manifest.
 In future this field will be made immutable. See https://github.com/improbable-eng/etcd-cluster-operator/issues/49
 
@@ -34,7 +34,7 @@ Here are some examples of day-to-day operations and how the Etcd data is handled
 
 Assuming you are using [Local Persistent Volumes](https://kubernetes.io/docs/concepts/storage/volumes/#local),
 which are contstrained to a particular Kubernetes node.
-How do you **bootstrap** a new ``EtcdCluster`` ?
+How do you **bootstrap** a new `EtcdCluster` ?
 
 1. On each target Kubernetes node, create a `/mnt/local-ssd` directory
 1. Mount at least one 100Gi SSD partition at e.g. `/mnt/local-ssd/<partition-UUID>`
@@ -101,13 +101,13 @@ spec:
             name: etcd-storage
 ```
 
-Kubernetes will then dynamically provision a ``PersistentVolume`` of 100Gi backed by an SSD,
+Kubernetes will then dynamically provision a `PersistentVolume` of 100Gi backed by an SSD,
 and "bind" that PV to the PVC above.
 (or it will bind a pre-provisioned PV to that PVC).
 
-Kubernetes will also create a ``Pod`` based on the ``ReplicaSet`` template above.
+Kubernetes will also create a `Pod` based on the `ReplicaSet` template above.
 
-This ``Pod`` will remain unscheduled until the PVC is bound to a PV.
+This `Pod` will remain unscheduled until the PVC is bound to a PV.
 It will then be scheduled and started on the same Kubernetes node as the PV.
 
 Eventually, you will have an empty Etcd cluster of three nodes, with a total of 300Gi SSD storage available.
@@ -116,17 +116,17 @@ Eventually, you will have an empty Etcd cluster of three nodes, with a total of 
 
 Assuming you are using [Local Persistent Volumes](https://kubernetes.io/docs/concepts/storage/volumes/#local),
 which are contstrained to a particular Kubernetes node.
-How do you **reboot** a Kubernetes node, without disrupting the ``EtcdCluster`` ?
+How do you **reboot** a Kubernetes node, without disrupting the `EtcdCluster` ?
 
 **NOTE:** This operation **does not** require the `improbable-eng/etcd-cluster-operator` to be running.
-The Etcd peer ``ReplicaSets`` ensure that the cluster can function even without the operator which created them.
+The Etcd peer `ReplicaSets` ensure that the cluster can function even without the operator which created them.
 
-**NOTE:** Ensure that your ``EtcdCluster`` has sufficient peers on other Kubernetes nodes, to maintain quorum.
+**NOTE:** Ensure that your `EtcdCluster` has sufficient peers on other Kubernetes nodes, to maintain quorum.
 
 1. Reboot the Kubernetes node
    1. Kubernetes will delete the current `Pod` (it will be scheduled for deletion), but the PVC, the PV, will remain.
-   1. Kubernetes will ensure that a new ``Pod`` is created, but it will remain un-schedulable until the Kubernetes node reboots.
+   1. Kubernetes will ensure that a new `Pod` is created, but it will remain un-schedulable until the Kubernetes node reboots.
       1. This is because the Kubernetes Scheduler knows that the `Pod` placement is constrained
          by the location of the existing PVC and bound PV.
-   1. When the server has rebooted, Kubernetes will be able to schedule the ``Pod`` and it will start up, with the existing data
+   1. When the server has rebooted, Kubernetes will be able to schedule the `Pod` and it will start up, with the existing data
       and rejoin the Etcd cluster.
