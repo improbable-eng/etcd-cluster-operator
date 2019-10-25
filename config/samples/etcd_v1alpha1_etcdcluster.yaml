@@ -5,3 +5,9 @@ metadata:
   namespace: default
 spec:
   replicas: 3
+  storage:
+    volumeClaimTemplate:
+      storageClassName: standard
+      resources:
+        requests:
+          storage: 50Mi

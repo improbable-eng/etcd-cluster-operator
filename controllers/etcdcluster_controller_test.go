@@ -10,10 +10,10 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/test"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/test/try"
 )
 
@@ -22,20 +22,14 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 		teardownFunc, namespace := s.setupTest(t)
 		defer teardownFunc()
 
-		etcdCluster := &etcdv1alpha1.EtcdCluster{
-			ObjectMeta: metav1.ObjectMeta{
-				Labels:      make(map[string]string),
-				Annotations: make(map[string]string),
-				Name:        "bees",
-				Namespace:   namespace,
-			},
-			Spec: etcdv1alpha1.EtcdClusterSpec{
-				Replicas: pointer.Int32Ptr(3),
-			},
-		}
+		etcdCluster := test.ExampleEtcdCluster(namespace)
 
 		err := s.k8sClient.Create(s.ctx, etcdCluster)
 		require.NoError(t, err, "failed to create EtcdCluster resource")
+
+		// Apply defaults here so that our expected object has all the same
+		// defaults as those used in the Reconcile function
+		etcdCluster.Default()
 
 		t.Run("CreatesService", func(t *testing.T) {
 			service := &v1.Service{}
@@ -133,4 +127,6 @@ func assertPeer(t *testing.T, cluster *etcdv1alpha1.EtcdCluster, peer *etcdv1alp
 	require.Equal(t, cluster.Name, peer.Labels[clusterLabel])
 
 	assertOwnedByCluster(t, cluster, peer)
+
+	assert.Equal(t, cluster.Spec.Storage, peer.Spec.Storage, "unexpected peer storage")
 }
