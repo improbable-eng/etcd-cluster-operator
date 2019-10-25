@@ -1,8 +1,6 @@
-# Persistence
+# Operations
 
-## Configuring Persistence Settings
-
-The persistence settings for an `EtcdCluster` are configured with the `storage` field.
+## Configuring an `EtcdCluster`
 
 Here's an example of the configuration for a 3-node Etcd cluster where each Etcd node has 100Gi of local SSD storage.
 
@@ -26,11 +24,11 @@ spec:
 Do not make changes to this field after you have applied the manifest.
 In future this field will be made immutable. See https://github.com/improbable-eng/etcd-cluster-operator/issues/49
 
-## Operations
+## Examples
 
 Here are some examples of day-to-day operations and explanations of Etcd data is handled in each case.
 
-### Bootstrap a new cluster
+### Bootstrap a New Cluster
 
 Assuming you are using [Local Persistent Volumes](https://kubernetes.io/docs/concepts/storage/volumes/#local),
 which are contstrained to a particular Kubernetes node.
@@ -39,11 +37,11 @@ How do you **bootstrap** a new `EtcdCluster` ?
 1. On each target Kubernetes node, create a `/mnt/local-ssd` directory
 1. Mount at least one 100Gi SSD partition at e.g. `/mnt/local-ssd/<partition-UUID>`
 1. Configure and deploy the [Local Static Provisioner](https://github.com/kubernetes-sigs/sig-storage-local-static-provisioner/blob/master/docs/getting-started.md), with a `classes` configuration which contains a `local-ssd` name and which  scans the `/mnt/local-ssd` directory.
-1. Wait for a StorageClass called `local-ssd`
-1. Wait for unbound PVs with this class to appear in the Kubernetes cluster.
-1. `kubectl apply -f ` the manifest above.
+1. Wait for a `StorageClass` called `local-ssd`
+1. Wait for unbound `PersistentVolume` resources to be created. They should be assigned the `StorageClass` `local-ssd`.
+1. Apply the the manifest above, using `kubectl apply -f `.
 
-The operator will create a new a collection of resources for each Etcd node:
+The `etcd-cluster-operator` will create a various API resources for each Etcd node:
 
 #### EtcdPeer
 
@@ -119,7 +117,7 @@ which are contstrained to a particular Kubernetes node.
 How do you **reboot** a Kubernetes node, without disrupting the `EtcdCluster` ?
 
 **NOTE:** This operation **does not** require the `etcd-cluster-operator` to be running.
-The Etcd peer `ReplicaSets` ensure that the cluster can function even without the operator which created them.
+The Etcd peer `ReplicaSet` ensures that the cluster can function even without the operator which created them.
 
 **NOTE:** Ensure that your `EtcdCluster` has sufficient peers on other Kubernetes nodes, to maintain quorum.
 
