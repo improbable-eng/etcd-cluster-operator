@@ -21,14 +21,10 @@ Apply the the manifest above:
 kubectl apply -f config/samples/etcd_v1alpha1_etcdcluster.yaml
 ```
 
-The `etcd-cluster-operator` will create the following new API resources for each Etcd node:
-
-1. EtcdPeer
-2. PersistentVolumeClaim
-3. ReplicaSet
+The `etcd-cluster-operator` will create the following new API resources for each Etcd node: `EtcdPeer`, `PersistentVolumeClaim` and a `ReplicaSet`.
 
 Kubernetes will then dynamically provision a `PersistentVolume` of 50Mi,
-using the [Provisioner](https://kubernetes.io/docs/concepts/storage/storage-classes/#provisioner) of the "default" `StorageClass`.
+using the [Provisioner](https://kubernetes.io/docs/concepts/storage/storage-classes/#provisioner) of the `StorageClass` called "standard".
 It will "bind" that `PersistentVolume` to the `PersistentVolumeClaim`.
 
 Kubernetes will also create a `Pod` based on the `ReplicaSet` template.
@@ -48,8 +44,8 @@ The `ReplicaSet` for each Etcd node ensures that the cluster can function even w
 
 1. Reboot the Kubernetes node
    1. Kubernetes will schedule the current `Pod` for deletion, but the `PersistentVolumeClaim` and the `PersistentVolume` will remain.
-   1. Kubernetes will create a new `Pod`, but it will remain un-schedulable until the Kubernetes node reboots.
+   2. Kubernetes will create a new `Pod`, but it will remain un-schedulable until the Kubernetes node reboots.
       1. This is because the Kubernetes Scheduler knows that the `Pod` placement is constrained
          by the location of the existing `PersistentVolumeClaim`and its bound `PersistentVolume`.
-   1. When the server has rebooted, Kubernetes will be able to schedule the `Pod` and it will start.
+   3. When the server has rebooted, Kubernetes will be able to schedule the `Pod` and it will start.
       The Etcd process inside the `Pod` will use the existing data and it will rejoin the Etcd cluster.
