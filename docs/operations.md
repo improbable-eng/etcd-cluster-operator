@@ -22,7 +22,7 @@ spec:
           storage: 100Gi
 ```
 
-**NOTE**: The `improbable-eng/etcd-cluster-operator` can not currently reconcile changes to the storage settings.
+**NOTE**: The `etcd-cluster-operator` can not currently reconcile changes to the storage settings.
 Do not make changes to this field after you have applied the manifest.
 In future this field will be made immutable. See https://github.com/improbable-eng/etcd-cluster-operator/issues/49
 
@@ -118,7 +118,7 @@ Assuming you are using [Local Persistent Volumes](https://kubernetes.io/docs/con
 which are contstrained to a particular Kubernetes node.
 How do you **reboot** a Kubernetes node, without disrupting the `EtcdCluster` ?
 
-**NOTE:** This operation **does not** require the `improbable-eng/etcd-cluster-operator` to be running.
+**NOTE:** This operation **does not** require the `etcd-cluster-operator` to be running.
 The Etcd peer `ReplicaSets` ensure that the cluster can function even without the operator which created them.
 
 **NOTE:** Ensure that your `EtcdCluster` has sufficient peers on other Kubernetes nodes, to maintain quorum.
