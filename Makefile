@@ -10,42 +10,51 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
+# Make sure GOBIN is on the PATH
+export PATH := $(GOBIN):$(PATH)
+
+# Stop go build tools from silently modifying go.mod and go.sum
+export GOFLAGS := -mod=readonly
+
 ifeq ($(CIRCLECI),"true")
 CLEANUP="false"
 else
 CLEANUP="true"
 endif
 
-all: manager
+all: verify test manager
 
 # Get binary dependencies
 bin/kubebuilder:
 	hack/download-kubebuilder-local.sh
 
+# Run all static checks
+verify: verify-gomod verify-manifests verify-generate verify-fmt vet
+
 # Run unit tests
-test: generate fmt vet manifests bin/kubebuilder
+test: bin/kubebuilder
 	KUBEBUILDER_ASSETS="$(shell pwd)/bin/kubebuilder/bin" go test ./... -coverprofile cover.out
 
 # Run end to end tests in a local Kind cluster. We do not clean up after running the tests to
 #  a) speed up the test run time slightly
 #  b) allow debug sessions to be attached to figure out what caused failures
-kind: generate fmt vet manifests
+kind:
 	go test ./internal/test/e2e --kind --repo-root ${CURDIR} -v --cleanup=${CLEANUP}
 
 # Build manager binary
-manager: generate fmt vet
+manager:
 	go build -o bin/manager main.go
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
-run: generate fmt vet manifests
+run:
 	go run ./main.go
 
 # Install CRDs into a cluster
-install: manifests
+install:
 	kustomize build config/crd | kubectl apply -f -
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
-deploy: manifests
+deploy:
 	cd config/manager && kustomize edit set image controller=${IMG}
 	kustomize build config/default | kubectl apply -f -
 
@@ -53,9 +62,15 @@ deploy: manifests
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
+verify-manifests: controller-gen
+	./hack/verify.sh make -s manifests
+
 # Run go fmt against code
 fmt:
-	go fmt ./...
+	gofmt -w .
+
+verify-fmt:
+	gofmt -d .
 
 # Run go vet against code
 vet:
@@ -64,6 +79,15 @@ vet:
 # Generate code
 generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths="./..."
+
+verify-generate: controller-gen
+	./hack/verify.sh make -s generate
+
+gomod:
+	go mod tidy
+
+verify-gomod:
+	./hack/verify.sh make -s gomod
 
 # Build the docker image
 docker-build: test
@@ -77,7 +101,9 @@ docker-push:
 # download controller-gen if necessary
 controller-gen:
 ifeq (, $(shell which controller-gen))
-	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.2
+# Prevents go get from modifying our go.mod file.
+# See https://github.com/kubernetes-sigs/kubebuilder/issues/909
+	cd /tmp; GO111MODULE=on go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.2
 CONTROLLER_GEN=$(GOBIN)/controller-gen
 else
 CONTROLLER_GEN=$(shell which controller-gen)

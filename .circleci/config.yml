@@ -28,6 +28,9 @@ jobs:
             sudo mv ./kubectl /usr/local/bin
       - checkout
       - run:
+         name: Static checks
+         command: make verify
+      - run:
          name: Unit tests
          command: make test
       - run:
