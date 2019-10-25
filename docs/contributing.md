@@ -12,16 +12,16 @@ Nested `t.Run` assertions are preferred, as they lead to clear test names. For e
 ```go
 func TestFoo(t *testing.T) {
 
-	t.Run("TestClusterController", func(t *testing.T) {
-		// Init Controller
-		t.Run("OnCreation", func(t *testing.T) {
-			// Create cluster
-			t.Run("CreatesService", func(t *testing.T) {
-				// Assert service exists
-				t.Fail()
-			})
-		})
-	})
+    t.Run("TestClusterController", func(t *testing.T) {
+        // Init Controller
+        t.Run("OnCreation", func(t *testing.T) {
+            // Create cluster
+            t.Run("CreatesService", func(t *testing.T) {
+                // Assert service exists
+                t.Fail()
+            })
+        })
+    })
 }
 ```
 
@@ -37,7 +37,7 @@ Generally speaking the controllers will not include unit tests as their behaviou
 tests. Sometimes a particular chunk of logic may be non-trivial to test in Kubebuilder tests, and therefore a unit test
 may be more appropriate. In this case it is preferred to avoid mocking, in particular mocking the Kubernetes Go client,
 and instead pull the logic to be tested into a pure function.
- 
+
 Other packages within the project which are not controllers (e.g., `internal/test/try`) should have unit tests in the
 usual way.
 
@@ -62,3 +62,21 @@ on an `EtcdCluster` resource, may also be interacted with.
 ### Static checks
 
 You can run ``make verify`` to perform static checks on the code and manifests.
+
+## Release Process
+
+Releases of the operator occur whenever the team feel there is sufficient new features to produce a release. The version
+string will be prefixed with `v` and use semver.
+
+### Pre-release tasks
+
+* Sanity check documentation under `docs` and `README.md`.
+* Compile and prepare release notes under `docs/release-notes/$VERSION.md`. For example version v0.1.0 would have a file
+  `docs/release-notes/v0.1.0.md`.
+
+### Process
+
+1. Tag the repository with the new version, e.g., `git tag v0.1.0` and push the tag to GitHub.
+2. Mark the tag as a release on GitHub.
+3. Build a Docker Image from the repository at that tag and push it to Docker Hub.
+4. Build a version of the deployment YAML with the image tag, attach it to the GitHub release as a YAML file.
