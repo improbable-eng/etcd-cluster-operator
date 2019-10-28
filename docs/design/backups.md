@@ -84,4 +84,9 @@ These go routines will simply sleep until the crontab fires, at which point they
 The controller reconcile process will make sure that the pool of goroutines are a reflection of the desired configuration.
 New routines will be created when a resource is applied, routines will be recreated when a resource is changed, and deleted when a resource is removed.
 
+## Backup Restoration
+
+Providing tooling to restore backups is out of scope of this design.
+We have judged it to be sufficient to provide documentation on how to restore backups, but not provide any built-in mechanisms to perform the restoration for you.
+The ETCD tooling does well at restoring the backup snapshots and we do not feel like there is much value to be added there.
 
