@@ -8,7 +8,7 @@ projectdir="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 
 cd "${projectdir}"
 
-tmp="$(mktemp --directory --tmpdir verify.sh.XXXXXXXX)"
+tmp="$(mktemp -d -t verify.sh.XXXXXXXX)"
 
 cleanup() {
     rm -rf "${tmp}"
