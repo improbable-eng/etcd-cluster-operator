@@ -1,4 +1,7 @@
 # etcd-cluster-operator
+
+![Go Report Card](https://goreportcard.com/badge/github.com/improbable-eng/etcd-cluster-operator)
+
 A controller to deploy and manage [etcd](https://etcd.io) clusters inside of Kubernetes.
 
 ## Introduction
