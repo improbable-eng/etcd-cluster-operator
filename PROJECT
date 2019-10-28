@@ -8,3 +8,9 @@ resources:
 - group: etcd
   version: v1alpha1
   kind: EtcdCluster
+- group: etcd
+  version: v1alpha1
+  kind: EtcdBackup
+- group: etcd
+  version: v1alpha1
+  kind: EtcdBackupSchedule

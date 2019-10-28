@@ -36,6 +36,46 @@ rules:
 - apiGroups:
   - etcd.improbable.io
   resources:
+  - etcdbackups
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - etcd.improbable.io
+  resources:
+  - etcdbackups/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - etcd.improbable.io
+  resources:
+  - etcdbackupschedules
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - etcd.improbable.io
+  resources:
+  - etcdbackupschedules/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - etcd.improbable.io
+  resources:
   - etcdclusters
   verbs:
   - get
