@@ -17,8 +17,13 @@ type EtcdClusterSpec struct {
 }
 
 type EtcdMember struct {
+	// Name is a human-readable name for the member. Will *typically* match the name we gave the peer that manages this
+	// member.
 	Name string `json:"name"`
-	ID   string `json:"ID"`
+
+	// ID is the internal unique identifier for the member that defines its identity with the etcd cluster. We do not
+	// define this.
+	ID string `json:"id"`
 }
 
 // EtcdClusterStatus defines the observed state of EtcdCluster
