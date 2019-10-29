@@ -26,12 +26,16 @@ spec:
         secretRef: 
           name: my-cluster-backup-bucket-credentials
           namespace: default
+status:
+  phase: Completed
+  startTime: 2019-10-31T12:00:00Z
+  completionTime: 2019-10-31T12:02:21Z
 ```
 
 This resource specifies that we desire a backup to be immediately taken as a [snapshot](https://github.com/etcd-io/etcd/blob/master/Documentation/op-guide/recovery.md#snapshotting-the-keyspace) from the etcd API of the given cluster.
 This snapshot will be saved to a GCS bucket, accessed with credentials read from a given secret.
 The file would be named with a timestamp when the backup was started, for uniqueness.
-For the initial implementation, backups will be taken by the controller, rather than a Job or Pod acting on behalf of the controller.
+For the initial implementation, backups will be taken by `etcd-cluster-operator`, rather than a `Job` or `Pod` acting on behalf of the controller.
 This is simply because we do not feel a need to separate this to an external process for the time being.
 
 Backup types could include
@@ -52,7 +56,7 @@ Only `gcsBucket` will be initially implemented.
 A controller will be watching for these resources.
 When an `EtcdBackup` resource is deployed the controller will start taking the backup in the specified way, publishing an event to notify that the backup has started. 
 Once the backup has been taken, the an event will be created to notify that the backup is being uploaded, and it will be pushed to the given destination.
-Once this is complete, an event will notify completion, we'll also update the resource state to `Complete`.
+Once this is complete, an event will notify completion, we'll also update the resource status to `Complete`.
 If an error occured during the backup process, this will also be shown by setting the resource status to `Failed`.
 
 ## Backup Schedule Resource
@@ -98,6 +102,10 @@ We have judged it to be sufficient to provide documentation on how to restore ba
 The ETCD tooling does well at restoring the backup snapshots and we do not feel like there is much value to be added there.
 
 ## Alternatives
+
+This behaviour could conceivably live inside of a Kubernetes `Job` / `CronJob` running some custom container to make the backup & push it to a remote.
+We chose to avoid this approach as it limits the configurability of the backups. 
+It would quicky become complex to support different backup strategies and storage destinations, and we'd likely end up implementing some configuration layer infront of the job.
 
 The [Velero](https://github.com/vmware-tanzu/velero) project aims to provide tools to back up all important data in a Kubernetes cluster. 
 We considered building an integration in to this project to do the ETCD backups for us - and there was no technical reason we found why this wouldn't be possible. 
