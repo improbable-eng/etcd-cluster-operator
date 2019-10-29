@@ -175,12 +175,18 @@ spec:
                 etcd cluster.
               items:
                 properties:
-                  ID:
+                  id:
+                    description: ID is the internal unique identifier for the member
+                      that defines its identity with the etcd cluster. We do not define
+                      this.
                     type: string
                   name:
+                    description: Name is a human-readable name for the member. Will
+                      *typically* match the name we gave the peer that manages this
+                      member.
                     type: string
                 required:
-                - ID
+                - id
                 - name
                 type: object
               type: array
