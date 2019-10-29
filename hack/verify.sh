@@ -8,6 +8,8 @@ projectdir="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 
 cd "${projectdir}"
 
+# Use short form arguments here to support BSD/macOS. `-d` instructs
+# it to make a directory, `-t` provides a prefix to use for the directory name.
 tmp="$(mktemp -d -t verify.sh.XXXXXXXX)"
 
 cleanup() {
