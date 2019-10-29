@@ -14,7 +14,10 @@ metadata:
   name: my-cluster-backup
   namespace: default
 spec:
-  clusterAddress: http://my-cluster.default.svc:2379
+  clusterEndpoints: 
+  - scheme: http
+    host: my-cluster.default.svc
+    port: 2379
   type: snapshot
   destination:
     gcsBucket:
@@ -65,6 +68,8 @@ metadata:
   namespace: default
 spec:
   schedule: "*/1 * * * *"
+  successfulBackupsHistoryLimit: 30
+  failedBackupsHistoryLimit: 5
   backupTemplate:
     type: snapshot
     destination:
@@ -80,13 +85,21 @@ This resource appears very similar to the `EtcdBackup` resource, with the additi
 This field allows backups to be taken on a crontab-notation schedule, behaving similarly to the Kubernetes [CronJob](https://kubernetes.io/docs/tasks/job/automated-tasks-with-cron-jobs/#schedule) resource.
 
 The controller will maintain a pool of go routines, one for each backup schedule resource.
-These go routines will simply sleep until the crontab fires, at which point they will create an `EtcdBackup` resource from the given configuration.
+These go routines will simply sleep until the crontab fires, at which point they will create a labelled `EtcdBackup` resource from the given configuration.
 The controller reconcile process will make sure that the pool of goroutines are a reflection of the desired configuration.
 New routines will be created when a resource is applied, routines will be recreated when a resource is changed, and deleted when a resource is removed.
+
+Once a backup has finished, the controller will ensure that we are only keeping the specified number of `EtcdBackup` resources around, and will clean up any old resources respecting the `successfulBackupsHistoryLimit` and `failedBackupsHistoryLimit` fields.
 
 ## Backup Restoration
 
 Providing tooling to restore backups is out of scope of this design.
 We have judged it to be sufficient to provide documentation on how to restore backups, but not provide any built-in mechanisms to perform the restoration for you.
 The ETCD tooling does well at restoring the backup snapshots and we do not feel like there is much value to be added there.
+
+## Alternatives
+
+The [Velero](https://github.com/vmware-tanzu/velero) project aims to provide tools to back up all important data in a Kubernetes cluster. 
+We considered building an integration in to this project to do the ETCD backups for us - and there was no technical reason we found why this wouldn't be possible. 
+However we would like to offer something out of the box for users who do not want to run Velero, so chose to build this in to the operator as a start.
 
