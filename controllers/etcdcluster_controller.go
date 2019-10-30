@@ -74,14 +74,14 @@ func (r *EtcdClusterReconciler) updateStatus(
 	ctx context.Context,
 	name types.NamespacedName,
 	cluster *etcdv1alpha1.EtcdCluster,
-	members []etcdclient.Member,
+	members *[]etcdclient.Member,
 	reconcilerEvent event.EtcdClusterReconcilerEvent) error {
 
 	log := r.Log.WithValues("cluster", name)
 
 	if members != nil {
-		cluster.Status.Members = make([]etcdv1alpha1.EtcdMember, len(members))
-		for i, member := range members {
+		cluster.Status.Members = make([]etcdv1alpha1.EtcdMember, len(*members))
+		for i, member := range *members {
 			cluster.Status.Members[i] = etcdv1alpha1.EtcdMember{
 				Name: member.Name,
 				ID:   member.ID,
@@ -99,7 +99,7 @@ func (r *EtcdClusterReconciler) updateStatus(
 func (r *EtcdClusterReconciler) reconcile(
 	ctx context.Context,
 	name types.NamespacedName,
-	members []etcdclient.Member,
+	members *[]etcdclient.Member,
 	cluster *etcdv1alpha1.EtcdCluster,
 ) (
 	ctrl.Result,
@@ -182,9 +182,12 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	}
 
 	// Attempt to dial the etcd cluster, recording the cluster response if we can
-	members, err := r.connectToEtcd(ctx, cluster)
-	if err != nil {
+	members := &[]etcdclient.Member{}
+	if memberSlice, err := r.connectToEtcd(ctx, cluster); err != nil {
 		log.Error(err, "Unable to contact etcd cluster")
+		members = nil
+	} else {
+		members = &memberSlice
 	}
 
 	// Perform a reconcile, getting back the desired result, any errors, and a clusterEvent. This is an internal concept
