@@ -221,14 +221,9 @@ func runAllTests(t *testing.T, kubectl *kubectlContext) {
 		if err != nil {
 			return err
 		}
-		for _, expectedMemberName := range []string{
-			"my-cluster-0",
-			"my-cluster-1",
-			"my-cluster-2",
-		} {
-			if !strings.Contains(members, expectedMemberName) {
-				return errors.New(fmt.Sprintf("Expected etcd member list '%s' to contain member name '%s'", members, expectedMemberName))
-			}
+		// Don't assert on exact memebers, just that we have three of them.
+		if len(strings.Split(members, " ")) != 3 {
+			return errors.New(fmt.Sprintf("Expected etcd member list to have three members. Had %d.", len(members)))
 		}
 		return nil
 	}, time.Minute*2, time.Second*10)
