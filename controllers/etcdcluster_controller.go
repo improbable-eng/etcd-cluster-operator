@@ -75,7 +75,7 @@ func (r *EtcdClusterReconciler) updateStatus(
 	name types.NamespacedName,
 	cluster *etcdv1alpha1.EtcdCluster,
 	members *[]etcdclient.Member,
-	reconcilerEvent reconcilerevent.EtcdClusterReconcilerEvent) error {
+	reconcilerEvent reconcilerevent.ReconcilerEvent) error {
 
 	log := r.Log.WithValues("cluster", name)
 
@@ -103,7 +103,7 @@ func (r *EtcdClusterReconciler) reconcile(
 	cluster *etcdv1alpha1.EtcdCluster,
 ) (
 	ctrl.Result,
-	reconcilerevent.EtcdClusterReconcilerEvent,
+	reconcilerevent.ReconcilerEvent,
 	error) {
 
 	log := r.Log.WithValues("cluster", name)
