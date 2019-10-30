@@ -3,7 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"github.com/improbable-eng/etcd-cluster-operator/internal/event"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/reconcilerevent"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -75,7 +75,7 @@ func (r *EtcdClusterReconciler) updateStatus(
 	name types.NamespacedName,
 	cluster *etcdv1alpha1.EtcdCluster,
 	members *[]etcdclient.Member,
-	reconcilerEvent event.EtcdClusterReconcilerEvent) error {
+	reconcilerEvent reconcilerevent.EtcdClusterReconcilerEvent) error {
 
 	log := r.Log.WithValues("cluster", name)
 
@@ -103,7 +103,7 @@ func (r *EtcdClusterReconciler) reconcile(
 	cluster *etcdv1alpha1.EtcdCluster,
 ) (
 	ctrl.Result,
-	event.EtcdClusterReconcilerEvent,
+	reconcilerevent.EtcdClusterReconcilerEvent,
 	error) {
 
 	log := r.Log.WithValues("cluster", name)
@@ -130,7 +130,7 @@ func (r *EtcdClusterReconciler) reconcile(
 			return ctrl.Result{}, nil, err
 		}
 		log.V(1).Info("Created Service", "service", service.Name)
-		return ctrl.Result{}, &event.ServiceCreatedEvent{Object: cluster, ServiceName: service.Name}, nil
+		return ctrl.Result{}, &reconcilerevent.ServiceCreatedEvent{Object: cluster, ServiceName: service.Name}, nil
 	}
 	log.V(2).Info("Service exists", "service", service.Name)
 
@@ -154,7 +154,7 @@ func (r *EtcdClusterReconciler) reconcile(
 					"peer", peerName)
 				return ctrl.Result{}, nil, err
 			}
-			return ctrl.Result{}, &event.PeerCreatedEvent{Object: cluster, PeerName: peer.Name}, nil
+			return ctrl.Result{}, &reconcilerevent.PeerCreatedEvent{Object: cluster, PeerName: peer.Name}, nil
 		}
 	} else {
 		log.V(2).Info("Cluster communication established")
