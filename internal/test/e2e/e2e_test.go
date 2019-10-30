@@ -70,9 +70,17 @@ func TestE2E_Kind(t *testing.T) {
 		configPath: kind.KubeConfigPath(),
 	}
 
+	t.Log("Installing cert-manager")
+	err := kubectl.Apply("--validate=false", "--filename=https://github.com/jetstack/cert-manager/releases/download/v0.11.0/cert-manager.yaml")
+	require.NoError(t, err)
+
+	t.Log("Waiting for cert-manager to be ready")
+	err = kubectl.Wait("--for=condition=Available", "--timeout=300s", "apiservice", "v1beta1.webhook.cert-manager.io")
+	require.NoError(t, err)
+
 	// Ensure CRDs exist in the cluster.
 	t.Log("Applying CRDs")
-	err := kubectl.Apply("--kustomize", filepath.Join(*fRepoRoot, "config", "crd"))
+	err = kubectl.Apply("--kustomize", filepath.Join(*fRepoRoot, "config", "crd"))
 	require.NoError(t, err)
 
 	// Build the operator.

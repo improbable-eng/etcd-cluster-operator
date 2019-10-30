@@ -50,3 +50,10 @@ func (k *kubectlContext) Get(args ...string) (string, error) {
 	out, err := k.do(append([]string{"get"}, args...)...)
 	return string(out), err
 }
+
+// Wait wraps `kubectl wait', returning any error that occurred.
+func (k *kubectlContext) Wait(args ...string) error {
+	out, err := k.do(append([]string{"wait"}, args...)...)
+	k.t.Log(string(out))
+	return err
+}
