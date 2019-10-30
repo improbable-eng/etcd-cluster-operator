@@ -230,17 +230,14 @@ func (r *EtcdClusterReconciler) connectToEtcd(ctx context.Context, cluster *etcd
 }
 
 func etcdClientConfig(cluster *etcdv1alpha1.EtcdCluster) *etcdclient.Config {
-	peerNames := expectedPeerNamesForCluster(cluster)
-	peerAddresses := make([]string, len(peerNames))
-	for i, peerName := range peerNames {
-		u := &url.URL{
-			Scheme: etcdScheme,
-			Host:   fmt.Sprintf("%s:%d", expectedURLForPeer(cluster, peerName), etcdClientPort),
-		}
-		peerAddresses[i] = u.String()
+	serviceURL := &url.URL{
+		Scheme: etcdScheme,
+		// We (the operator) are quite probably in a different namespace to the cluster, so we need to use a fully
+		// defined URL.
+		Host: fmt.Sprintf("%s.%s.svc:%d", cluster.Name, cluster.Namespace, etcdClientPort),
 	}
 	return &etcdclient.Config{
-		Endpoints: peerAddresses,
+		Endpoints: []string{serviceURL.String()},
 		Transport: etcdclient.DefaultTransport,
 	}
 }
