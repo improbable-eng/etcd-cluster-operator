@@ -117,7 +117,7 @@ func TestE2E_Kind(t *testing.T) {
 
 	// Ensure the operator starts.
 	err = try.Eventually(func() error {
-		out, err := kubectl.Get("--namespace", "etcd-cluster-operator-system", "deploy", "etcd-cluster-operator-manager", "-o=jsonpath='{.status.readyReplicas}'")
+		out, err := kubectl.Get("--namespace", "eco-system", "deploy", "eco-controller-manager", "-o=jsonpath='{.status.readyReplicas}'")
 		if err != nil {
 			return err
 		}
