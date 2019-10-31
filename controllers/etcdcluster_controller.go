@@ -3,7 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"github.com/improbable-eng/etcd-cluster-operator/internal/reconcilerevent"
+	"github.com/improbable-eng/etcd-cluster-operator/pkg/reconcilerevent"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
