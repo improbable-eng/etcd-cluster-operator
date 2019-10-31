@@ -106,15 +106,6 @@ func (r *EtcdClusterReconciler) reconcile(
 	}
 	log := r.Log.WithValues("cluster", name)
 
-	// Apply defaults in case a defaulting webhook has not been deployed.
-	cluster.Default()
-
-	// Validate in case a validating webhook has not been deployed
-	err := cluster.ValidateCreate()
-	if err != nil {
-		return ctrl.Result{}, nil, fmt.Errorf("invalid EtcdCluster resource: %w", err)
-	}
-
 	service := &v1.Service{}
 	if err := r.Get(ctx, name, service); err != nil {
 		if !apierrors.IsNotFound(err) {
@@ -169,6 +160,15 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	if err := r.Get(ctx, req.NamespacedName, cluster); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 		// special 'exit early' case.
+	}
+
+	// Apply defaults in case a defaulting webhook has not been deployed.
+	cluster.Default()
+
+	// Validate in case a validating webhook has not been deployed
+	err := cluster.ValidateCreate()
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("invalid EtcdCluster resource: %w", err)
 	}
 
 	// Attempt to dial the etcd cluster, recording the cluster response if we can
