@@ -76,8 +76,6 @@ func (r *EtcdClusterReconciler) updateStatus(
 	members *[]etcdclient.Member,
 	reconcilerEvent reconcilerevent.ReconcilerEvent) error {
 
-	log := r.Log.WithValues("cluster", name)
-
 	if members != nil {
 		cluster.Status.Members = make([]etcdv1alpha1.EtcdMember, len(*members))
 		for i, member := range *members {
@@ -88,7 +86,6 @@ func (r *EtcdClusterReconciler) updateStatus(
 		}
 
 		if err := r.Client.Status().Update(ctx, cluster); err != nil {
-			log.Error(err, "Unable to update status field on EtcdCluster")
 			return err
 		}
 	}
@@ -113,20 +110,17 @@ func (r *EtcdClusterReconciler) reconcile(
 	// Validate in case a validating webhook has not been deployed
 	err := cluster.ValidateCreate()
 	if err != nil {
-		log.Error(err, "invalid EtcdCluster")
-		return ctrl.Result{}, nil, nil
+		return ctrl.Result{}, nil, fmt.Errorf("invalid EtcdCluster resource: %w", err)
 	}
 
 	service := &v1.Service{}
 	if err := r.Get(ctx, name, service); err != nil {
 		if !apierrors.IsNotFound(err) {
-			log.Error(err, "unable to fetch EtcdCluster service")
-			return ctrl.Result{}, nil, err
+			return ctrl.Result{}, nil, fmt.Errorf("unable to fetch EtcdCluster service: %w", err)
 		}
 		service = headlessServiceForCluster(cluster)
 		if err := r.Create(ctx, service); err != nil {
-			log.Error(err, "unable to create Service", "service", service.Name)
-			return ctrl.Result{}, nil, err
+			return ctrl.Result{}, nil, fmt.Errorf("unable to create service: %w", err)
 		}
 		log.V(1).Info("Created Service", "service", service.Name)
 		return ctrl.Result{}, &reconcilerevent.ServiceCreatedEvent{Object: cluster, ServiceName: service.Name}, nil
@@ -136,8 +130,7 @@ func (r *EtcdClusterReconciler) reconcile(
 	if members == nil {
 		peers := &etcdv1alpha1.EtcdPeerList{}
 		if err := r.List(ctx, peers, client.MatchingFields{clusterNameSpecField: cluster.Name}); err != nil {
-			log.Error(err, "unable to list peers")
-			return ctrl.Result{}, nil, err
+			return ctrl.Result{}, nil, fmt.Errorf("unable to list peers: %w", err)
 		}
 
 		if cluster.Spec.Replicas != nil && int32(len(peers.Items)) < *cluster.Spec.Replicas {
@@ -149,9 +142,7 @@ func (r *EtcdClusterReconciler) reconcile(
 				"peer", peerName)
 			peer := peerForCluster(cluster, peerName)
 			if err := r.Create(ctx, peer); err != nil {
-				log.Error(err, "Failed to create peer",
-					"peer", peerName)
-				return ctrl.Result{}, nil, err
+				return ctrl.Result{}, nil, fmt.Errorf("failed to create EtcdPeer %s: %w", peerName, err)
 			}
 			return ctrl.Result{}, &reconcilerevent.PeerCreatedEvent{Object: cluster, PeerName: peer.Name}, nil
 		}
