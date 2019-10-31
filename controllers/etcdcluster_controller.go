@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/pkg/errors"
 	etcdclient "go.etcd.io/etcd/client"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -215,13 +214,13 @@ func (r *EtcdClusterReconciler) getEtcdMembers(ctx context.Context, cluster *etc
 	etcdConfig := etcdClientConfig(cluster)
 	c, err := etcdclient.New(*etcdConfig)
 	if err != nil {
-		return nil, errors.Wrap(err, "Unable to connect to etcd")
+		return nil, fmt.Errorf("unable to connect to etcd: %w", err)
 	}
 
 	membersAPI := etcdclient.NewMembersAPI(c)
 	members, err := membersAPI.List(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, "Unable to list members of etcd cluster")
+		return nil, fmt.Errorf("unable to list members of etcd cluster: %w", err)
 	}
 
 	return members, nil
