@@ -174,7 +174,7 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	// Attempt to dial the etcd cluster, recording the cluster response if we can
 	members := &[]etcdclient.Member{}
 	if memberSlice, err := r.getEtcdMembers(ctx, cluster); err != nil {
-		log.Error(err, "Unable to contact etcd cluster")
+		log.V(2).Info("Unable to contact etcd cluster", "error", err)
 		members = nil
 	} else {
 		members = &memberSlice
