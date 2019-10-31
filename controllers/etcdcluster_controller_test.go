@@ -1,7 +1,9 @@
 package controllers
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,6 +18,45 @@ import (
 	"github.com/improbable-eng/etcd-cluster-operator/internal/test"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/test/try"
 )
+
+func TestErrorCat(t *testing.T) {
+	if errorCat() != nil {
+		t.Error("Should give nil when no errors are given")
+	}
+	if errorCat(nil) != nil {
+		t.Error("Should ignore nil inputs")
+	}
+	if errorCat(nil, nil) != nil {
+		t.Error("SHould ignore nil inputs")
+	}
+
+	testErrA := errors.New("thing A failed")
+	if errorCat(testErrA) != testErrA {
+		t.Error("Shouldn't modify a single error given")
+	}
+	if errorCat(testErrA, nil) != testErrA {
+		t.Error("Shouldn't modify a single error given with nils")
+	}
+
+	testErrB := errors.New("thing B failed")
+	bothErrors := errorCat(testErrA, testErrB)
+	if bothErrors == nil {
+		t.Fatalf("Gave nil when given errors")
+	}
+	if !strings.Contains(bothErrors.Error(), testErrA.Error()) {
+		t.Errorf("Failed to concatenate error strings together. Error %s did not contain error %s",
+			bothErrors.Error(),
+			testErrA.Error())
+	}
+	if !strings.Contains(bothErrors.Error(), testErrB.Error()) {
+		t.Errorf("Failed to concatenate error strings together. Error %s did not contain error %s",
+			bothErrors.Error(),
+			testErrB.Error())
+	}
+	if errorCat(testErrA, nil, testErrB).Error() != errorCat(testErrA, testErrB).Error() {
+		t.Error("Failed to ignore nils during error concatenation")
+	}
+}
 
 func (s *controllerSuite) testClusterController(t *testing.T) {
 	t.Run("OnCreation", func(t *testing.T) {

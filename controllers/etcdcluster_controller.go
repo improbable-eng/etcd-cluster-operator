@@ -182,16 +182,16 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 
 	// Perform a reconcile, getting back the desired result, any errors, and a clusterEvent. This is an internal concept
 	// and is not the same as the Kubernetes event, although it is used to make one later.
-	result, clusterEvent, err := r.reconcile(ctx, members, cluster)
-	if err != nil {
+	result, clusterEvent, reconcileErr := r.reconcile(ctx, members, cluster)
+	if reconcileErr != nil {
 		log.Error(err, "Failed to reconcile")
 	}
 
 	// The update status takes in the cluster definition, and the member list from etcd as of *before we ran reconcile*.
 	// We also get the event, which may contain rich information about what we did (such as the new member name on a
 	// MemberAdded event).
-	err = r.updateStatus(ctx, cluster, members, clusterEvent)
-	if err != nil {
+	updateStatusErr := r.updateStatus(ctx, cluster, members, clusterEvent)
+	if updateStatusErr != nil {
 		log.Error(err, "Failed to update status")
 	}
 
@@ -200,7 +200,21 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		clusterEvent.Record(r.Recorder)
 	}
 
-	return result, nil
+	return result, errorCat(reconcileErr, updateStatusErr)
+}
+
+func errorCat(errs ...error) error {
+	var finalErr error
+	for _, err := range errs {
+		if err != nil {
+			if finalErr == nil {
+				finalErr = err
+			} else {
+				finalErr = fmt.Errorf("%s and %s", err.Error(), finalErr.Error())
+			}
+		}
+	}
+	return finalErr
 }
 
 func (r *EtcdClusterReconciler) getEtcdMembers(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster) ([]etcdclient.Member, error) {
