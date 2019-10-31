@@ -175,7 +175,6 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 
 	cluster := &etcdv1alpha1.EtcdCluster{}
 	if err := r.Get(ctx, req.NamespacedName, cluster); err != nil {
-		log.Error(err, "unable to fetch EtcdCluster resource")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 		// special 'exit early' case.
 	}
