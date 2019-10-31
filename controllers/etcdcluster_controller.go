@@ -18,7 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
-	"github.com/improbable-eng/etcd-cluster-operator/pkg/reconcilerevent"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/reconcilerevent"
 )
 
 const (
