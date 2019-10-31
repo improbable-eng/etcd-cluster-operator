@@ -71,7 +71,6 @@ func headlessServiceForCluster(cluster *etcdv1alpha1.EtcdCluster) *v1.Service {
 // updateStatus updates the EtcdCluster resource's status to be the current value of the cluster.
 func (r *EtcdClusterReconciler) updateStatus(
 	ctx context.Context,
-	name types.NamespacedName,
 	cluster *etcdv1alpha1.EtcdCluster,
 	members *[]etcdclient.Member,
 	reconcilerEvent reconcilerevent.ReconcilerEvent) error {
@@ -94,7 +93,6 @@ func (r *EtcdClusterReconciler) updateStatus(
 
 func (r *EtcdClusterReconciler) reconcile(
 	ctx context.Context,
-	name types.NamespacedName,
 	members *[]etcdclient.Member,
 	cluster *etcdv1alpha1.EtcdCluster,
 ) (
@@ -102,6 +100,10 @@ func (r *EtcdClusterReconciler) reconcile(
 	reconcilerevent.ReconcilerEvent,
 	error) {
 
+	name := types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      cluster.Name,
+	}
 	log := r.Log.WithValues("cluster", name)
 
 	// Apply defaults in case a defaulting webhook has not been deployed.
@@ -180,7 +182,7 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 
 	// Perform a reconcile, getting back the desired result, any errors, and a clusterEvent. This is an internal concept
 	// and is not the same as the Kubernetes event, although it is used to make one later.
-	result, clusterEvent, err := r.reconcile(ctx, req.NamespacedName, members, cluster)
+	result, clusterEvent, err := r.reconcile(ctx, members, cluster)
 	if err != nil {
 		log.Error(err, "Failed to reconcile")
 	}
@@ -188,7 +190,7 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	// The update status takes in the cluster definition, and the member list from etcd as of *before we ran reconcile*.
 	// We also get the event, which may contain rich information about what we did (such as the new member name on a
 	// MemberAdded event).
-	err = r.updateStatus(ctx, req.NamespacedName, cluster, members, clusterEvent)
+	err = r.updateStatus(ctx, cluster, members, clusterEvent)
 	if err != nil {
 		log.Error(err, "Failed to update status")
 	}
