@@ -1,0 +1,13 @@
+# A peer with a missing storageclassname
+# This particular field is validated by the webhook rather than by openapi validation
+apiVersion: etcd.improbable.io/v1alpha1
+kind: EtcdPeer
+metadata:
+  name: e2e-defaulting-peer
+spec:
+  clusterName: e2e-defaulting-peer
+  storage:
+    volumeClaimTemplate:
+      resources:
+        requests:
+          storage: 50Mi

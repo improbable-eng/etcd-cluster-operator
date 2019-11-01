@@ -1,0 +1,13 @@
+# A cluster with a missing storageclassname
+# This particular field is validated by the webhook rather than by openapi validation
+apiVersion: etcd.improbable.io/v1alpha1
+kind: EtcdCluster
+metadata:
+  name: e2e-defaulting-cluster
+spec:
+  replicas: 1
+  storage:
+    volumeClaimTemplate:
+      resources:
+        requests:
+          storage: 50Mi

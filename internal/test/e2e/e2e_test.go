@@ -49,24 +49,35 @@ var (
 	}
 )
 
-func objFromYaml(objBytes []byte, obj runtime.Object) error {
+func objFromYaml(objBytes []byte) (runtime.Object, error) {
 	scheme := runtime.NewScheme()
 	if err := v1alpha1.AddToScheme(scheme); err != nil {
-		return err
+		return nil, err
 	}
-	return runtime.DecodeInto(
+	return runtime.Decode(
 		serializer.NewCodecFactory(scheme).UniversalDeserializer(),
 		objBytes,
-		obj,
 	)
 }
 
-func objFromYamlPath(objPath string, obj runtime.Object) error {
+func objFromYamlPath(objPath string) (runtime.Object, error) {
 	objBytes, err := ioutil.ReadFile(objPath)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return objFromYaml(objBytes, obj)
+	return objFromYaml(objBytes)
+}
+
+func getSpec(t *testing.T, o interface{}) interface{} {
+	switch ot := o.(type) {
+	case *v1alpha1.EtcdCluster:
+		return ot.Spec
+	case *v1alpha1.EtcdPeer:
+		return ot.Spec
+	default:
+		require.Failf(t, "unknown type", "%#v", o)
+	}
+	return nil
 }
 
 func TestE2E_Kind(t *testing.T) {
@@ -232,53 +243,67 @@ func runAllTests(t *testing.T, kubectl *kubectlContext) {
 	}, time.Second*5, time.Second*1)
 	require.NoError(t, err)
 
-	t.Run("Defaulting/EtcdCluster", func(t *testing.T) {
-		// Local cluster
-		l := &v1alpha1.EtcdCluster{}
-		err = objFromYamlPath(sampleClusterPath, l)
-		require.NoError(t, err)
+	t.Run("Defaulting", func(t *testing.T) {
+		for _, tc := range []struct {
+			name string
+			path string
+		}{
+			{
+				name: "EtcdCluster",
+				path: "testdata/defaulting/etcdcluster.yaml",
+			},
+			{
+				name: "EtcdPeer",
+				path: "testdata/defaulting/etcdpeer.yaml",
+			},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				// local object
+				l, err := objFromYamlPath(tc.path)
+				require.NoError(t, err)
 
-		rBytes, err := kubectl.Get("--output", "json", "--namespace", l.Namespace, "etcdcluster", l.Name)
-		require.NoError(t, err, rBytes)
+				rBytes, err := kubectl.DryRun(tc.path)
+				require.NoError(t, err, rBytes)
 
-		// Remote cluster
-		r := &v1alpha1.EtcdCluster{}
-		err = objFromYaml([]byte(rBytes), r)
-		require.NoError(t, err)
+				// Remote object
+				r, err := objFromYaml([]byte(rBytes))
+				require.NoError(t, err)
 
-		if diff := cmp.Diff(l.Spec, r.Spec); diff == "" {
-			assert.Failf(t, "defaults were not applied to the EtcdCluster: %s", sampleClusterPath)
-		} else {
-			t.Log(diff)
-			assert.Contains(t, diff, `AccessModes:`)
-			assert.Contains(t, diff, `VolumeMode:`)
+				if diff := cmp.Diff(getSpec(t, l), getSpec(t, r)); diff == "" {
+					assert.Failf(t, "defaults were not applied to: %s", tc.path)
+				} else {
+					t.Log(diff)
+					assert.Contains(t, diff, `AccessModes:`)
+					assert.Contains(t, diff, `VolumeMode:`)
+				}
+			})
+
 		}
 	})
 
-	t.Run("Defaulting/EtcdPeer", func(t *testing.T) {
-		// Deploy the peer
-		err = kubectl.Apply("--filename", "testdata/peer.yaml")
-		require.NoError(t, err)
-
-		// Local Peer
-		l := &v1alpha1.EtcdPeer{}
-		err = objFromYamlPath("testdata/peer.yaml", l)
-		require.NoError(t, err)
-
-		rBytes, err := kubectl.Get("--output", "json", "--namespace", l.Namespace, "etcdpeer", l.Name)
-		require.NoError(t, err, rBytes)
-
-		// Remote cluster
-		r := &v1alpha1.EtcdPeer{}
-		err = objFromYaml([]byte(rBytes), r)
-		require.NoError(t, err)
-
-		if diff := cmp.Diff(l.Spec, r.Spec); diff == "" {
-			assert.Failf(t, "defaults were not applied to the EtcdCluster: %s", sampleClusterPath)
-		} else {
-			t.Log(diff)
-			assert.Contains(t, diff, `AccessModes:`)
-			assert.Contains(t, diff, `VolumeMode:`)
+	t.Run("Validation", func(t *testing.T) {
+		for _, tc := range []struct {
+			name string
+			path string
+		}{
+			{
+				name: "EtcdCluster",
+				path: "testdata/validation/etcdcluster_missing_storageclassname.yaml",
+			},
+			{
+				name: "EtcdPeer",
+				path: "testdata/validation/etcdpeer_missing_storageclassname.yaml",
+			},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				errorMessage, err := kubectl.DryRun(tc.path)
+				require.Error(t, err)
+				assert.Regexp(
+					t,
+					`^Error from server \(spec.storage.volumeClaimTemplate.storageClassName: Required value\):`,
+					errorMessage,
+				)
+			})
 		}
 	})
 
