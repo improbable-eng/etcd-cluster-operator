@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/util/errors"
 	"net/url"
 	"time"
 
@@ -200,21 +201,7 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		clusterEvent.Record(r.Recorder)
 	}
 
-	return result, errorCat(reconcileErr, updateStatusErr)
-}
-
-func errorCat(errs ...error) error {
-	var finalErr error
-	for _, err := range errs {
-		if err != nil {
-			if finalErr == nil {
-				finalErr = err
-			} else {
-				finalErr = fmt.Errorf("%s and %s", err.Error(), finalErr.Error())
-			}
-		}
-	}
-	return finalErr
+	return result, errors.NewAggregate([]error{reconcileErr, updateStatusErr})
 }
 
 func (r *EtcdClusterReconciler) getEtcdMembers(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster) ([]etcdclient.Member, error) {
