@@ -15,6 +15,8 @@ spec:
     plural: etcdclusters
     singular: etcdcluster
   scope: ""
+  subresources:
+    status: {}
   validation:
     openAPIV3Schema:
       description: EtcdCluster is the Schema for the etcdclusters API
@@ -167,6 +169,27 @@ spec:
           type: object
         status:
           description: EtcdClusterStatus defines the observed state of EtcdCluster
+          properties:
+            members:
+              description: Members contains information about each member from the
+                etcd cluster.
+              items:
+                properties:
+                  id:
+                    description: ID is the internal unique identifier for the member
+                      that defines its identity with the etcd cluster. We do not define
+                      this.
+                    type: string
+                  name:
+                    description: Name is a human-readable name for the member. Will
+                      *typically* match the name we gave the peer that manages this
+                      member.
+                    type: string
+                required:
+                - id
+                - name
+                type: object
+              type: array
           type: object
       type: object
   version: v1alpha1

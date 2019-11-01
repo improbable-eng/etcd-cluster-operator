@@ -16,13 +16,25 @@ type EtcdClusterSpec struct {
 	Storage *EtcdPeerStorage `json:"storage,omitempty"`
 }
 
+type EtcdMember struct {
+	// Name is a human-readable name for the member. Will *typically* match the name we gave the peer that manages this
+	// member.
+	Name string `json:"name"`
+
+	// ID is the internal unique identifier for the member that defines its identity with the etcd cluster. We do not
+	// define this.
+	ID string `json:"id"`
+}
+
 // EtcdClusterStatus defines the observed state of EtcdCluster
 type EtcdClusterStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Members contains information about each member from the etcd cluster.
+	// +optional
+	Members []EtcdMember `json:"members"`
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 
 // EtcdCluster is the Schema for the etcdclusters API
 type EtcdCluster struct {

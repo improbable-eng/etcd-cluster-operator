@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -212,4 +213,19 @@ func runAllTests(t *testing.T, kubectl *kubectlContext) {
 	}, time.Minute*2, time.Second*10)
 	require.NoError(t, err)
 	t.Log("ETCD is reachable from host machine")
+
+	err = try.Eventually(func() error {
+		t.Log("Checking if the EtcdCluster resource has the correct status")
+		members, err := kubectl.Get("--namespace", "default", "etcdcluster", "my-cluster", "-o=jsonpath='{.status.members...name}'")
+
+		if err != nil {
+			return err
+		}
+		// Don't assert on exact memebers, just that we have three of them.
+		if len(strings.Split(members, " ")) != 3 {
+			return errors.New(fmt.Sprintf("Expected etcd member list to have three members. Had %d.", len(members)))
+		}
+		return nil
+	}, time.Minute*2, time.Second*10)
+	require.NoError(t, err)
 }
