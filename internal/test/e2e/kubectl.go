@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -62,4 +63,10 @@ func (k *kubectlContext) Wait(args ...string) error {
 func (k *kubectlContext) DryRun(filename string) (string, error) {
 	out, err := k.do("apply", "--server-dry-run", "--output", "yaml", "--filename", filename)
 	return string(out), err
+}
+
+func (k *kubectlContext) Scale(resource string, scale uint) error {
+	out, err := k.do("scale", fmt.Sprintf("--replicas=%d", scale), resource)
+	k.t.Log(string(out))
+	return err
 }

@@ -345,4 +345,39 @@ func runAllTests(t *testing.T, kubectl *kubectlContext) {
 		}, time.Minute*2, time.Second*10)
 		require.NoError(t, err)
 	})
+
+	t.Run("ScaleUp", func(t *testing.T) {
+		// Attempt to scale up to five nodes
+		err = kubectl.Scale("etcdcluster/my-cluster", 5)
+		require.NoError(t, err)
+
+		etcdClient, err := etcd.New(etcdConfig)
+		require.NoError(t, err)
+
+		err = try.Eventually(func() error {
+			t.Log("Listing etcd members")
+			members, err := etcd.NewMembersAPI(etcdClient).List(ctx)
+			if err != nil {
+				return err
+			}
+
+			if len(members) != 5 {
+				return errors.New(fmt.Sprintf("expected %d etcd peers, got %d", 5, len(members)))
+			}
+
+			for _, member := range members {
+				if len(member.ClientURLs) == 0 {
+					return errors.New("peer has no client URLs")
+				}
+				if len(member.PeerURLs) == 0 {
+					return errors.New("peer has no peer URLs")
+				}
+				if len(member.ID) == 0 {
+					return errors.New("Peer has no ID")
+				}
+			}
+			return nil
+		}, time.Minute*2, time.Second*10)
+		require.NoError(t, err)
+	})
 }
