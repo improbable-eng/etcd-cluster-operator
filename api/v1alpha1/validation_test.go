@@ -18,22 +18,6 @@ func TestEtcdCluster_ValidateCreate(t *testing.T) {
 			t.Log(err)
 		}
 	})
-	t.Run("StorageMissing", func(t *testing.T) {
-		o := test.ExampleEtcdCluster("ns1")
-		o.Spec.Storage = nil
-		err := o.ValidateCreate()
-		if assert.Error(t, err) {
-			t.Log(err)
-		}
-	})
-	t.Run("VolumeClaimTemplateMissing", func(t *testing.T) {
-		o := test.ExampleEtcdCluster("ns1")
-		o.Spec.Storage.VolumeClaimTemplate = nil
-		err := o.ValidateCreate()
-		if assert.Error(t, err) {
-			t.Log(err)
-		}
-	})
 	t.Run("StorageClassNameMissing", func(t *testing.T) {
 		o := test.ExampleEtcdCluster("ns1")
 		o.Spec.Storage.VolumeClaimTemplate.StorageClassName = nil
@@ -112,22 +96,6 @@ func TestEtcdPeer_ValidateCreate(t *testing.T) {
 		o := test.ExampleEtcdPeer("ns1")
 		err := o.ValidateCreate()
 		if !assert.NoError(t, err) {
-			t.Log(err)
-		}
-	})
-	t.Run("StorageMissing", func(t *testing.T) {
-		o := test.ExampleEtcdPeer("ns1")
-		o.Spec.Storage = nil
-		err := o.ValidateCreate()
-		if assert.Error(t, err) {
-			t.Log(err)
-		}
-	})
-	t.Run("VolumeClaimTemplateMissing", func(t *testing.T) {
-		o := test.ExampleEtcdPeer("ns1")
-		o.Spec.Storage.VolumeClaimTemplate = nil
-		err := o.ValidateCreate()
-		if assert.Error(t, err) {
 			t.Log(err)
 		}
 	})

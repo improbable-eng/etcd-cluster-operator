@@ -248,12 +248,12 @@ func peerForCluster(cluster *etcdv1alpha1.EtcdCluster, peerName string) *etcdv1a
 		},
 		Spec: etcdv1alpha1.EtcdPeerSpec{
 			ClusterName: cluster.Name,
-			Bootstrap: &etcdv1alpha1.Bootstrap{
-				Static: &etcdv1alpha1.StaticBootstrap{
+			Bootstrap: etcdv1alpha1.Bootstrap{
+				Static: etcdv1alpha1.StaticBootstrap{
 					InitialCluster: initialClusterMembers(cluster),
 				},
 			},
-			Storage: cluster.Spec.Storage.DeepCopy(),
+			Storage: *cluster.Spec.Storage.DeepCopy(),
 		},
 	}
 }

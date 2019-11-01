@@ -92,12 +92,8 @@ func (o *EtcdPeer) ValidateUpdate(old runtime.Object) error {
 	return nil
 }
 
-func validatePersistentVolumeClaimSpec(path *field.Path, o *corev1.PersistentVolumeClaimSpec) field.ErrorList {
+func validatePersistentVolumeClaimSpec(path *field.Path, o corev1.PersistentVolumeClaimSpec) field.ErrorList {
 	var allErrs field.ErrorList
-	if o == nil {
-		allErrs = append(allErrs, field.Required(path, ""))
-		return allErrs
-	}
 	if o.StorageClassName == nil {
 		allErrs = append(allErrs, field.Required(path.Child("storageClassName"), ""))
 		return allErrs
@@ -111,10 +107,6 @@ func validatePersistentVolumeClaimSpec(path *field.Path, o *corev1.PersistentVol
 
 func (o *EtcdPeerStorage) validate(path *field.Path) field.ErrorList {
 	var allErrs field.ErrorList
-	if o == nil {
-		allErrs = append(allErrs, field.Required(path, ""))
-		return allErrs
-	}
 	allErrs = append(
 		allErrs,
 		validatePersistentVolumeClaimSpec(path.Child("volumeClaimTemplate"), o.VolumeClaimTemplate)...,

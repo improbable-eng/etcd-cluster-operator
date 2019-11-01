@@ -39,15 +39,13 @@ func (o *EtcdPeerStorage) setDefaults() {
 	if o == nil {
 		return
 	}
-	if o.VolumeClaimTemplate != nil {
-		if o.VolumeClaimTemplate.AccessModes == nil {
-			o.VolumeClaimTemplate.AccessModes = []corev1.PersistentVolumeAccessMode{
-				corev1.ReadWriteOnce,
-			}
+	if o.VolumeClaimTemplate.AccessModes == nil {
+		o.VolumeClaimTemplate.AccessModes = []corev1.PersistentVolumeAccessMode{
+			corev1.ReadWriteOnce,
 		}
+	}
 
-		if o.VolumeClaimTemplate.VolumeMode == nil {
-			o.VolumeClaimTemplate.VolumeMode = &defaultVolumeMode
-		}
+	if o.VolumeClaimTemplate.VolumeMode == nil {
+		o.VolumeClaimTemplate.VolumeMode = &defaultVolumeMode
 	}
 }

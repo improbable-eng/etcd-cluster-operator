@@ -12,7 +12,7 @@ type EtcdClusterSpec struct {
 	Replicas *int32 `json:"replicas"`
 	// Storage is the configuration of the disks and mount points of the Etcd
 	// peers.
-	Storage *EtcdPeerStorage `json:"storage,omitempty"`
+	Storage EtcdPeerStorage `json:"storage,omitempty"`
 }
 
 type EtcdMember struct {

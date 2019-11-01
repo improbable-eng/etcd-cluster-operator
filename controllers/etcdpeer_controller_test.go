@@ -152,6 +152,6 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		// defaults as those used in the Reconcile function
 		peer.Default()
 
-		require.Equal(t, *peer.Spec.Storage.VolumeClaimTemplate, actualPvc.Spec, "Unexpected PVC spec")
+		require.Equal(t, peer.Spec.Storage.VolumeClaimTemplate, actualPvc.Spec, "Unexpected PVC spec")
 	})
 }

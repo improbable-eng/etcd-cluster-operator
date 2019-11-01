@@ -20,8 +20,8 @@ func ExampleEtcdCluster(namespace string) *v1alpha1.EtcdCluster {
 		},
 		Spec: v1alpha1.EtcdClusterSpec{
 			Replicas: pointer.Int32Ptr(3),
-			Storage: &v1alpha1.EtcdPeerStorage{
-				VolumeClaimTemplate: &corev1.PersistentVolumeClaimSpec{
+			Storage: v1alpha1.EtcdPeerStorage{
+				VolumeClaimTemplate: corev1.PersistentVolumeClaimSpec{
 					StorageClassName: pointer.StringPtr("example-class"),
 					Resources: corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
@@ -43,8 +43,8 @@ func ExampleEtcdPeer(namespace string) *v1alpha1.EtcdPeer {
 		},
 		Spec: v1alpha1.EtcdPeerSpec{
 			ClusterName: "my-cluster",
-			Bootstrap: &v1alpha1.Bootstrap{
-				Static: &v1alpha1.StaticBootstrap{
+			Bootstrap: v1alpha1.Bootstrap{
+				Static: v1alpha1.StaticBootstrap{
 					InitialCluster: []v1alpha1.InitialClusterMember{
 						{
 							Name: "bees",
@@ -61,8 +61,8 @@ func ExampleEtcdPeer(namespace string) *v1alpha1.EtcdPeer {
 					},
 				},
 			},
-			Storage: &v1alpha1.EtcdPeerStorage{
-				VolumeClaimTemplate: &corev1.PersistentVolumeClaimSpec{
+			Storage: v1alpha1.EtcdPeerStorage{
+				VolumeClaimTemplate: corev1.PersistentVolumeClaimSpec{
 					StorageClassName: pointer.StringPtr("example-class"),
 					Resources: corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
