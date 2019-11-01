@@ -1,0 +1,13 @@
+apiVersion: etcd.improbable.io/v1alpha1
+kind: EtcdPeer
+metadata:
+  name: etcdpeer-defaulting-0
+  namespace: default
+spec:
+  clusterName: etcdpeer-defaulting
+  storage:
+    volumeClaimTemplate:
+      resources:
+        requests:
+          storage: 50Mi
+      storageClassName: standard

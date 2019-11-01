@@ -15,15 +15,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	etcd "go.etcd.io/etcd/client"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	kindv1alpha3 "sigs.k8s.io/kind/pkg/apis/config/v1alpha3"
 	"sigs.k8s.io/kind/pkg/cluster"
 	"sigs.k8s.io/kind/pkg/cluster/create"
 	"sigs.k8s.io/kind/pkg/container/cri"
 
+	"github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/test/try"
 )
 
@@ -44,6 +48,26 @@ var (
 		HeaderTimeoutPerRequest: time.Second,
 	}
 )
+
+func objFromYaml(objBytes []byte, obj runtime.Object) error {
+	scheme := runtime.NewScheme()
+	if err := v1alpha1.AddToScheme(scheme); err != nil {
+		return err
+	}
+	return runtime.DecodeInto(
+		serializer.NewCodecFactory(scheme).UniversalDeserializer(),
+		objBytes,
+		obj,
+	)
+}
+
+func objFromYamlPath(objPath string, obj runtime.Object) error {
+	objBytes, err := ioutil.ReadFile(objPath)
+	if err != nil {
+		return err
+	}
+	return objFromYaml(objBytes, obj)
+}
 
 func TestE2E_Kind(t *testing.T) {
 	if !*fUseKind {
@@ -198,42 +222,100 @@ func runAllTests(t *testing.T, kubectl *kubectlContext) {
 	)
 	require.NoError(t, err)
 
+	sampleClusterPath := filepath.Join(*fRepoRoot, "config", "samples", "etcd_v1alpha1_etcdcluster.yaml")
+
 	// Deploy the cluster custom resources.
-	err = kubectl.Apply(
-		"--filename", filepath.Join(*fRepoRoot, "config", "samples", "etcd_v1alpha1_etcdcluster.yaml"),
-	)
-	require.NoError(t, err)
-
-	etcdClient, err := etcd.New(etcdConfig)
-	require.NoError(t, err)
-
+	// Retry for 5 seconds, because the Etcd mutating and validating webhook
+	// service may not immediately be responding.
 	err = try.Eventually(func() error {
-		t.Log("Checking if ETCD is available")
-		members, err := etcd.NewMembersAPI(etcdClient).List(ctx)
-		if err != nil {
-			return err
-		}
-
-		if len(members) != expectedClusterSize {
-			return errors.New(fmt.Sprintf("expected %d etcd peers, got %d", expectedClusterSize, len(members)))
-		}
-		return nil
-	}, time.Minute*2, time.Second*10)
+		return kubectl.Apply("--filename", sampleClusterPath)
+	}, time.Second*5, time.Second*1)
 	require.NoError(t, err)
-	t.Log("ETCD is reachable from host machine")
 
-	err = try.Eventually(func() error {
-		t.Log("Checking if the EtcdCluster resource has the correct status")
-		members, err := kubectl.Get("--namespace", "default", "etcdcluster", "my-cluster", "-o=jsonpath='{.status.members...name}'")
+	t.Run("Defaulting/EtcdCluster", func(t *testing.T) {
+		// Local cluster
+		l := &v1alpha1.EtcdCluster{}
+		err = objFromYamlPath(sampleClusterPath, l)
+		require.NoError(t, err)
 
-		if err != nil {
-			return err
+		rBytes, err := kubectl.Get("--output", "json", "--namespace", l.Namespace, "etcdcluster", l.Name)
+		require.NoError(t, err, rBytes)
+
+		// Remote cluster
+		r := &v1alpha1.EtcdCluster{}
+		err = objFromYaml([]byte(rBytes), r)
+		require.NoError(t, err)
+
+		if diff := cmp.Diff(l.Spec, r.Spec); diff == "" {
+			assert.Failf(t, "defaults were not applied to the EtcdCluster: %s", sampleClusterPath)
+		} else {
+			t.Log(diff)
+			assert.Contains(t, diff, `AccessModes:`)
+			assert.Contains(t, diff, `VolumeMode:`)
 		}
-		// Don't assert on exact memebers, just that we have three of them.
-		if len(strings.Split(members, " ")) != 3 {
-			return errors.New(fmt.Sprintf("Expected etcd member list to have three members. Had %d.", len(members)))
+	})
+
+	t.Run("Defaulting/EtcdPeer", func(t *testing.T) {
+		// Deploy the peer
+		err = kubectl.Apply("--filename", "testdata/peer.yaml")
+		require.NoError(t, err)
+
+		// Local Peer
+		l := &v1alpha1.EtcdPeer{}
+		err = objFromYamlPath("testdata/peer.yaml", l)
+		require.NoError(t, err)
+
+		rBytes, err := kubectl.Get("--output", "json", "--namespace", l.Namespace, "etcdpeer", l.Name)
+		require.NoError(t, err, rBytes)
+
+		// Remote cluster
+		r := &v1alpha1.EtcdPeer{}
+		err = objFromYaml([]byte(rBytes), r)
+		require.NoError(t, err)
+
+		if diff := cmp.Diff(l.Spec, r.Spec); diff == "" {
+			assert.Failf(t, "defaults were not applied to the EtcdCluster: %s", sampleClusterPath)
+		} else {
+			t.Log(diff)
+			assert.Contains(t, diff, `AccessModes:`)
+			assert.Contains(t, diff, `VolumeMode:`)
 		}
-		return nil
-	}, time.Minute*2, time.Second*10)
-	require.NoError(t, err)
+	})
+
+	t.Run("EtcdIsReachable", func(t *testing.T) {
+		etcdClient, err := etcd.New(etcdConfig)
+		require.NoError(t, err)
+
+		err = try.Eventually(func() error {
+			t.Log("Checking if ETCD is available")
+			members, err := etcd.NewMembersAPI(etcdClient).List(ctx)
+			if err != nil {
+				return err
+			}
+
+			if len(members) != expectedClusterSize {
+				return errors.New(fmt.Sprintf("expected %d etcd peers, got %d", expectedClusterSize, len(members)))
+			}
+			return nil
+		}, time.Minute*2, time.Second*10)
+		require.NoError(t, err)
+		t.Log("ETCD is reachable from host machine")
+	})
+
+	t.Run("StatusUpdate", func(t *testing.T) {
+		err = try.Eventually(func() error {
+			t.Log("Checking if the EtcdCluster resource has the correct status")
+			members, err := kubectl.Get("--namespace", "default", "etcdcluster", "my-cluster", "-o=jsonpath='{.status.members...name}'")
+
+			if err != nil {
+				return err
+			}
+			// Don't assert on exact memebers, just that we have three of them.
+			if len(strings.Split(members, " ")) != 3 {
+				return errors.New(fmt.Sprintf("Expected etcd member list to have three members. Had %d.", len(members)))
+			}
+			return nil
+		}, time.Minute*2, time.Second*10)
+		require.NoError(t, err)
+	})
 }
