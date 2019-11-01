@@ -37,6 +37,14 @@ func (o *EtcdCluster) ValidateUpdate(old runtime.Object) error {
 		return fmt.Errorf("Unexpected type for old: %#v", old)
 	}
 	oldO = oldO.DeepCopy()
+
+	if *oldO.Spec.Replicas > *o.Spec.Replicas {
+		return fmt.Errorf(
+			"Unsupported changes: spec.replicas: current: %d, new: %d: scale-in is not supported",
+			*oldO.Spec.Replicas, *o.Spec.Replicas,
+		)
+	}
+
 	// Overwrite the fields which are allowed to change
 	oldO.Spec.Replicas = o.Spec.Replicas
 

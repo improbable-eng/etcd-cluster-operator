@@ -68,14 +68,21 @@ func TestEtcdCluster_ValidateUpdate(t *testing.T) {
 			},
 		},
 		{
-			name: "StorageClassNameChanged",
+			name: "UnsupportedChange/ScaleIn",
+			modifier: func(o *v1alpha1.EtcdCluster) {
+				*o.Spec.Replicas -= 1
+			},
+			err: "scale-in is not supported",
+		},
+		{
+			name: "UnsupportedChange/StorageClassName",
 			modifier: func(o *v1alpha1.EtcdCluster) {
 				*o.Spec.Storage.VolumeClaimTemplate.StorageClassName += "-changed"
 			},
 			err: `^Unsupported changes:`,
 		},
 		{
-			name: "ResourcesStorageChanged",
+			name: "UnsupportedChange/ResourcesStorage",
 			modifier: func(o *v1alpha1.EtcdCluster) {
 				o.Spec.Storage.VolumeClaimTemplate.Resources.Requests["storage"] = resource.MustParse("1Mi")
 			},
@@ -87,6 +94,9 @@ func TestEtcdCluster_ValidateUpdate(t *testing.T) {
 			o2 := o1.DeepCopy()
 			tc.modifier(o2)
 			err := o2.ValidateUpdate(o1)
+			if err != nil {
+				t.Log(err)
+			}
 			if tc.err != "" {
 				assert.Regexp(t, tc.err, err, "unexpected error message")
 			} else {
@@ -149,14 +159,14 @@ func TestEtcdPeer_ValidateUpdate(t *testing.T) {
 		err      string
 	}{
 		{
-			name: "StorageClassNameChanged",
+			name: "UnsupportedChange/StorageClassName",
 			modifier: func(o *v1alpha1.EtcdPeer) {
 				*o.Spec.Storage.VolumeClaimTemplate.StorageClassName += "-changed"
 			},
 			err: `^Unsupported changes:`,
 		},
 		{
-			name: "ResourcesStorageChanged",
+			name: "UnsupportedChange/ResourcesStorage",
 			modifier: func(o *v1alpha1.EtcdPeer) {
 				o.Spec.Storage.VolumeClaimTemplate.Resources.Requests["storage"] = resource.MustParse("1Mi")
 			},
@@ -168,6 +178,9 @@ func TestEtcdPeer_ValidateUpdate(t *testing.T) {
 			o2 := o1.DeepCopy()
 			tc.modifier(o2)
 			err := o2.ValidateUpdate(o1)
+			if err != nil {
+				t.Log(err)
+			}
 			if tc.err != "" {
 				assert.Regexp(t, tc.err, err, "unexpected error message")
 			} else {
