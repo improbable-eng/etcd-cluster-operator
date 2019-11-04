@@ -1,0 +1,12 @@
+apiVersion: etcd.improbable.io/v1alpha1
+kind: EtcdBackup
+metadata:
+  name: e2e-backup-cluster
+spec:
+  clusterEndpoints:
+  - scheme: http
+    host: e2e-backup-cluster.teste2e-parallel-backup
+    port: 2379
+  destination:
+    local:    
+      path: /tmp/backups

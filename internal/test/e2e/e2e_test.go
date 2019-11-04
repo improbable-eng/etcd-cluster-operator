@@ -351,7 +351,53 @@ func TestE2E(t *testing.T) {
 			defer cleanup()
 			scaleDownTests(t, kubectl.WithDefaultNamespace(ns))
 		})
+		t.Run("Backup", func(t *testing.T) {
+			t.Parallel()
+			ns := NamespaceForTest(t, kubectl)
+			backupTests(t, kubectl.WithT(t).WithDefaultNamespace(ns))
+		})
 	})
+}
+
+func backupTests(t *testing.T, kubectl *kubectlContext) {
+	t.Log("Given a one node cluster.")
+	err := kubectl.Apply("--filename", filepath.Join(*fRepoRoot, "config", "test", "e2e", "backup", "etcdcluster.yaml"))
+	require.NoError(t, err)
+
+	t.Log("Containing data.")
+	out, err := eventuallyInCluster(
+		kubectl,
+		"set-etcd-value",
+		time.Minute*2,
+		"quay.io/coreos/etcd:v3.2.27",
+		"etcdctl", "--insecure-discovery", "--discovery-srv=e2e-backup-cluster",
+		"set", "--", "foo", "bar",
+	)
+	require.NoError(t, err, out)
+
+	t.Log("A backup can be taken to a local disk.")
+	err = kubectl.Apply("--filename", filepath.Join(*fRepoRoot, "config", "test", "e2e", "backup", "etcdbackup.yaml"))
+	require.NoError(t, err)
+
+	kubectlSystem := kubectl.WithDefaultNamespace("eco-system")
+	var podNames string
+	err = try.Eventually(func() (err error) {
+		podNames, err = kubectlSystem.Get("pods", "--output=name")
+		return err
+	}, time.Minute, time.Second*5)
+	require.NoError(t, err)
+	podNameList := strings.Split(strings.TrimSpace(podNames), "\n")
+	require.Len(t, podNameList, 1)
+	podName := strings.TrimPrefix(podNameList[0], "pod/")
+
+	t.Log("And it will be persisted in the expected location.")
+	err = try.Eventually(func() (err error) {
+		out, err = kubectlSystem.Exec(podName, "ls", "/tmp/backups", "-c", "manager")
+		return err
+	}, time.Minute*2, time.Second*10)
+	require.NoError(t, err)
+	t.Log(string(out))
+	require.Len(t, strings.Split(string(out), "\n"), 2)
 }
 
 func webhookTests(t *testing.T, kubectl *kubectlContext) {
@@ -522,7 +568,7 @@ func persistenceTests(t *testing.T, kubectl *kubectlContext) {
 	t.Log("Containing data.")
 	expectedValue := "foobarbaz"
 
-	out, err := EventuallyInCluster(
+	out, err := eventuallyInCluster(
 		kubectl,
 		"set-etcd-value",
 		time.Minute*2,
@@ -558,7 +604,7 @@ func persistenceTests(t *testing.T, kubectl *kubectlContext) {
 	require.NoError(t, err)
 
 	t.Log("And the data is still available.")
-	out, err = EventuallyInCluster(
+	out, err = eventuallyInCluster(
 		kubectl,
 		"get-etcd-value",
 		time.Minute*2,
