@@ -224,7 +224,7 @@ func setupLocalCluster(t *testing.T) (*cluster.Context, func()) {
 }
 
 func runAllTests(t *testing.T, kubectl *kubectlContext) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
 	defer cancel()
 
 	// Deploy a service to expose the cluster to the host machine.
@@ -373,7 +373,7 @@ func runAllTests(t *testing.T, kubectl *kubectlContext) {
 					return errors.New("peer has no peer URLs")
 				}
 				if len(member.ID) == 0 {
-					return errors.New("Peer has no ID")
+					return errors.New("peer has no ID")
 				}
 			}
 			return nil
