@@ -185,7 +185,7 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	// and is not the same as the Kubernetes event, although it is used to make one later.
 	result, clusterEvent, reconcileErr := r.reconcile(ctx, members, cluster)
 	if reconcileErr != nil {
-		log.Error(err, "Failed to reconcile")
+		log.Error(reconcileErr, "Failed to reconcile")
 	}
 
 	// The update status takes in the cluster definition, and the member list from etcd as of *before we ran reconcile*.
@@ -193,7 +193,7 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	// MemberAdded event).
 	updateStatusErr := r.updateStatus(ctx, cluster, members, clusterEvent)
 	if updateStatusErr != nil {
-		log.Error(err, "Failed to update status")
+		log.Error(updateStatusErr, "Failed to update status")
 	}
 
 	// Finally, the event is used to generate a Kubernetes event by calling `Record` and passing in the recorder.
