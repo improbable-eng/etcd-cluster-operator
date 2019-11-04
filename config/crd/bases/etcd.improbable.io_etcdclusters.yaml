@@ -39,6 +39,7 @@ spec:
             replicas:
               description: Number of instances of etcd to assemble into this cluster
               format: int32
+              minimum: 1
               type: integer
             storage:
               description: Storage is the configuration of the disks and mount points

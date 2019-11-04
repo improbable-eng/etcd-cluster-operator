@@ -4,12 +4,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 // EtcdClusterSpec defines the desired state of EtcdCluster
 type EtcdClusterSpec struct {
 	// Number of instances of etcd to assemble into this cluster
+	//+kubebuilder:validation:Required
+	//+kubebuilder:validation:Minimum=1
 	Replicas *int32 `json:"replicas"`
 	// Storage is the configuration of the disks and mount points of the Etcd
 	// peers.
