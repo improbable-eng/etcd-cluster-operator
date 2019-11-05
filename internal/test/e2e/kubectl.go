@@ -63,3 +63,14 @@ func (k *kubectlContext) DryRun(filename string) (string, error) {
 	out, err := k.do("apply", "--server-dry-run", "--output", "yaml", "--filename", filename)
 	return string(out), err
 }
+
+// WithT returns a copy of k with a new testing context.
+// This ensures that messages logged with t.Log in this module are associated with the correct sub-test.
+// You should use this in any sub-test.
+func (k *kubectlContext) WithT(t *testing.T) *kubectlContext {
+	return &kubectlContext{
+		t:          t,
+		configPath: k.configPath,
+		homeDir:    k.homeDir,
+	}
+}
