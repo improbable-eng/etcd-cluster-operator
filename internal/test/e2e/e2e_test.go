@@ -286,6 +286,10 @@ func TestE2E(t *testing.T) {
 			t.Parallel()
 			webhookTests(t, kubectl.WithT(t))
 		})
+		t.Run("Persistence", func(t *testing.T) {
+			t.Parallel()
+			persistenceTests(t, kubectl.WithT(t))
+		})
 	})
 }
 
@@ -350,12 +354,12 @@ func webhookTests(t *testing.T, kubectl *kubectlContext) {
 				kubectl := kubectl.WithT(t)
 				lPath := filepath.Join(*fRepoRoot, "config/test/e2e", tc.path)
 				out, err := kubectl.DryRun(lPath)
-				assert.Error(t, err)
 				assert.Regexp(
 					t,
 					`^Error from server \(spec.storage.volumeClaimTemplate.storageClassName: Required value\):`,
-					out,
+					err,
 				)
+				assert.Empty(t, out)
 			})
 		}
 	})
@@ -397,7 +401,6 @@ func sampleClusterTests(t *testing.T, kubectl *kubectlContext, sampleClusterPath
 		err := try.Eventually(func() error {
 			t.Log("")
 			members, err := kubectl.Get("--namespace", "default", "etcdcluster", "my-cluster", "-o=jsonpath='{.status.members...name}'")
-
 			if err != nil {
 				return err
 			}
@@ -409,4 +412,74 @@ func sampleClusterTests(t *testing.T, kubectl *kubectlContext, sampleClusterPath
 		}, time.Minute*2, time.Second*10)
 		require.NoError(t, err)
 	})
+}
+
+func etcdctl(kubectl *kubectlContext, svcName string, args ...string) (string, error) {
+	return kubectl.Run(
+		append(
+			[]string{
+				"--quiet",
+				"--restart=Never",
+				"--rm",
+				"--image=quay.io/coreos/etcd:v3.2.27",
+				"--attach",
+				"etcdctl",
+				"--",
+				"etcdctl",
+				"--insecure-discovery",
+				fmt.Sprintf("--discovery-srv=%s", svcName),
+			}, args...,
+		)...,
+	)
+}
+
+func persistenceTests(t *testing.T, kubectl *kubectlContext) {
+	t.Log("Given a 1-node cluster.")
+	configPath := filepath.Join(*fRepoRoot, "config/test/e2e/persistence")
+	err := kubectl.Apply("--filename", configPath)
+	require.NoError(t, err)
+
+	t.Log("Containing data.")
+	expectedValue := "foobarbaz"
+	var out string
+	err = try.Eventually(func() (err error) {
+		out, err = etcdctl(kubectl, "cluster1", "set", "--", "foo", expectedValue)
+		return err
+	}, time.Minute*2, time.Second*5)
+	require.NoError(t, err, out)
+
+	t.Log("If the cluster is deleted.")
+	err = kubectl.Delete("etcdcluster", "cluster1", "--wait")
+	require.NoError(t, err)
+
+	t.Log("And all the cluster pods terminate.")
+	err = try.Eventually(func() error {
+		out, err := kubectl.Get(
+			"pods",
+			"--selector", "etcd.improbable.io/cluster-name=cluster1",
+			"--output", "go-template={{ len .items }}",
+		)
+		if err != nil {
+			return err
+		}
+		if out != "0" {
+			return errors.New("expected 0 pods, got: " + out)
+		}
+		return nil
+	}, time.Minute, time.Second*5)
+
+	t.Log("The cluster can be restored.")
+	err = kubectl.Apply("--filename", configPath)
+	require.NoError(t, err)
+
+	t.Log("And the data is still available.")
+	err = try.Eventually(
+		func() (err error) {
+			out, err = etcdctl(kubectl, "cluster1", "get", "--quorum", "--", "foo")
+			return err
+		},
+		time.Minute*2, time.Second*5,
+	)
+	require.NoError(t, err, out)
+	assert.Equal(t, expectedValue+"\n", out)
 }

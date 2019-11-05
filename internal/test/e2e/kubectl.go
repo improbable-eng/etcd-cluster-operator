@@ -1,6 +1,8 @@
 package e2e
 
 import (
+	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -28,7 +30,13 @@ func (k *kubectlContext) do(args ...string) ([]byte, error) {
 	cmd := exec.Command("kubectl", args...)
 	cmd.Env = append(cmd.Env, "KUBECONFIG="+k.configPath)
 	cmd.Env = append(cmd.Env, "HOME="+k.homeDir)
-	return cmd.CombinedOutput()
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		err = fmt.Errorf("%s: %w", stderr.String(), err)
+	}
+	return out, err
 }
 
 // Apply wraps `kubectl apply', returning any error that occurred.
@@ -54,6 +62,19 @@ func (k *kubectlContext) Get(args ...string) (string, error) {
 // Wait wraps `kubectl wait', returning any error that occurred.
 func (k *kubectlContext) Wait(args ...string) error {
 	out, err := k.do(append([]string{"wait"}, args...)...)
+	k.t.Log(string(out))
+	return err
+}
+
+// Run wraps `kubectl run', returning the unparsed output & any error that occurred.
+func (k *kubectlContext) Run(args ...string) (string, error) {
+	out, err := k.do(append([]string{"run"}, args...)...)
+	return string(out), err
+}
+
+// Delete wraps `kubectl delete', returning any error that occurred.
+func (k *kubectlContext) Delete(args ...string) error {
+	out, err := k.do(append([]string{"delete"}, args...)...)
 	k.t.Log(string(out))
 	return err
 }
