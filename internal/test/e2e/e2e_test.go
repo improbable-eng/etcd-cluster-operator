@@ -27,7 +27,7 @@ import (
 	"sigs.k8s.io/kind/pkg/cluster/create"
 	"sigs.k8s.io/kind/pkg/container/cri"
 
-	"github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
+	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/test/try"
 )
 
@@ -51,7 +51,7 @@ var (
 
 func objFromYaml(objBytes []byte) (runtime.Object, error) {
 	scheme := runtime.NewScheme()
-	if err := v1alpha1.AddToScheme(scheme); err != nil {
+	if err := etcdv1alpha1.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
 	return runtime.Decode(
@@ -70,9 +70,9 @@ func objFromYamlPath(objPath string) (runtime.Object, error) {
 
 func getSpec(t *testing.T, o interface{}) interface{} {
 	switch ot := o.(type) {
-	case *v1alpha1.EtcdCluster:
+	case *etcdv1alpha1.EtcdCluster:
 		return ot.Spec
-	case *v1alpha1.EtcdPeer:
+	case *etcdv1alpha1.EtcdPeer:
 		return ot.Spec
 	default:
 		require.Failf(t, "unknown type", "%#v", o)
