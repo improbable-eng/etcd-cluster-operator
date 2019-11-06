@@ -14,7 +14,7 @@ The version should link to the github tagged release.
 ## Changelog for [${patch-version}](https://github.com/improbable-eng/etcd-cluster-operator/releases/${patch-version}) - ${date}
 
 <!--
-Notable chanes include new functionality, features, or API additions.
+Notable changes include new functionality, features, or API additions.
 Do not include minor bugfixes or refactors here.
 -->
 ### Notable changes
@@ -22,9 +22,10 @@ Do not include minor bugfixes or refactors here.
 <!--
 Each change should have a summary, possibly inspired by a commit/ticket title, and a more detailed description of why the change was required and what it enables users to do.
 The summary should begin with a link to the ticket tracking the change, or a PR with its implementation.
+The description should link to any key issues/pull requests that contributed to the feature's implementation.
 Repeat this for each notable change.
 -->
-* [#${issue-ref}](https://github.com/improbable-eng/etcd-cluster-operator/issues/${issue-ref}) **${issue-summary}**
+* [#${issue-ref-1}](https://github.com/improbable-eng/etcd-cluster-operator/issues/${issue-ref-1}) **${issue-summary-1}**
 
    Lorem ipsum dolor sit amet, consectetur adipiscing elit. Etiam lacinia eros vel posuere gravida. 
    Pellentesque in tempus risus, at dictum lorem. 
@@ -38,6 +39,17 @@ Repeat this for each notable change.
    Maecenas sollicitudin ornare orci a consequat. 
    Duis eu dictum felis. 
    Nunc vitae justo et quam sagittis scelerisque.
+   
+* [#${issue-ref-2}](https://github.com/improbable-eng/etcd-cluster-operator/issues/${issue-ref-2}) **${issue-summary-2}**
+
+   Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
+   Nulla eget eleifend tellus. 
+   Maecenas blandit sed nulla at interdum. 
+   Vivamus ut massa nisl. 
+   Praesent viverra est at metus pulvinar, eu luctus elit condimentum. 
+   In tincidunt nibh arcu, id laoreet metus rutrum in. 
+   Integer nec lobortis urna, et condimentum felis. 
+   Suspendisse elit urna, pretium in egestas vitae, volutpat a purus.
 
 <!--
 This section includes a the rest of the changes in this release that are not notable.
