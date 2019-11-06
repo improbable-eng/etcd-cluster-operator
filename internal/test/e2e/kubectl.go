@@ -60,6 +60,6 @@ func (k *kubectlContext) Wait(args ...string) error {
 
 // DryRun wraps `kubectl apply --server-dry-run', returning the unparsed output & any error that occurred.
 func (k *kubectlContext) DryRun(filename string) (string, error) {
-	out, err := k.do(append([]string{"apply"}, "--server-dry-run", "--output", "yaml", "--filename", filename)...)
+	out, err := k.do("apply", "--server-dry-run", "--output", "yaml", "--filename", filename)
 	return string(out), err
 }
