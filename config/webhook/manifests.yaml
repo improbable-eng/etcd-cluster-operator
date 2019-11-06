@@ -1,0 +1,88 @@
+
+---
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingWebhookConfiguration
+metadata:
+  creationTimestamp: null
+  name: mutating-webhook-configuration
+webhooks:
+- clientConfig:
+    caBundle: Cg==
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-etcd-improbable-io-v1alpha1-etcdcluster
+  failurePolicy: Fail
+  name: default.etcdclusters.etcd.improbable.io
+  rules:
+  - apiGroups:
+    - etcd.improbable.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - etcdclusters
+- clientConfig:
+    caBundle: Cg==
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-etcd-improbable-io-v1alpha1-etcdpeer
+  failurePolicy: Fail
+  name: default.etcdpeers.etcd.improbable.io
+  rules:
+  - apiGroups:
+    - etcd.improbable.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - etcdpeers
+
+---
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: ValidatingWebhookConfiguration
+metadata:
+  creationTimestamp: null
+  name: validating-webhook-configuration
+webhooks:
+- clientConfig:
+    caBundle: Cg==
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-etcd-improbable-io-v1alpha1-etcdcluster
+  failurePolicy: Fail
+  name: validation.etcdclusters.etcd.improbable.io
+  rules:
+  - apiGroups:
+    - etcd.improbable.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - etcdclusters
+- clientConfig:
+    caBundle: Cg==
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-etcd-improbable-io-v1alpha1-etcdpeer
+  failurePolicy: Fail
+  name: validation.etcdpeers.etcd.improbable.io
+  rules:
+  - apiGroups:
+    - etcd.improbable.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - etcdpeers

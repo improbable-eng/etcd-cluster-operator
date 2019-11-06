@@ -46,8 +46,11 @@ manager:
 	go build -o bin/manager main.go
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
+# Use 'DISABLE_WEBHOOKS=1` to run the controller-manager without the
+# webhook server, and to skip the loading of webhook TLS keys, since these are
+# difficult to set up locally.
 run:
-	go run ./main.go
+	DISABLE_WEBHOOKS=1 go run ./main.go
 
 # Install CRDs into a cluster
 install:
@@ -57,6 +60,7 @@ install:
 deploy:
 	cd config/manager && kustomize edit set image controller=${IMG}
 	kustomize build config/default | kubectl apply -f -
+
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen

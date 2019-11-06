@@ -1,0 +1,12 @@
+apiVersion: etcd.improbable.io/v1alpha1
+kind: EtcdCluster
+metadata:
+  name: e2e-defaulting-cluster
+spec:
+  replicas: 1
+  storage:
+    volumeClaimTemplate:
+      storageClassName: standard
+      resources:
+        requests:
+          storage: 50Mi
