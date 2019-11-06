@@ -66,19 +66,19 @@ func main() {
 	}
 	// +kubebuilder:scaffold:builder
 	if os.Getenv("DISABLE_WEBHOOKS") != "" {
-		setupLog.Info("skipping webhook set up")
+		setupLog.Info("Skipping webhook set up.")
 	} else {
-		setupLog.Info("setting up webhooks")
+		setupLog.Info("Setting up webhooks.")
 		if err = (&webhooks.EtcdCluster{
 			Log: ctrl.Log.WithName("webhooks").WithName("EtcdCluster"),
 		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create webhook", "webhook", "EtcdCluster")
+			setupLog.Error(err, "Unable to create webhook.", "webhook", "EtcdCluster")
 			os.Exit(1)
 		}
 		if err = (&webhooks.EtcdPeer{
 			Log: ctrl.Log.WithName("webhooks").WithName("EtcdPeer"),
 		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create webhook", "webhook", "EtcdPeer")
+			setupLog.Error(err, "Unable to create webhook.", "webhook", "EtcdPeer")
 			os.Exit(1)
 		}
 	}
