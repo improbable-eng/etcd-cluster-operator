@@ -250,19 +250,20 @@ func runAllTests(t *testing.T, kubectl *kubectlContext) {
 		}{
 			{
 				name: "EtcdCluster",
-				path: "testdata/defaulting/etcdcluster.yaml",
+				path: "defaulting/etcdcluster.yaml",
 			},
 			{
 				name: "EtcdPeer",
-				path: "testdata/defaulting/etcdpeer.yaml",
+				path: "defaulting/etcdpeer.yaml",
 			},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
 				// local object
-				l, err := objFromYamlPath(tc.path)
+				lPath := filepath.Join(*fRepoRoot, "config/test/e2e", tc.path)
+				l, err := objFromYamlPath(lPath)
 				require.NoError(t, err)
 
-				rBytes, err := kubectl.DryRun(tc.path)
+				rBytes, err := kubectl.DryRun(lPath)
 				require.NoError(t, err, rBytes)
 
 				// Remote object
@@ -270,7 +271,7 @@ func runAllTests(t *testing.T, kubectl *kubectlContext) {
 				require.NoError(t, err)
 
 				if diff := cmp.Diff(getSpec(t, l), getSpec(t, r)); diff == "" {
-					assert.Failf(t, "defaults were not applied to: %s", tc.path)
+					assert.Failf(t, "defaults were not applied to: %s", lPath)
 				} else {
 					t.Log(diff)
 					assert.Contains(t, diff, `AccessModes:`)
@@ -288,15 +289,16 @@ func runAllTests(t *testing.T, kubectl *kubectlContext) {
 		}{
 			{
 				name: "EtcdCluster",
-				path: "testdata/validation/etcdcluster_missing_storageclassname.yaml",
+				path: "validation/etcdcluster_missing_storageclassname.yaml",
 			},
 			{
 				name: "EtcdPeer",
-				path: "testdata/validation/etcdpeer_missing_storageclassname.yaml",
+				path: "validation/etcdpeer_missing_storageclassname.yaml",
 			},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
-				errorMessage, err := kubectl.DryRun(tc.path)
+				lPath := filepath.Join(*fRepoRoot, "config/test/e2e", tc.path)
+				errorMessage, err := kubectl.DryRun(lPath)
 				require.Error(t, err)
 				assert.Regexp(
 					t,
