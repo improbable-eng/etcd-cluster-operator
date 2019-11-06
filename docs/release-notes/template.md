@@ -1,17 +1,17 @@
 <!--
 Release notes template.
-Copy this file in to a file named $version.md (e.g v1.2.md), replace variables with the correct information, and push!
+Copy this file in to a file named $patcch-version.md (e.g v1.2.md), replace variables with the correct information, and push!
 We should maintain one file for each minor version release, patch releases should be prepended to the files for each minor version affected.
 All dates are in RFC-3339 format.
 -->
-# Release ${version}
+# Release ${minor-version}
 
 <!--
 Repeat this for each patch release.
 Changelogs should be ordered from newest to oldest, with the most recent patch appearing first.
 The version should link to the github tagged release.
 -->
-## Changelog for [${version}](https://github.com/improbable-eng/etcd-cluster-operator/releases/${version}) - ${date}
+## Changelog for [${patch-version}](https://github.com/improbable-eng/etcd-cluster-operator/releases/${patch-version}) - ${date}
 
 <!--
 Notable chanes include new functionality, features, or API additions.
