@@ -289,7 +289,7 @@ func (r *EtcdClusterReconciler) reconcile(
 			} else if *cluster.Spec.Replicas < int32(len(*members)) {
 				// There are too many members for the expected number of replicas. Remove the member with the highest
 				// ordinal
-				// TODO Implement scale-down
+				// TODO(#35) Implement scale-down
 			} else {
 				// Exactly the correct number of members. Make no change, all is well with the world.
 				log.V(2).Info("Expected number of replicas aligned with actual number.",
