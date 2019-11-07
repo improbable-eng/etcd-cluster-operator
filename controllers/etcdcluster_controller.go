@@ -258,7 +258,7 @@ func (r *EtcdClusterReconciler) reconcile(
 		}
 
 		// Remove EtcdPeer resources which do not have members.
-		// TODO Implement scale-down
+		// TODO(#35) Implement scale-down
 
 		// If we've reached this point we're sure that the EtcdPeer resources in the cluster match the contents of the
 		// membership API. The next step is checking to see if we want to mutate the membership API of etcd to scale up
