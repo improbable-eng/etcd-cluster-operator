@@ -30,7 +30,7 @@ func (o *EtcdCluster) ValidateDelete() error {
 	return allErrs.ToAggregate()
 }
 
-// ValidateCreate validates that only supported fields are changed
+// ValidateUpdate validates that only supported fields are changed
 func (o *EtcdCluster) ValidateUpdate(old runtime.Object) error {
 	oldO, ok := old.(*EtcdCluster)
 	if !ok {
