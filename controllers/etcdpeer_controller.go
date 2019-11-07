@@ -14,6 +14,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/etcdenvvar"
@@ -188,9 +190,6 @@ func pvcForPeer(peer *etcdv1alpha1.EtcdPeer) *corev1.PersistentVolumeClaim {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      peer.Name,
 			Namespace: peer.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(peer, etcdv1alpha1.GroupVersion.WithKind("EtcdPeer")),
-			},
 		},
 		Spec: *peer.Spec.Storage.VolumeClaimTemplate.DeepCopy(),
 	}
@@ -292,6 +291,8 @@ func (r *EtcdPeerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&etcdv1alpha1.EtcdPeer{}).
 		// Watch for changes to ReplicaSet resources that an EtcdPeer owns.
 		Owns(&appsv1.ReplicaSet{}).
-		Owns(&corev1.PersistentVolumeClaim{}).
+		// We can use a simple EnqueueRequestForObject handler here as the PVC
+		// has the same name as the EtcdPeer resource that needs to be enqueued
+		Watches(&source.Kind{Type: &corev1.PersistentVolumeClaim{}}, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
