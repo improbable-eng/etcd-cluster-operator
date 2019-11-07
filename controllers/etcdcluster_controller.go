@@ -284,7 +284,7 @@ func (r *EtcdClusterReconciler) reconcile(
 					return ctrl.Result{}, nil, fmt.Errorf("failed to add new member %s: %w", peerName, err)
 				}
 				// Requeue, as we don't watch on the membership list. So we don't auto-detect the change we just made.
-				// TODO Implement custom watch on etcd membership API, and remove this requeue after member addition
+				// TODO(#76) Implement custom watch on etcd membership API, and remove this requeue after member addition
 				return ctrl.Result{RequeueAfter: time.Second * 10}, &reconcilerevent.MemberAddedEvent{Object: cluster, Member: member}, nil
 			} else if *cluster.Spec.Replicas < int32(len(*members)) {
 				// There are too many members for the expected number of replicas. Remove the member with the highest
@@ -302,7 +302,7 @@ func (r *EtcdClusterReconciler) reconcile(
 	// so that we can recheck the membership API. We currently do not implement any watch on the etcd API, and as it is
 	// not a Kubernetes API we will have to implement one custom.
 
-	// TODO Implement custom watch on etcd membership API, and remove this regular requeue
+	// TODO(#76) Implement custom watch on etcd membership API, and remove this regular requeue
 	return ctrl.Result{RequeueAfter: time.Second * 10}, nil, nil
 }
 
