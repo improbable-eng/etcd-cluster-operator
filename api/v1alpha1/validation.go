@@ -75,7 +75,7 @@ func (o *EtcdPeer) ValidateDelete() error {
 	return allErrs.ToAggregate()
 }
 
-// ValidateCreate validates that only supported fields are changed
+// ValidateUpdate validates that only supported fields are changed
 func (o *EtcdPeer) ValidateUpdate(old runtime.Object) error {
 	oldO, ok := old.(*EtcdPeer)
 	if !ok {
