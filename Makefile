@@ -33,7 +33,7 @@ verify: verify-gomod verify-manifests verify-generate verify-fmt vet
 
 # Run unit tests
 test: bin/kubebuilder
-	KUBEBUILDER_ASSETS="$(shell pwd)/bin/kubebuilder/bin" go test ./... -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell pwd)/bin/kubebuilder/bin" go test ./... -coverprofile cover.out $(ARGS)
 
 # Run end to end tests in a local Kind cluster. We do not clean up after running the tests to
 #  a) speed up the test run time slightly
