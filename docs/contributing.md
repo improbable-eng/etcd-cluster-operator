@@ -41,6 +41,10 @@ and instead pull the logic to be tested into a pure function.
 Other packages within the project which are not controllers (e.g., `internal/test/try`) should have unit tests in the
 usual way.
 
+Here are some examples of commands which run the unit tests:
+ * `make test` to run all the unit tests
+ * `make test ARGS="-v -run TestEtcdCluster_ValidateCreate"`to supply "go test" arguments such as `-run` or `-v`.
+
 ### Kubebuilder Tests
 
 The test suite provided by Kubebuilder will execute a local copy of a Kubernetes API Server to test against. These tests
@@ -58,6 +62,13 @@ externally visible changes to etcd itself. This is to avoid the tests causing th
 For example an end to end test may create an `EtcdCluster` and assert that it can connect to it from inside the cluster
 using the expected DNS name. Elements of the Kuberentes API that a user might interact with, such as the `status` field
 on an `EtcdCluster` resource, may also be interacted with.
+
+Here are some examples of commands which run the end-to-end tests:
+ * `make kind` will create a new Kind cluster, run all the the end-to-end tests and delete the cluster when the tests are complete.
+ * `make kind CLEANUP=false` will create a Kind cluster, run the tests and leave the cluster running after the tests complete.
+ * `make kind 'ARGS=-run TestE2E/Parallel/Webhooks'` will run a subset of the end-to-end tests.
+
+NB If a Kind cluster with the name "etcd-e2e" already exists, that cluster will be re-used.
 
 ### Static checks
 
