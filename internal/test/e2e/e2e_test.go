@@ -372,7 +372,7 @@ func runAllTests(t *testing.T, kubectl *kubectlContext) {
 				if len(member.PeerURLs) == 0 {
 					return errors.New("peer has no peer URLs")
 				}
-				if len(member.ID) == 0 {
+				if member.ID == "" {
 					return errors.New("peer has no ID")
 				}
 			}
