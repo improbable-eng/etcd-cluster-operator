@@ -39,6 +39,7 @@ const (
 var (
 	fUseKind           = flag.Bool("kind", false, "Creates a Kind cluster to run the tests against.")
 	fKindLogsPath      = flag.String("kind-logs-path", "/tmp/kind-logs", "The absolute path to a directory where kind logs will be exported.")
+	fKindClusterName   = flag.String("kind-cluster-name", "etcd-e2e", "The name of the Kind cluster to use or create")
 	fUseCurrentContext = flag.Bool("current-context", false, "Runs the tests against the current Kubernetes context, the path to kube config defaults to ~/.kube/config, unless overridden by the KUBECONFIG environment variable.")
 	fRepoRoot          = flag.String("repo-root", "", "The absolute path to the root of the etcd-cluster-operator git repository.")
 	fCleanup           = flag.Bool("cleanup", true, "Tears down the Kind cluster once the test is finished.")
@@ -84,8 +85,15 @@ func getSpec(t *testing.T, o interface{}) interface{} {
 
 // Starts a Kind cluster on the local machine, exposing port 2379 accepting ETCD connections.
 func startKind(t *testing.T, ctx context.Context, stopped chan struct{}) (*cluster.Context, error) {
-	t.Log("Starting Kind cluster.")
-	kind := cluster.NewContext("etcd-e2e")
+	clusters, err := cluster.List()
+	for _, c := range clusters {
+		if c.Name() == *fKindClusterName {
+			t.Log("Found existing Kind cluster")
+			return &c, nil
+		}
+	}
+	t.Log("Starting new Kind cluster")
+	kind := cluster.NewContext(*fKindClusterName)
 	go func() {
 		defer close(stopped)
 		<-ctx.Done()
@@ -99,7 +107,7 @@ func startKind(t *testing.T, ctx context.Context, stopped chan struct{}) (*clust
 		err = kind.Delete()
 		assert.NoError(t, err)
 	}()
-	err := kind.Create(create.WithV1Alpha3(&kindv1alpha3.Cluster{
+	err = kind.Create(create.WithV1Alpha3(&kindv1alpha3.Cluster{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Cluster",
 			APIVersion: "kind.sigs.k8s.io/v1alpha3",
