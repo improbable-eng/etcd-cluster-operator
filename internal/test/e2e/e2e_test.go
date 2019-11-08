@@ -375,6 +375,9 @@ func runAllTests(t *testing.T, kubectl *kubectlContext) {
 				if member.ID == "" {
 					return errors.New("peer has no ID")
 				}
+				if member.Name == "" {
+					return errors.New("peer has no Name")
+				}
 			}
 			return nil
 		}, time.Minute*2, time.Second*10)
