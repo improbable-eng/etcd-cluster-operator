@@ -39,7 +39,7 @@ test: bin/kubebuilder
 #  a) speed up the test run time slightly
 #  b) allow debug sessions to be attached to figure out what caused failures
 kind:
-	go test ./internal/test/e2e --kind --repo-root ${CURDIR} -v --cleanup=${CLEANUP}
+	go test ./internal/test/e2e --kind --repo-root ${CURDIR} -v --cleanup=${CLEANUP} $(ARGS)
 
 # Build manager binary
 manager:
