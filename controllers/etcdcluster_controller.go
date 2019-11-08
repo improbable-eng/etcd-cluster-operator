@@ -240,14 +240,10 @@ func (r *EtcdClusterReconciler) reconcile(
 			}
 			if !memberHasPeer {
 				// We have found a member without a peer. We should add an EtcdPeer resource for this member
-				peerName, err := peerNameForMember(member)
-				if err != nil {
-					return ctrl.Result{}, nil, err
-				}
 				log.V(1).Info(
 					"Found member in etcd's API that has no EtcdPeer resource representation, adding one.",
-					"member-name", peerName)
-				peer := peerForCluster(cluster, peerName)
+					"member-name", expectedPeerName)
+				peer := peerForCluster(cluster, expectedPeerName)
 				configureJoinExistingCluster(peer, cluster, *members)
 
 				if err := r.Create(ctx, peer); err != nil {
