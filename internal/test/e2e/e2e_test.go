@@ -224,7 +224,7 @@ func setupLocalCluster(t *testing.T) (*cluster.Context, func()) {
 }
 
 func runAllTests(t *testing.T, kubectl *kubectlContext) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
 	defer cancel()
 
 	// Deploy a service to expose the cluster to the host machine.
