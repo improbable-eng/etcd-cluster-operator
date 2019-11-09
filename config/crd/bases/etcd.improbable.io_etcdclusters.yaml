@@ -169,6 +169,7 @@ spec:
               type: object
           required:
           - replicas
+          - storage
           type: object
         status:
           description: EtcdClusterStatus defines the observed state of EtcdCluster

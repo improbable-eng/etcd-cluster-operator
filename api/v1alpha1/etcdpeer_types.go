@@ -51,7 +51,7 @@ type EtcdPeerSpec struct {
 
 	// Storage is the configuration of the disks and mount points of the Etcd
 	// pod.
-	Storage EtcdPeerStorage `json:"storage,omitempty"`
+	Storage EtcdPeerStorage `json:"storage"`
 }
 
 // EtcdPeerStorage defines the desired storage for an EtcdPeer

@@ -203,6 +203,7 @@ spec:
               type: object
           required:
           - clusterName
+          - storage
           type: object
         status:
           description: EtcdPeerStatus defines the observed state of EtcdPeer
