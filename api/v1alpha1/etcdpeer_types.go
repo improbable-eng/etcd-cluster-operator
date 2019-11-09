@@ -31,8 +31,7 @@ type StaticBootstrap struct {
 type Bootstrap struct {
 	// Static boostrapping requires that we know the network names of the
 	// other peers ahead of time.
-	// +optional
-	Static StaticBootstrap `json:"static,omitempty"`
+	Static StaticBootstrap `json:"static"`
 }
 
 // EtcdPeerSpec defines the desired state of EtcdPeer
@@ -46,8 +45,7 @@ type EtcdPeerSpec struct {
 	// Bootstrap is the bootstrap configuration to pass down into the etcd
 	// pods. As per the etcd documentation, etcd will ignore bootstrap
 	// instructions if it already knows where it's peers are.
-	// +optional
-	Bootstrap Bootstrap `json:"bootstrap,omitempty"`
+	Bootstrap Bootstrap `json:"bootstrap"`
 
 	// Storage is the configuration of the disks and mount points of the Etcd
 	// pod.

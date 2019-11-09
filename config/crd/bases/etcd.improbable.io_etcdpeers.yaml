@@ -68,6 +68,8 @@ spec:
                       minItems: 1
                       type: array
                   type: object
+              required:
+              - static
               type: object
             clusterName:
               description: The name of the etcd cluster that this peer should join.
@@ -202,6 +204,7 @@ spec:
               - volumeClaimTemplate
               type: object
           required:
+          - bootstrap
           - clusterName
           - storage
           type: object
