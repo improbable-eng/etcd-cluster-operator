@@ -164,6 +164,8 @@ spec:
                         backing this claim.
                       type: string
                   type: object
+              required:
+              - volumeClaimTemplate
               type: object
           required:
           - replicas

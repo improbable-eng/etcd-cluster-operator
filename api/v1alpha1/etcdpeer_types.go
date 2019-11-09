@@ -61,7 +61,7 @@ type EtcdPeerStorage struct {
 	// StorageClass and the Storage Resource Request in this template.
 	// That PVC will then be mounted in the Pod for this EtcdPeer and the Etcd
 	// process when it starts will persist its data to the PV bound to that PVC.
-	VolumeClaimTemplate corev1.PersistentVolumeClaimSpec `json:"volumeClaimTemplate,omitempty"`
+	VolumeClaimTemplate corev1.PersistentVolumeClaimSpec `json:"volumeClaimTemplate"`
 }
 
 // EtcdPeerStatus defines the observed state of EtcdPeer
