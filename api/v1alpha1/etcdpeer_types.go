@@ -23,8 +23,8 @@ type InitialClusterMember struct {
 type StaticBootstrap struct {
 	// InitialCluster provides details of all initial cluster members,
 	// and should include ourselves.
-	// +kubebuilder:validation:MinItems:=1
-	InitialCluster []InitialClusterMember `json:"initialCluster,omitempty"`
+	// +kubebuilder:validation:MinItems=1
+	InitialCluster []InitialClusterMember `json:"initialCluster"`
 }
 
 // Bootstrap contains bootstrap infromation for the peer to use.

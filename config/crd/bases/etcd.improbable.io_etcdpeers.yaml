@@ -67,6 +67,8 @@ spec:
                         type: object
                       minItems: 1
                       type: array
+                  required:
+                  - initialCluster
                   type: object
               required:
               - static
