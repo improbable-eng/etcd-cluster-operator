@@ -21,6 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/etcd"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/reconcilerevent"
 )
 
@@ -33,6 +34,7 @@ type EtcdClusterReconciler struct {
 	client.Client
 	Log      logr.Logger
 	Recorder record.EventRecorder
+	Etcd     etcd.EtcdAPI
 }
 
 func headlessServiceForCluster(cluster *etcdv1alpha1.EtcdCluster) *v1.Service {
@@ -396,25 +398,26 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 }
 
 func (r *EtcdClusterReconciler) addEtcdMember(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, peerURL string) (*etcdclient.Member, error) {
-	etcdConfig := etcdClientConfig(cluster)
-	c, err := etcdclient.New(*etcdConfig)
+	c, err := r.Etcd.MembershipAPI(etcdClientConfig(cluster))
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect to etcd: %w", err)
 	}
 
-	membersAPI := etcdclient.NewMembersAPI(c)
-	return membersAPI.Add(ctx, peerURL)
+	members, err := c.Add(ctx, peerURL)
+	if err != nil {
+		return nil, fmt.Errorf("unable to add member to etcd cluster: %w", err)
+	}
+
+	return members, nil
 }
 
 func (r *EtcdClusterReconciler) getEtcdMembers(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster) ([]etcdclient.Member, error) {
-	etcdConfig := etcdClientConfig(cluster)
-	c, err := etcdclient.New(*etcdConfig)
+	c, err := r.Etcd.MembershipAPI(etcdClientConfig(cluster))
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect to etcd: %w", err)
 	}
 
-	membersAPI := etcdclient.NewMembersAPI(c)
-	members, err := membersAPI.List(ctx)
+	members, err := c.List(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list members of etcd cluster: %w", err)
 	}
@@ -422,14 +425,14 @@ func (r *EtcdClusterReconciler) getEtcdMembers(ctx context.Context, cluster *etc
 	return members, nil
 }
 
-func etcdClientConfig(cluster *etcdv1alpha1.EtcdCluster) *etcdclient.Config {
+func etcdClientConfig(cluster *etcdv1alpha1.EtcdCluster) etcdclient.Config {
 	serviceURL := &url.URL{
 		Scheme: etcdScheme,
 		// We (the operator) are quite probably in a different namespace to the cluster, so we need to use a fully
 		// defined URL.
 		Host: fmt.Sprintf("%s.%s.svc:%d", cluster.Name, cluster.Namespace, etcdClientPort),
 	}
-	return &etcdclient.Config{
+	return etcdclient.Config{
 		Endpoints: []string{serviceURL.String()},
 		Transport: etcdclient.DefaultTransport,
 	}

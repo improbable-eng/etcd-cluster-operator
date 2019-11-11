@@ -1,12 +1,14 @@
 package controllers
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	etcdclient "go.etcd.io/etcd/client"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -16,6 +18,12 @@ import (
 	"github.com/improbable-eng/etcd-cluster-operator/internal/test"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/test/try"
 )
+
+type AlwaysFailEtcdAPI struct{}
+
+func (_ *AlwaysFailEtcdAPI) MembershipAPI(config etcdclient.Config) (etcdclient.MembersAPI, error) {
+	return nil, errors.New("fake etcd, nothing is here")
+}
 
 func (s *controllerSuite) testClusterController(t *testing.T) {
 	t.Run("OnCreation", func(t *testing.T) {
@@ -30,6 +38,9 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 		// Apply defaults here so that our expected object has all the same
 		// defaults as those used in the Reconcile function
 		etcdCluster.Default()
+
+		// Mock out the etcd API with one that always fails - i.e., we're always in 'bootstrap' mode
+		s.etcd = &AlwaysFailEtcdAPI{}
 
 		t.Run("CreatesService", func(t *testing.T) {
 			service := &v1.Service{}
