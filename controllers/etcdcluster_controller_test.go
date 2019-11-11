@@ -1,8 +1,10 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"testing"
 	"time"
 
@@ -21,8 +23,40 @@ import (
 
 type AlwaysFailEtcdAPI struct{}
 
-func (_ *AlwaysFailEtcdAPI) MembershipAPI(config etcdclient.Config) (etcdclient.MembersAPI, error) {
+func (_ *AlwaysFailEtcdAPI) MembershipAPI(_ etcdclient.Config) (etcdclient.MembersAPI, error) {
 	return nil, errors.New("fake etcd, nothing is here")
+}
+
+type StaticResponseMembersAPI struct {
+	Members []etcdclient.Member
+}
+
+func (s StaticResponseMembersAPI) List(ctx context.Context) ([]etcdclient.Member, error) {
+	return s.Members, nil
+}
+
+func (s StaticResponseMembersAPI) Add(ctx context.Context, peerURL string) (*etcdclient.Member, error) {
+	panic("implement me")
+}
+
+func (s StaticResponseMembersAPI) Remove(ctx context.Context, mID string) error {
+	panic("implement me")
+}
+
+func (s StaticResponseMembersAPI) Update(ctx context.Context, mID string, peerURLs []string) error {
+	panic("implement me")
+}
+
+func (s StaticResponseMembersAPI) Leader(ctx context.Context) (*etcdclient.Member, error) {
+	panic("implement me")
+}
+
+type StaticResponseEtcdAPI struct {
+	Members []etcdclient.Member
+}
+
+func (sr *StaticResponseEtcdAPI) MembershipAPI(_ etcdclient.Config) (etcdclient.MembersAPI, error) {
+	return &StaticResponseMembersAPI{Members: sr.Members}, nil
 }
 
 func (s *controllerSuite) testClusterController(t *testing.T) {
@@ -116,6 +150,68 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 					peer.Spec.Bootstrap.Static.InitialCluster,
 					"Peer did not have expected static bootstrap instructions")
 			}
+		})
+
+		t.Run("UpdatesStatus", func(t *testing.T) {
+			// Make our fake etcd respond
+			members := make([]etcdclient.Member, *etcdCluster.Spec.Replicas)
+			for i := range members {
+				name := fmt.Sprintf("%s-%d", etcdCluster.Name, i)
+				peerURL := &url.URL{
+					Scheme: etcdScheme,
+					Host: fmt.Sprintf("%s.%s.%s.svc:%d",
+						name,
+						etcdCluster.Name,
+						etcdCluster.Namespace,
+						etcdPeerPort,
+					),
+				}
+				clientURL := &url.URL{
+					Scheme: etcdScheme,
+					Host: fmt.Sprintf("%s.%s.%s.svc:%d",
+						name,
+						etcdCluster.Name,
+						etcdCluster.Namespace,
+						etcdClientPort,
+					),
+				}
+				members[i] = etcdclient.Member{
+					ID:         fmt.Sprintf("SOMEID%d", i),
+					Name:       name,
+					PeerURLs:   []string{peerURL.String()},
+					ClientURLs: []string{clientURL.String()},
+				}
+			}
+			s.etcd = &StaticResponseEtcdAPI{Members: members}
+
+			err = try.Eventually(func() error {
+				fetchedCluster := &etcdv1alpha1.EtcdCluster{}
+				err := s.k8sClient.Get(s.ctx,
+					client.ObjectKey{
+						Namespace: namespace,
+						Name:      etcdCluster.Name,
+					},
+					fetchedCluster)
+				if err != nil {
+					return err
+				}
+				for _, expectedMember := range members {
+					// Ensure our expected member is in this list
+					foundMember := false
+					for _, actualMember := range fetchedCluster.Status.Members {
+						if actualMember.Name == expectedMember.Name {
+							foundMember = true
+							continue
+						}
+					}
+					if !foundMember {
+						return errors.New(fmt.Sprintf("failed to find member %s", expectedMember.Name))
+					}
+				}
+				// All good
+				return nil
+			}, time.Second*30, time.Millisecond*500)
+			require.NoError(t, err)
 		})
 	})
 }
