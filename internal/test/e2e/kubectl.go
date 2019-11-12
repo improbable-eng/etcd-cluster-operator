@@ -7,14 +7,19 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
+
+const testNameLabelKey = "e2e.etcd.improbable.io/test-name"
 
 // kubectlContext wraps shell calls to `kubectl', appropriately handling their results. It is only intended for use
 // in tests.
 type kubectlContext struct {
-	t          *testing.T
-	configPath string
-	homeDir    string
+	t                *testing.T
+	configPath       string
+	homeDir          string
+	defaultNamespace *string
 }
 
 func (k *kubectlContext) do(args ...string) ([]byte, error) {
@@ -24,6 +29,10 @@ func (k *kubectlContext) do(args ...string) ([]byte, error) {
 			return nil, err
 		}
 		k.homeDir = hd
+	}
+
+	if k.defaultNamespace != nil {
+		args = append([]string{"--namespace", *k.defaultNamespace}, args...)
 	}
 
 	k.t.Log("Running kubectl " + strings.Join(args, " "))
@@ -85,13 +94,57 @@ func (k *kubectlContext) DryRun(filename string) (string, error) {
 	return string(out), err
 }
 
+// Create wraps `kubectl create', returning the unparsed output & any error that occurred.
+func (k *kubectlContext) Create(args ...string) (string, error) {
+	out, err := k.do(append([]string{"create"}, args...)...)
+	return string(out), err
+}
+
+// Label wraps `kubectl create', returning the unparsed output & any error that occurred.
+func (k *kubectlContext) Label(args ...string) (string, error) {
+	out, err := k.do(append([]string{"label"}, args...)...)
+	return string(out), err
+}
+
 // WithT returns a copy of k with a new testing context.
 // This ensures that messages logged with t.Log in this module are associated with the correct sub-test.
 // You should use this in any sub-test.
 func (k *kubectlContext) WithT(t *testing.T) *kubectlContext {
 	return &kubectlContext{
-		t:          t,
-		configPath: k.configPath,
-		homeDir:    k.homeDir,
+		t:                t,
+		configPath:       k.configPath,
+		homeDir:          k.homeDir,
+		defaultNamespace: k.defaultNamespace,
 	}
+}
+
+func (k *kubectlContext) WithDefaultNamespace(ns string) *kubectlContext {
+	return &kubectlContext{
+		t:                k.t,
+		configPath:       k.configPath,
+		homeDir:          k.homeDir,
+		defaultNamespace: &ns,
+	}
+}
+
+func NamespaceForTest(t *testing.T, kubectl *kubectlContext) string {
+	testName := t.Name()
+	name := testName
+	name = strings.ReplaceAll(name, "_", "-")
+	name = strings.ReplaceAll(name, "/", "-")
+	name = strings.ToLower(name)
+	label := fmt.Sprintf("%s=%s", testNameLabelKey, name)
+	t.Log("Deleting existing namespace (if present)")
+	err := kubectl.Delete("namespace", "--selector", label, "--wait")
+	require.NoError(t, err)
+
+	t.Log("Creating new namespace for test")
+	out, err := kubectl.Create("namespace", name)
+	require.NoError(t, err, out)
+
+	t.Log("Labelling namespace")
+	out, err = kubectl.Label("namespace", name, label)
+	require.NoError(t, err, out)
+
+	return name
 }
