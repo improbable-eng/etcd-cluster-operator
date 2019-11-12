@@ -280,15 +280,18 @@ func TestE2E(t *testing.T) {
 	t.Run("Parallel", func(t *testing.T) {
 		t.Run("SampleCluster", func(t *testing.T) {
 			t.Parallel()
-			sampleClusterTests(t, kubectl.WithT(t), sampleClusterPath)
+			ns := NamespaceForTest(t, kubectl)
+			sampleClusterTests(t, kubectl.WithT(t).WithDefaultNamespace(ns), sampleClusterPath)
 		})
 		t.Run("Webhooks", func(t *testing.T) {
 			t.Parallel()
-			webhookTests(t, kubectl.WithT(t))
+			ns := NamespaceForTest(t, kubectl)
+			webhookTests(t, kubectl.WithT(t).WithDefaultNamespace(ns))
 		})
 		t.Run("Persistence", func(t *testing.T) {
 			t.Parallel()
-			persistenceTests(t, kubectl.WithT(t))
+			ns := NamespaceForTest(t, kubectl)
+			persistenceTests(t, kubectl.WithT(t).WithDefaultNamespace(ns))
 		})
 	})
 }
@@ -400,7 +403,7 @@ func sampleClusterTests(t *testing.T, kubectl *kubectlContext, sampleClusterPath
 		kubectl := kubectl.WithT(t)
 		err := try.Eventually(func() error {
 			t.Log("")
-			members, err := kubectl.Get("--namespace", "default", "etcdcluster", "my-cluster", "-o=jsonpath='{.status.members...name}'")
+			members, err := kubectl.Get("etcdcluster", "my-cluster", "-o=jsonpath='{.status.members...name}'")
 			if err != nil {
 				return err
 			}
