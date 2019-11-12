@@ -519,8 +519,9 @@ func etcdClientConfig(cluster *etcdv1alpha1.EtcdCluster) etcdclient.Config {
 		Host: fmt.Sprintf("%s.%s.svc:%d", cluster.Name, cluster.Namespace, etcdClientPort),
 	}
 	return etcdclient.Config{
-		Endpoints: []string{serviceURL.String()},
-		Transport: etcdclient.DefaultTransport,
+		Endpoints:               []string{serviceURL.String()},
+		Transport:               etcdclient.DefaultTransport,
+		HeaderTimeoutPerRequest: time.Second * 1,
 	}
 }
 
