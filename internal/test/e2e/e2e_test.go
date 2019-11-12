@@ -435,7 +435,7 @@ func etcdctl(kubectl *kubectlContext, svcName string, args ...string) (string, e
 
 func persistenceTests(t *testing.T, kubectl *kubectlContext) {
 	t.Log("Given a 1-node cluster.")
-	configPath := filepath.Join(*fRepoRoot, "config/test/e2e/persistence")
+	configPath := filepath.Join(*fRepoRoot, "config", test", e2e", "persistence")
 	err := kubectl.Apply("--filename", configPath)
 	require.NoError(t, err)
 
