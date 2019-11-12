@@ -467,6 +467,7 @@ func persistenceTests(t *testing.T, kubectl *kubectlContext) {
 		}
 		return nil
 	}, time.Minute, time.Second*5)
+	require.NoError(t, err)
 
 	t.Log("The cluster can be restored.")
 	err = kubectl.Apply("--filename", configPath)
