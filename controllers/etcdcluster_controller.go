@@ -38,10 +38,11 @@ type EtcdClusterReconciler struct {
 }
 
 func headlessServiceForCluster(cluster *etcdv1alpha1.EtcdCluster) *v1.Service {
+	name := serviceName(cluster)
 	return &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cluster.Name,
-			Namespace: cluster.Namespace,
+			Name:      name.Name,
+			Namespace: name.Namespace,
 			OwnerReferences: []metav1.OwnerReference{
 				*metav1.NewControllerRef(cluster, etcdv1alpha1.GroupVersion.WithKind("EtcdCluster")),
 			},
@@ -71,6 +72,94 @@ func headlessServiceForCluster(cluster *etcdv1alpha1.EtcdCluster) *v1.Service {
 			},
 		},
 	}
+}
+
+func serviceName(cluster *etcdv1alpha1.EtcdCluster) types.NamespacedName {
+	return types.NamespacedName{
+		Name:      cluster.Name,
+		Namespace: cluster.Namespace,
+	}
+}
+
+// hasService determines if the Kubernetes Service exists. Error is returned if there is some problem communicating with
+// Kubernetes.
+func (r *EtcdClusterReconciler) hasService(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster) (bool, error) {
+	service := &v1.Service{}
+	err := r.Get(ctx, serviceName(cluster), service)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			// We got the expected error, which is that it's not found
+			return false, nil
+		}
+		// Unexpected error, some other problem?
+		return false, err
+	}
+	// We found it because we got no error
+	return true, nil
+}
+
+// createService makes the headless service in Kubernetes
+func (r *EtcdClusterReconciler) createService(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster) (*reconcilerevent.ServiceCreatedEvent, error) {
+	service := headlessServiceForCluster(cluster)
+	if err := r.Create(ctx, service); err != nil {
+		return nil, err
+	}
+	return &reconcilerevent.ServiceCreatedEvent{Object: cluster, ServiceName: service.Name}, nil
+}
+
+func (r *EtcdClusterReconciler) createBootstrapPeer(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, peers *etcdv1alpha1.EtcdPeerList) (*reconcilerevent.PeerCreatedEvent, error) {
+	peerName := nextAvailablePeerName(cluster, peers.Items)
+	peer := peerForCluster(cluster, peerName)
+	configurePeerBootstrap(peer, cluster)
+	err := r.Create(ctx, peer)
+	if err != nil {
+		return nil, err
+	}
+	return &reconcilerevent.PeerCreatedEvent{Object: cluster, PeerName: peer.Name}, nil
+}
+
+func (r *EtcdClusterReconciler) hasPeerForMember(peers *etcdv1alpha1.EtcdPeerList, member etcdclient.Member) (bool, error) {
+	expectedPeerName, err := peerNameForMember(member)
+	if err != nil {
+		return false, err
+	}
+	for _, peer := range peers.Items {
+		if expectedPeerName == peer.Name {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (r *EtcdClusterReconciler) createPeerForMember(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, members []etcdclient.Member, member etcdclient.Member) (*reconcilerevent.PeerCreatedEvent, error) {
+	// Use this instead of member.Name. If we've just added the peer for this member then the member might not
+	// have that field set, so instead figure it out from the peerURL.
+	expectedPeerName, err := peerNameForMember(member)
+	if err != nil {
+		return nil, err
+	}
+	peer := peerForCluster(cluster, expectedPeerName)
+	configureJoinExistingCluster(peer, cluster, members)
+
+	err = r.Create(ctx, peer)
+	if err != nil {
+		return nil, err
+	}
+	return &reconcilerevent.PeerCreatedEvent{Object: cluster, PeerName: peer.Name}, nil
+
+}
+
+func (r *EtcdClusterReconciler) addNewMember(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, peers *etcdv1alpha1.EtcdPeerList) (*reconcilerevent.MemberAddedEvent, error) {
+	peerName := nextAvailablePeerName(cluster, peers.Items)
+	peerURL := &url.URL{
+		Scheme: etcdScheme,
+		Host:   fmt.Sprintf("%s:%d", expectedURLForPeer(cluster, peerName), etcdPeerPort),
+	}
+	member, err := r.addEtcdMember(ctx, cluster, peerURL.String())
+	if err != nil {
+		return nil, err
+	}
+	return &reconcilerevent.MemberAddedEvent{Object: cluster, Member: member, Name: peerName}, nil
 }
 
 // updateStatus updates the EtcdCluster resource's status to be the current value of the cluster.
@@ -127,29 +216,35 @@ func (r *EtcdClusterReconciler) reconcile(
 	reconcilerevent.ReconcilerEvent,
 	error,
 ) {
-	name := types.NamespacedName{
+	// Use a logger enriched with information about the cluster we'er reconciling. Note we generally do not log on
+	// errors as we pass the error up to the manager anyway.
+	log := r.Log.WithValues("cluster", types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      cluster.Name,
-	}
-	log := r.Log.WithValues("cluster", name)
+	})
 
-	// The first port of call is to verify that the service exists. This service is headless, and is designed to provide
-	// the underlying etcd pods with a consistent network identity such that they can dial each other. It *can* be used
-	// for client access to etcd if a user desires, but users are also encouraged to create their own services for their
-	// client access if that is more convenient.
-	service := &v1.Service{}
-	if err := r.Get(ctx, name, service); err != nil {
-		if !apierrors.IsNotFound(err) {
-			return ctrl.Result{}, nil, fmt.Errorf("unable to fetch EtcdCluster service: %w", err)
-		}
-		service = headlessServiceForCluster(cluster)
-		if err := r.Create(ctx, service); err != nil {
-			return ctrl.Result{}, nil, fmt.Errorf("unable to create service: %w", err)
-		}
-		log.V(1).Info("Created Service", "service", service.Name)
-		return ctrl.Result{}, &reconcilerevent.ServiceCreatedEvent{Object: cluster, ServiceName: service.Name}, nil
+	// Always requeue after ten seconds, as we don't watch on the membership list. So we don't auto-detect changes made
+	// to the etcd membership API.
+	// TODO(#76) Implement custom watch on etcd membership API, and remove this `requeueAfter`
+	result := ctrl.Result{RequeueAfter: time.Second * 10}
+
+	// The first port of call is to verify that the service exists and create it if it does not.
+	//
+	// This service is headless, and is designed to provide the underlying etcd pods with a consistent network identity
+	// such that they can dial each other. It *can* be used for client access to etcd if a user desires, but users are
+	// also encouraged to create their own services for their client access if that is more convenient.
+	serviceExists, err := r.hasService(ctx, cluster)
+	if err != nil {
+		return result, nil, fmt.Errorf("unable to fetch service from Kubernetes API: %w", err)
 	}
-	log.V(2).Info("Service exists", "service", service.Name)
+	if !serviceExists {
+		serviceCreatedEvent, err := r.createService(ctx, cluster)
+		if err != nil {
+			return result, nil, fmt.Errorf("unable to create service: %w", err)
+		}
+		log.V(1).Info("Created Service", "service", serviceCreatedEvent.ServiceName)
+		return result, serviceCreatedEvent, nil
+	}
 
 	// There are two big branches of behaviour: Either we (the operator) can contact the etcd cluster, or we can't. If
 	// the `members` pointer is nil that means we were unsuccessful in our attempts to connect. Otherwise it indicates
@@ -186,21 +281,19 @@ func (r *EtcdClusterReconciler) reconcile(
 		// We are also careful to never *remove* a peer in this 'no contact' state. So while we may erroneously add
 		// peers in some edge cases, we will never remove a peer without first confirming the action is correct with
 		// the cluster.
-		if cluster.Spec.Replicas != nil && int32(len(peers.Items)) < *cluster.Spec.Replicas {
+		if hasTooFewPeers(cluster, peers) {
 			// We have fewer peers than our replicas, so create a new peer. We do this one at a time, so only make
 			// *one* peer.
-			peerName := nextAvailablePeerName(cluster, peers.Items)
+			peerCreatedEvent, err := r.createBootstrapPeer(ctx, cluster, peers)
+			if err != nil {
+				return result, nil, fmt.Errorf("failed to create EtcdPeer %w", err)
+			}
 			log.V(1).Info(
-				"Insufficient peers for replicas and unable to contact etcd. Assuming we're bootstrapping adding new peer. (If we're not we'll heal this later.)",
+				"Insufficient peers for replicas and unable to contact etcd. Assumed we're bootstrapping created new peer. (If we're not we'll heal this later.)",
 				"current-peers", len(peers.Items),
 				"desired-peers", cluster.Spec.Replicas,
-				"peer", peerName)
-			peer := peerForCluster(cluster, peerName)
-			configurePeerBootstrap(peer, cluster)
-			if err := r.Create(ctx, peer); err != nil {
-				return ctrl.Result{}, nil, fmt.Errorf("failed to create EtcdPeer %s: %w", peerName, err)
-			}
-			return ctrl.Result{}, &reconcilerevent.PeerCreatedEvent{Object: cluster, PeerName: peer.Name}, nil
+				"peer", peerCreatedEvent.PeerName)
+			return result, peerCreatedEvent, nil
 		} else {
 			// We can't contact the cluster, and we don't *think* we need more peers. So it's unsafe to take any
 			// action.
@@ -226,32 +319,20 @@ func (r *EtcdClusterReconciler) reconcile(
 
 		// Add EtcdPeer resources for members that do not have one.
 		for _, member := range *members {
-			// Use this instead of member.Name. If we've just added the peer for this member then the member might not
-			// have that field set, so instead figure it out from the peerURL.
-			expectedPeerName, err := peerNameForMember(member)
+			hasPeer, err := r.hasPeerForMember(peers, member)
 			if err != nil {
-				log.Error(err, "Found member with no identifiable name, unable to reconcile it, skipping")
-				continue
+				return result, nil, err
 			}
-			memberHasPeer := false
-			for _, peer := range peers.Items {
-				if expectedPeerName == peer.Name {
-					memberHasPeer = true
-					break
-				}
-			}
-			if !memberHasPeer {
+			if !hasPeer {
 				// We have found a member without a peer. We should add an EtcdPeer resource for this member
-				log.V(1).Info(
-					"Found member in etcd's API that has no EtcdPeer resource representation, adding one.",
-					"member-name", expectedPeerName)
-				peer := peerForCluster(cluster, expectedPeerName)
-				configureJoinExistingCluster(peer, cluster, *members)
-
-				if err := r.Create(ctx, peer); err != nil {
-					return ctrl.Result{}, nil, fmt.Errorf("failed to create EtcdPeer %s: %w", peer.Name, err)
+				peerCreatedEvent, err := r.createPeerForMember(ctx, cluster, *members, member)
+				if err != nil {
+					return result, nil, fmt.Errorf("failed to create EtcdPeer %w", err)
 				}
-				return ctrl.Result{}, &reconcilerevent.PeerCreatedEvent{Object: cluster, PeerName: peer.Name}, nil
+				log.V(1).Info(
+					"Found member in etcd's API that has no EtcdPeer resource representation, added one.",
+					"member-name", peerCreatedEvent.PeerName)
+				return result, peerCreatedEvent, nil
 			}
 		}
 
@@ -265,26 +346,20 @@ func (r *EtcdClusterReconciler) reconcile(
 			// It's finally time to see if we need to mutate the membership API to bring it in-line with our expected
 			// replicas. There are three cases, we have enough members, too few, or too many. The order we check these
 			// cases in is irrelevant as only one can possibly be true.
-			if *cluster.Spec.Replicas > int32(len(*members)) {
+			if hasTooFewMembers(cluster, *members) {
 				// There are too few members for the expected number of replicas. Add a new member.
-				peerName := nextAvailablePeerName(cluster, peers.Items)
-				peerURL := &url.URL{
-					Scheme: etcdScheme,
-					Host:   fmt.Sprintf("%s:%d", expectedURLForPeer(cluster, peerName), etcdPeerPort),
+				memberAddedEvent, err := r.addNewMember(ctx, cluster, peers)
+				if err != nil {
+					return result, nil, fmt.Errorf("failed to add new member: %w", err)
 				}
+
 				log.V(1).Info("Too few members for expected replica count, adding new member.",
 					"expected-replicas", *cluster.Spec.Replicas,
 					"actual-members", len(*members),
-					"peer-name", peerName,
-					"peer-url", peerURL)
-				member, err := r.addEtcdMember(ctx, cluster, peerURL.String())
-				if err != nil {
-					return ctrl.Result{}, nil, fmt.Errorf("failed to add new member %s: %w", peerName, err)
-				}
-				// Requeue, as we don't watch on the membership list. So we don't auto-detect the change we just made.
-				// TODO(#76) Implement custom watch on etcd membership API, and remove this requeue after member addition
-				return ctrl.Result{RequeueAfter: time.Second * 10}, &reconcilerevent.MemberAddedEvent{Object: cluster, Member: member}, nil
-			} else if *cluster.Spec.Replicas < int32(len(*members)) {
+					"peer-name", memberAddedEvent.Name,
+					"peer-url", memberAddedEvent.Member.PeerURLs[0])
+				return result, memberAddedEvent, nil
+			} else if hasTooManyMembers(cluster, *members) {
 				// There are too many members for the expected number of replicas. Remove the member with the highest
 				// ordinal
 				// TODO(#35) Implement scale-down
@@ -296,12 +371,20 @@ func (r *EtcdClusterReconciler) reconcile(
 			}
 		}
 	}
-	// This is the fall-through 'all is right with the world' case. We requeue here with a ten second timeout. This is
-	// so that we can recheck the membership API. We currently do not implement any watch on the etcd API, and as it is
-	// not a Kubernetes API we will have to implement one custom.
+	// This is the fall-through 'all is right with the world' case.
+	return result, nil, nil
+}
 
-	// TODO(#76) Implement custom watch on etcd membership API, and remove this regular requeue
-	return ctrl.Result{RequeueAfter: time.Second * 10}, nil, nil
+func hasTooFewPeers(cluster *etcdv1alpha1.EtcdCluster, peers *etcdv1alpha1.EtcdPeerList) bool {
+	return cluster.Spec.Replicas != nil && int32(len(peers.Items)) < *cluster.Spec.Replicas
+}
+
+func hasTooFewMembers(cluster *etcdv1alpha1.EtcdCluster, members []etcdclient.Member) bool {
+	return *cluster.Spec.Replicas > int32(len(members))
+}
+
+func hasTooManyMembers(cluster *etcdv1alpha1.EtcdCluster, members []etcdclient.Member) bool {
+	return *cluster.Spec.Replicas < int32(len(members))
 }
 
 func isAllMembersStable(members []etcdclient.Member) bool {
