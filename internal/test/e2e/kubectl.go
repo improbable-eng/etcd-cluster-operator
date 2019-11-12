@@ -94,13 +94,13 @@ func (k *kubectlContext) DryRun(filename string) (string, error) {
 	return string(out), err
 }
 
-// Create wraps `kubectl create', returning the unparsed output & any error that occurred.
+// Create wraps `kubectl create', returning the unparsed output & any errors that occurred.
 func (k *kubectlContext) Create(args ...string) (string, error) {
 	out, err := k.do(append([]string{"create"}, args...)...)
 	return string(out), err
 }
 
-// Label wraps `kubectl create', returning the unparsed output & any error that occurred.
+// Label wraps `kubectl label', returning the unparsed output & any errors that occurred.
 func (k *kubectlContext) Label(args ...string) (string, error) {
 	out, err := k.do(append([]string{"label"}, args...)...)
 	return string(out), err
@@ -118,6 +118,8 @@ func (k *kubectlContext) WithT(t *testing.T) *kubectlContext {
 	}
 }
 
+// WithDefaultNamespace returns a kubectl where `--namespace ns` will be
+// prepended to all the other supplied arguments.
 func (k *kubectlContext) WithDefaultNamespace(ns string) *kubectlContext {
 	return &kubectlContext{
 		t:                k.t,
@@ -127,6 +129,11 @@ func (k *kubectlContext) WithDefaultNamespace(ns string) *kubectlContext {
 	}
 }
 
+// NamespaceForTest creates a new namespace with a name derived from the current
+// running test.
+// It adds a label, so that all such namespaces can easily be found.
+// And if a namespace with that label already exists, it deletes it first to
+// cleanup any resources left over from the previous test.
 func NamespaceForTest(t *testing.T, kubectl *kubectlContext) string {
 	testName := t.Name()
 	name := testName
