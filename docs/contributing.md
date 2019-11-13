@@ -71,8 +71,8 @@ string will be prefixed with `v` and use semver.
 ### Pre-release tasks
 
 * Sanity check documentation under `docs` and `README.md`.
-* Compile and prepare release notes under `docs/release-notes/$VERSION.md`. For example version v0.1.0 would have a file
-  `docs/release-notes/v0.1.0.md`.
+* Compile and prepare release notes under `docs/release-notes/$VERSION.md`. For example versions v0.1.X would share a 
+file `docs/release-notes/v0.1.md`.
 
 ### Process
 
