@@ -21,7 +21,7 @@ func (s *ServiceCreatedEvent) Record(recorder record.EventRecorder) {
 	recorder.Event(s.Object,
 		"Normal",
 		"ServiceCreated",
-		fmt.Sprintf("Created service with name '%s'", s.ServiceName))
+		fmt.Sprintf("Created service with name %q", s.ServiceName))
 }
 
 type PeerCreatedEvent struct {
@@ -33,7 +33,7 @@ func (s *PeerCreatedEvent) Record(recorder record.EventRecorder) {
 	recorder.Event(s.Object,
 		"Normal",
 		"PeerCreated",
-		fmt.Sprintf("Created a new EtcdPeer with name '%s'", s.PeerName))
+		fmt.Sprintf("Created a new EtcdPeer with name %q", s.PeerName))
 }
 
 type MemberAddedEvent struct {
