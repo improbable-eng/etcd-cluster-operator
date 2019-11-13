@@ -49,3 +49,70 @@ The `ReplicaSet` for each Etcd node ensures that the cluster can function even w
          by the location of the existing `PersistentVolumeClaim`and its bound `PersistentVolume`.
    3. When the server has rebooted, Kubernetes will be able to schedule the `Pod` and it will start.
       The Etcd process inside the `Pod` will use the existing data and it will rejoin the Etcd cluster.
+
+### Delete a Cluster
+
+When you delete an `EtcdCluster` resource, the `etcd` data **will not** be deleted.
+The `etcd-cluster-operator` **does not** set an `OwnerReference` on the `PersistentVolumeClaim` that it creates,
+and this prevents `PersistentVolumeClaim` and the `PersistentVolume` resources being automatically garbage collected.
+This is done deliberately, to avoid the risk of data loss if you accidentally delete an `EtcdCluster`.
+
+When you delete an `EtcdCluster`, the `EtcdPeer`, `ReplicaSet`, `Pod`, and `Service` API objects *will* be deleted.
+They are garbage collected because the etcd-cluster-operator does set an `OwnerReference` on these API objects.
+
+#### Restore a Deleted Cluster
+
+You can recreate the deleted etcd cluster and restore its original data
+by recreating an *identical*  `EtcdCluster` resource.
+The etcd-cluster-operator will recreate the `EtcdPeer`, `ReplicaSet` and `Service` resources
+and it will re-use the original `PersistentVolumeClaim` resources.
+
+#### Locate the Data for a Deleted Cluster
+
+You can locate the data for a deleted `EtcdCluster` by using a label selector to locate all the the `PersistentVolumeClaim` objects:
+
+```
+$ kubectl get pvc --selector etcd.improbable.io/cluster-name=cluster1
+NAME         STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+cluster1-0   Bound    pvc-71543b02-54ac-49d2-ad7d-35601ab5d48f   1Mi        RWO            standard       3m34s
+
+```
+
+You can then examine the `PersistentVolume` and find out where its data is stored.
+
+```
+$ kubectl describe pv pvc-71543b02-54ac-49d2-ad7d-35601ab5d48f
+Name:            pvc-71543b02-54ac-49d2-ad7d-35601ab5d48f
+Labels:          <none>
+Annotations:     kubernetes.io/createdby: hostpath-dynamic-provisioner
+                 pv.kubernetes.io/bound-by-controller: yes
+                 pv.kubernetes.io/provisioned-by: kubernetes.io/host-path
+Finalizers:      [kubernetes.io/pv-protection]
+StorageClass:    standard
+Status:          Bound
+Claim:           teste2e-parallel-persistence/cluster1-0
+Reclaim Policy:  Delete
+Access Modes:    RWO
+VolumeMode:      Filesystem
+Capacity:        1Mi
+Node Affinity:   <none>
+Message:
+Source:
+    Type:          HostPath (bare host directory volume)
+    Path:          /tmp/hostpath_pv/1026efed-5405-4112-82e2-c06951f64017
+    HostPathType:
+Events:            <none>
+```
+
+#### Delete the Data for a Deleted Cluster
+
+If you are sure that you no longer need the data for a deleted `EtcdCluster` you can delete the `PersistentVolumeClaim` resources,
+which will allow the `PersistentVolume` resources to be automatically deleted, recycled or retained for manual inspection and deletion later.
+
+```
+$ kubectl delete pvc --selector etcd.improbable.io/cluster-name=cluster1
+persistentvolumeclaim "cluster1-0" deleted
+```
+
+The exact behaviour depends on the "Reclaim Policy" of the `PersistentVolume` and on the capabilities of the volume provisioners which are being used in the cluster.
+You can read more about this in the Kubernetes documentation:  [Lifecycle of a volume and claim](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#lifecycle-of-a-volume-and-claim).
