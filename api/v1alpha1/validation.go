@@ -1,6 +1,9 @@
 package v1alpha1
 
 import (
+	"fmt"
+
+	"github.com/google/go-cmp/cmp"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -27,11 +30,28 @@ func (o *EtcdCluster) ValidateDelete() error {
 	return allErrs.ToAggregate()
 }
 
-// ValidateCreate validates that only supported fields are changed
-// TODO: Not yet implemented
+// ValidateUpdate validates that only supported fields are changed
 func (o *EtcdCluster) ValidateUpdate(old runtime.Object) error {
-	var allErrs field.ErrorList
-	return allErrs.ToAggregate()
+	oldO, ok := old.(*EtcdCluster)
+	if !ok {
+		return fmt.Errorf("Unexpected type for old: %#v", old)
+	}
+	oldO = oldO.DeepCopy()
+
+	if *oldO.Spec.Replicas > *o.Spec.Replicas {
+		return fmt.Errorf(
+			"Unsupported changes: spec.replicas: current: %d, new: %d: scale-in is not supported",
+			*oldO.Spec.Replicas, *o.Spec.Replicas,
+		)
+	}
+
+	// Overwrite the fields which are allowed to change
+	oldO.Spec.Replicas = o.Spec.Replicas
+
+	if diff := cmp.Diff(oldO.Spec, o.Spec); diff != "" {
+		return fmt.Errorf("Unsupported changes: (- current, + new) %s", diff)
+	}
+	return nil
 }
 
 var _ webhook.Validator = &EtcdPeer{}
@@ -55,11 +75,21 @@ func (o *EtcdPeer) ValidateDelete() error {
 	return allErrs.ToAggregate()
 }
 
-// ValidateCreate validates that only supported fields are changed
-// TODO: Not yet implemented
+// ValidateUpdate validates that only supported fields are changed
 func (o *EtcdPeer) ValidateUpdate(old runtime.Object) error {
-	var allErrs field.ErrorList
-	return allErrs.ToAggregate()
+	oldO, ok := old.(*EtcdPeer)
+	if !ok {
+		return fmt.Errorf("Unexpected type for old: %#v", old)
+	}
+	oldO = oldO.DeepCopy()
+
+	// Overwrite any the fields which are allowed to change
+	// oldO.Spec.Foo = o.Spec.Foo
+
+	if diff := cmp.Diff(oldO.Spec, o.Spec); diff != "" {
+		return fmt.Errorf("Unsupported changes: (- current, + new) %s", diff)
+	}
+	return nil
 }
 
 func validatePersistentVolumeClaimSpec(path *field.Path, o *corev1.PersistentVolumeClaimSpec) field.ErrorList {

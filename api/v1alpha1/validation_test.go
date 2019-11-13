@@ -4,7 +4,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"k8s.io/apimachinery/pkg/api/resource"
 
+	"github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/test"
 )
 
@@ -50,6 +52,61 @@ func TestEtcdCluster_ValidateCreate(t *testing.T) {
 	})
 }
 
+// TODO Incomplete.
+// Need to test changes for all PVC fields.
+// Ideally without exhaustively testing them all here.
+func TestEtcdCluster_ValidateUpdate(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		modifier func(*v1alpha1.EtcdCluster)
+		err      string
+	}{
+		{
+			name: "ScaleOut",
+			modifier: func(o *v1alpha1.EtcdCluster) {
+				*o.Spec.Replicas += 1
+			},
+		},
+		{
+			name: "UnsupportedChange/ScaleIn",
+			modifier: func(o *v1alpha1.EtcdCluster) {
+				*o.Spec.Replicas -= 1
+			},
+			err: "scale-in is not supported",
+		},
+		{
+			name: "UnsupportedChange/StorageClassName",
+			modifier: func(o *v1alpha1.EtcdCluster) {
+				*o.Spec.Storage.VolumeClaimTemplate.StorageClassName += "-changed"
+			},
+			err: `^Unsupported changes:`,
+		},
+		{
+			name: "UnsupportedChange/ResourcesStorage",
+			modifier: func(o *v1alpha1.EtcdCluster) {
+				o.Spec.Storage.VolumeClaimTemplate.Resources.Requests["storage"] = resource.MustParse("1Mi")
+			},
+			err: `^Unsupported changes:`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			o1 := test.ExampleEtcdCluster("ns1")
+			o2 := o1.DeepCopy()
+			tc.modifier(o2)
+			err := o2.ValidateUpdate(o1)
+			if err != nil {
+				t.Log(err)
+			}
+			if tc.err != "" {
+				assert.Regexp(t, tc.err, err, "unexpected error message")
+			} else {
+				assert.NoError(t, err, "unexpected error")
+			}
+		})
+	}
+
+}
+
 func TestEtcdPeer_ValidateCreate(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		o := test.ExampleEtcdPeer("ns1")
@@ -90,4 +147,46 @@ func TestEtcdPeer_ValidateCreate(t *testing.T) {
 			t.Log(err)
 		}
 	})
+}
+
+// TODO Incomplete.
+// Need to test changes for all PVC fields.
+// Ideally without exhaustively testing them all here.
+func TestEtcdPeer_ValidateUpdate(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		modifier func(*v1alpha1.EtcdPeer)
+		err      string
+	}{
+		{
+			name: "UnsupportedChange/StorageClassName",
+			modifier: func(o *v1alpha1.EtcdPeer) {
+				*o.Spec.Storage.VolumeClaimTemplate.StorageClassName += "-changed"
+			},
+			err: `^Unsupported changes:`,
+		},
+		{
+			name: "UnsupportedChange/ResourcesStorage",
+			modifier: func(o *v1alpha1.EtcdPeer) {
+				o.Spec.Storage.VolumeClaimTemplate.Resources.Requests["storage"] = resource.MustParse("1Mi")
+			},
+			err: `^Unsupported changes:`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			o1 := test.ExampleEtcdPeer("ns1")
+			o2 := o1.DeepCopy()
+			tc.modifier(o2)
+			err := o2.ValidateUpdate(o1)
+			if err != nil {
+				t.Log(err)
+			}
+			if tc.err != "" {
+				assert.Regexp(t, tc.err, err, "unexpected error message")
+			} else {
+				assert.NoError(t, err, "unexpected error")
+			}
+		})
+	}
+
 }
