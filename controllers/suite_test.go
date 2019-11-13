@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"context"
-	"github.com/improbable-eng/etcd-cluster-operator/internal/etcd"
 	"path/filepath"
 	"testing"
 	"time"
@@ -20,6 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/etcd"
 )
 
 type controllerSuite struct {
