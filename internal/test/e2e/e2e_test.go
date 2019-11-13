@@ -267,6 +267,7 @@ func TestE2E(t *testing.T) {
 	// with the remaining tests.
 	// Because the Etcd mutating and validating webhook service may not
 	// immediately be responding.
+	kubectl = kubectl.WithDefaultNamespace("default")
 	var out string
 	err := try.Eventually(func() (err error) {
 		out, err = kubectl.DryRun(sampleClusterPath)
