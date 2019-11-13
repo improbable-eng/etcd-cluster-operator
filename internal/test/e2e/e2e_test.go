@@ -377,7 +377,6 @@ func sampleClusterTests(t *testing.T, kubectl *kubectlContext, sampleClusterPath
 	require.NoError(t, err)
 
 	t.Run("EtcdClusterAvailability", func(t *testing.T) {
-		t.Parallel()
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
 		defer cancel()
 
@@ -399,7 +398,6 @@ func sampleClusterTests(t *testing.T, kubectl *kubectlContext, sampleClusterPath
 	})
 
 	t.Run("EtcdClusterStatus", func(t *testing.T) {
-		t.Parallel()
 		kubectl := kubectl.WithT(t)
 		err := try.Eventually(func() error {
 			t.Log("")
@@ -408,8 +406,9 @@ func sampleClusterTests(t *testing.T, kubectl *kubectlContext, sampleClusterPath
 				return err
 			}
 			// Don't assert on exact members, just that we have three of them.
-			if len(strings.Split(members, " ")) != 3 {
-				return errors.New(fmt.Sprintf("Expected etcd member list to have three members. Had %d.", len(members)))
+			numMembers := len(strings.Split(members, " "))
+			if numMembers != 3 {
+				return errors.New(fmt.Sprintf("Expected etcd member list to have three members. Had %d.", numMembers))
 			}
 			return nil
 		}, time.Minute*2, time.Second*10)
@@ -426,7 +425,7 @@ func sampleClusterTests(t *testing.T, kubectl *kubectlContext, sampleClusterPath
 
 		err = try.Eventually(func() error {
 			t.Log("Listing etcd members")
-			members, err := etcd.NewMembersAPI(etcdClient).List(ctx)
+			members, err := etcd.NewMembersAPI(etcdClient).List(context.Background())
 			if err != nil {
 				return err
 			}
