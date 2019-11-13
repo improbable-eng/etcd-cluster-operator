@@ -46,5 +46,5 @@ func (s *MemberAddedEvent) Record(recorder record.EventRecorder) {
 	recorder.Event(s.Object,
 		"Normal",
 		"MemberAdded",
-		fmt.Sprintf("Added a new member with name %s", s.Member.Name))
+		fmt.Sprintf("Added a new member with name %q", s.Name))
 }
