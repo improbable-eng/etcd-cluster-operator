@@ -608,30 +608,35 @@ func probesTests(t *testing.T, kubectl *kubectlContext) {
 		t.Skip("This test requires a Kind cluster")
 	}
 
-	t.Log("Given a 1-node cluster.")
-	configPath := filepath.Join(*fRepoRoot, "config", "test", "e2e", "persistence")
+	t.Log("Given a 3-node cluster.")
+	configPath := filepath.Join(*fRepoRoot, "config", "samples", "etcd_v1alpha1_etcdcluster.yaml")
 	err := kubectl.Apply("--filename", configPath)
 	require.NoError(t, err)
 
 	t.Log("Containing data.")
 	expectedValue := "foobarbaz"
-	var out string
-	err = try.Eventually(func() (err error) {
-		out, err = etcdctl(kubectl, "cluster1", "set", "--", "foo", expectedValue)
-		return err
-	}, time.Minute*2, time.Second*5)
+	out, err := EventuallyInCluster(
+		kubectl,
+		"set-etcd-value",
+		time.Minute*2,
+		"quay.io/coreos/etcd:v3.2.27",
+		"etcdctl", "--insecure-discovery", "--discovery-srv=my-cluster",
+		"set", "--", "foo", expectedValue,
+	)
 	require.NoError(t, err, out)
 
-	t.Log("If a node stops responding")
-	containerKill(t, kubectl, "etcd.improbable.io/peer-name=cluster1-0", "etcd", "SIGSTOP")
+	t.Log("If two nodes stop responding")
+	containerKill(t, kubectl, "etcd.improbable.io/peer-name=my-cluster-0", "etcd", "SIGSTOP")
+	containerKill(t, kubectl, "etcd.improbable.io/peer-name=my-cluster-1", "etcd", "SIGSTOP")
 
 	t.Log("The cluster recovers")
-	err = try.Eventually(
-		func() (err error) {
-			out, err = etcdctl(kubectl, "cluster1", "get", "--quorum", "--", "foo")
-			return err
-		},
-		time.Minute*2, time.Second*5,
+	out, err = EventuallyInCluster(
+		kubectl,
+		"get-etcd-value",
+		time.Minute*5,
+		"quay.io/coreos/etcd:v3.2.27",
+		"etcdctl", "--insecure-discovery", "--discovery-srv=my-cluster",
+		"get", "--quorum", "--", "foo",
 	)
 	require.NoError(t, err, out)
 	assert.Equal(t, expectedValue+"\n", out)

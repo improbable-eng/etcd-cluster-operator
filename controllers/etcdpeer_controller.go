@@ -13,6 +13,7 @@ import (
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -79,6 +80,13 @@ func bindAllAddress(port int) *url.URL {
 	return &url.URL{
 		Scheme: etcdScheme,
 		Host:   fmt.Sprintf("0.0.0.0:%d", port),
+	}
+}
+
+func listenMetricsURL(port int) *url.URL {
+	return &url.URL{
+		Scheme: etcdScheme,
+		Host:   fmt.Sprintf("127.0.0.1:%d", port),
 	}
 }
 
@@ -166,6 +174,10 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 									Name:  etcdenvvar.DataDir,
 									Value: etcdDataMountPath,
 								},
+								{
+									Name:  etcdenvvar.ListenMetricsURLs,
+									Value: listenMetricsURL(etcdMetricsPort).String(),
+								},
 							},
 							Ports: []corev1.ContainerPort{
 								{
@@ -176,12 +188,30 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 									Name:          "etcd-peer",
 									ContainerPort: etcdPeerPort,
 								},
+								{
+									Name:          "etcd-metrics",
+									ContainerPort: etcdMetricsPort,
+								},
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "etcd-data",
 									MountPath: etcdDataMountPath,
 								},
+							},
+							LivenessProbe: &corev1.Probe{
+								Handler: corev1.Handler{
+									HTTPGet: &corev1.HTTPGetAction{
+										Host:   "127.0.0.1",
+										Path:   "/health",
+										Port:   intstr.FromInt(etcdMetricsPort),
+										Scheme: corev1.URISchemeHTTP,
+									},
+								},
+								PeriodSeconds:       10,
+								InitialDelaySeconds: 15,
+								TimeoutSeconds:      15,
+								FailureThreshold:    8,
 							},
 						},
 					},
