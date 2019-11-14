@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"flag"
@@ -333,6 +334,11 @@ func TestE2E(t *testing.T) {
 			ns := NamespaceForTest(t, kubectl)
 			persistenceTests(t, kubectl.WithT(t).WithDefaultNamespace(ns))
 		})
+		t.Run("Probes", func(t *testing.T) {
+			t.Parallel()
+			ns := NamespaceForTest(t, kubectl)
+			probesTests(t, kubectl.WithT(t).WithDefaultNamespace(ns))
+		})
 	})
 }
 
@@ -547,6 +553,85 @@ func persistenceTests(t *testing.T, kubectl *kubectlContext) {
 		"quay.io/coreos/etcd:v3.2.27",
 		"etcdctl", "--insecure-discovery", "--discovery-srv=cluster1",
 		"get", "--quorum", "--", "foo",
+	)
+	require.NoError(t, err, out)
+	assert.Equal(t, expectedValue+"\n", out)
+}
+
+const containerdPrefix = "containerd://"
+
+func containerKill(t *testing.T, kubectl *kubectlContext, selector, containerName, signal string) {
+	// Find the ctr container ID of the etcd container inside the node pod
+	out, err := kubectl.Get(
+		"pods",
+		"--selector",
+		selector,
+		"--output",
+		fmt.Sprintf(`jsonpath={.items[*].status.containerStatuses[?(@.name == "%s")].containerID}`, containerName),
+	)
+	require.NoError(t, err, out)
+	parts := strings.Fields(out)
+	require.Lenf(t, parts, 1, "too many container results for selector: %q", selector)
+	containerID := parts[0][len(containerdPrefix):]
+
+	// Get the Kind node
+	kind, err := getKind()
+	require.NoError(t, err)
+	nodes, err := kind.ListNodes()
+	require.NoError(t, err)
+	require.Len(t, nodes, 1, "wrong number of kind nodes")
+	node := nodes[0]
+
+	// Send signal to the process in the container
+	c := node.Command("ctr", "--namespace", "k8s.io", "task", "kill", containerID, "--signal", signal)
+	var stderr bytes.Buffer
+	c.SetStderr(&stderr)
+	err = c.Run()
+	require.NoError(t, err, stderr.String())
+}
+
+func getKind() (*cluster.Context, error) {
+	clusters, err := cluster.List()
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range clusters {
+		if c.Name() == *fKindClusterName {
+			return &c, nil
+		}
+	}
+	return nil, fmt.Errorf("unable to find kind cluster with name: %q", *fKindClusterName)
+}
+
+func probesTests(t *testing.T, kubectl *kubectlContext) {
+	if !*fUseKind {
+		t.Skip("This test requires a Kind cluster")
+	}
+
+	t.Log("Given a 1-node cluster.")
+	configPath := filepath.Join(*fRepoRoot, "config", "test", "e2e", "persistence")
+	err := kubectl.Apply("--filename", configPath)
+	require.NoError(t, err)
+
+	t.Log("Containing data.")
+	expectedValue := "foobarbaz"
+	var out string
+	err = try.Eventually(func() (err error) {
+		out, err = etcdctl(kubectl, "cluster1", "set", "--", "foo", expectedValue)
+		return err
+	}, time.Minute*2, time.Second*5)
+	require.NoError(t, err, out)
+
+	t.Log("If a node stops responding")
+	containerKill(t, kubectl, "etcd.improbable.io/peer-name=cluster1-0", "etcd", "SIGSTOP")
+
+	t.Log("The cluster recovers")
+	err = try.Eventually(
+		func() (err error) {
+			out, err = etcdctl(kubectl, "cluster1", "get", "--quorum", "--", "foo")
+			return err
+		},
+		time.Minute*2, time.Second*5,
 	)
 	require.NoError(t, err, out)
 	assert.Equal(t, expectedValue+"\n", out)
