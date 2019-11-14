@@ -38,6 +38,7 @@ const (
 
 var (
 	fUseKind           = flag.Bool("kind", false, "Creates a Kind cluster to run the tests against.")
+	fKindLogsPath      = flag.String("kind-logs-path", "/tmp/kind-logs", "The absolute path to a directory where kind logs will be exported.")
 	fUseCurrentContext = flag.Bool("current-context", false, "Runs the tests against the current Kubernetes context, the path to kube config defaults to ~/.kube/config, unless overridden by the KUBECONFIG environment variable.")
 	fRepoRoot          = flag.String("repo-root", "", "The absolute path to the root of the etcd-cluster-operator git repository.")
 	fCleanup           = flag.Bool("cleanup", true, "Tears down the Kind cluster once the test is finished.")
@@ -87,10 +88,12 @@ func startKind(t *testing.T, ctx context.Context) (*cluster.Context, error) {
 	kind := cluster.NewContext("etcd-e2e")
 	go func() {
 		<-ctx.Done()
+		err := kind.CollectLogs(*fKindLogsPath)
+		assert.NoError(t, err, "failed to collect Kind logs")
 		if !*fCleanup {
 			return
 		}
-		err := kind.Delete()
+		err = kind.Delete()
 		require.NoError(t, err)
 	}()
 	err := kind.Create(create.WithV1Alpha3(&kindv1alpha3.Cluster{
