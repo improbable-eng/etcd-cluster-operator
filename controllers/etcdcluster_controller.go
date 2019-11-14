@@ -453,7 +453,10 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 
 	// List peers
 	peers := &etcdv1alpha1.EtcdPeerList{}
-	if err := r.List(ctx, peers, client.MatchingFields{clusterNameSpecField: cluster.Name}); err != nil {
+	if err := r.List(ctx,
+		peers,
+		client.InNamespace(cluster.Namespace),
+		client.MatchingFields{clusterNameSpecField: cluster.Name}); err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to list peers: %w", err)
 	}
 
