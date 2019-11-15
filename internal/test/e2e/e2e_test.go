@@ -417,6 +417,7 @@ func sampleClusterTests(t *testing.T, kubectl *kubectlContext, sampleClusterPath
 	})
 
 	t.Run("ScaleUp", func(t *testing.T) {
+		kubectl := kubectl.WithT(t)
 		// Attempt to scale up to five nodes
 		err = kubectl.Scale("etcdcluster/my-cluster", 5)
 		require.NoError(t, err)
