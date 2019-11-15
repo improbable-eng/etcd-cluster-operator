@@ -229,7 +229,7 @@ func setupKind(t *testing.T, ctx context.Context) *kubectlContext {
 	return kubectl
 }
 
-func setupCurrentContext(t *testing.T, ctx context.Context) *kubectlContext {
+func setupCurrentContext(t *testing.T) *kubectlContext {
 	home, err := os.UserHomeDir()
 	require.NoError(t, err)
 	configPath := filepath.Join(home, ".kube", "config")
@@ -256,7 +256,7 @@ func TestE2E(t *testing.T) {
 	case *fUseKind:
 		kubectl = setupKind(t, ctx)
 	case *fUseCurrentContext:
-		kubectl = setupCurrentContext(t, ctx)
+		kubectl = setupCurrentContext(t)
 	default:
 		t.Skip("Supply either --kind or --current-context to run E2E tests")
 	}
@@ -417,6 +417,7 @@ func sampleClusterTests(t *testing.T, kubectl *kubectlContext, sampleClusterPath
 	})
 
 	t.Run("ScaleUp", func(t *testing.T) {
+		kubectl := kubectl.WithT(t)
 		// Attempt to scale up to five nodes
 		err = kubectl.Scale("etcdcluster/my-cluster", 5)
 		require.NoError(t, err)
