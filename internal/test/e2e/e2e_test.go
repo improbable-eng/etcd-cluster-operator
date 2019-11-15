@@ -83,18 +83,21 @@ func getSpec(t *testing.T, o interface{}) interface{} {
 }
 
 // Starts a Kind cluster on the local machine, exposing port 2379 accepting ETCD connections.
-func startKind(t *testing.T, ctx context.Context) (*cluster.Context, error) {
-	t.Log("Starting Kind cluster")
+func startKind(t *testing.T, ctx context.Context, stopped chan struct{}) (*cluster.Context, error) {
+	t.Log("Starting Kind cluster.")
 	kind := cluster.NewContext("etcd-e2e")
 	go func() {
+		defer close(stopped)
 		<-ctx.Done()
+		t.Log("Collecting Kind logs.")
 		err := kind.CollectLogs(*fKindLogsPath)
 		assert.NoError(t, err, "failed to collect Kind logs")
 		if !*fCleanup {
 			return
 		}
+		t.Log("Deleting Kind cluster.")
 		err = kind.Delete()
-		require.NoError(t, err)
+		assert.NoError(t, err)
 	}()
 	err := kind.Create(create.WithV1Alpha3(&kindv1alpha3.Cluster{
 		TypeMeta: metav1.TypeMeta{
@@ -193,13 +196,18 @@ func installOperator(t *testing.T, kubectl *kubectlContext, kind *cluster.Contex
 	require.NoError(t, err)
 }
 
-func setupKind(t *testing.T, ctx context.Context) *kubectlContext {
+func setupKind(t *testing.T, ctx context.Context, stopped chan struct{}) *kubectlContext {
 	ctx, cancel := context.WithCancel(ctx)
 	var (
 		kind     *cluster.Context
 		imageTar string
 		wg       sync.WaitGroup
 	)
+	stoppedKind := make(chan struct{})
+	go func() {
+		<-stoppedKind
+		close(stopped)
+	}()
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -214,7 +222,7 @@ func setupKind(t *testing.T, ctx context.Context) *kubectlContext {
 	go func() {
 		defer wg.Done()
 		var err error
-		kind, err = startKind(t, ctx)
+		kind, err = startKind(t, ctx, stoppedKind)
 		if err != nil {
 			assert.NoError(t, err)
 			cancel()
@@ -257,7 +265,10 @@ func TestE2E(t *testing.T) {
 	}()
 	switch {
 	case *fUseKind:
-		kubectl = setupKind(t, ctx)
+		stoppedKind := make(chan struct{})
+		defer func() { <-stoppedKind }()
+		defer cancel()
+		kubectl = setupKind(t, ctx, stoppedKind)
 	case *fUseCurrentContext:
 		kubectl = setupCurrentContext(t, ctx)
 	default:
