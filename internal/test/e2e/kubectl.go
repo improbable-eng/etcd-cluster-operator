@@ -94,6 +94,13 @@ func (k *kubectlContext) DryRun(filename string) (string, error) {
 	return string(out), err
 }
 
+// Scale wraps 'kubectl scale', returning any errors that occurred
+func (k *kubectlContext) Scale(resource string, scale uint) error {
+	out, err := k.do("scale", fmt.Sprintf("--replicas=%d", scale), resource)
+	k.t.Log(string(out))
+	return err
+}
+
 // Create wraps `kubectl create', returning the unparsed output & any errors that occurred.
 func (k *kubectlContext) Create(args ...string) (string, error) {
 	out, err := k.do(append([]string{"create"}, args...)...)

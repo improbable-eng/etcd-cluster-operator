@@ -3,6 +3,7 @@ package reconcilerevent
 import (
 	"fmt"
 
+	etcdclient "go.etcd.io/etcd/client"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 )
@@ -20,7 +21,7 @@ func (s *ServiceCreatedEvent) Record(recorder record.EventRecorder) {
 	recorder.Event(s.Object,
 		"Normal",
 		"ServiceCreated",
-		fmt.Sprintf("Created service with name '%s'", s.ServiceName))
+		fmt.Sprintf("Created service with name %q", s.ServiceName))
 }
 
 type PeerCreatedEvent struct {
@@ -32,5 +33,18 @@ func (s *PeerCreatedEvent) Record(recorder record.EventRecorder) {
 	recorder.Event(s.Object,
 		"Normal",
 		"PeerCreated",
-		fmt.Sprintf("Created a new EtcdPeer with name '%s'", s.PeerName))
+		fmt.Sprintf("Created a new EtcdPeer with name %q", s.PeerName))
+}
+
+type MemberAddedEvent struct {
+	Object runtime.Object
+	Member *etcdclient.Member
+	Name   string
+}
+
+func (s *MemberAddedEvent) Record(recorder record.EventRecorder) {
+	recorder.Event(s.Object,
+		"Normal",
+		"MemberAdded",
+		fmt.Sprintf("Added a new member with name %q", s.Name))
 }

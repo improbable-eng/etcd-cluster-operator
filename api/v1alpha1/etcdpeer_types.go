@@ -27,12 +27,26 @@ type StaticBootstrap struct {
 	InitialCluster []InitialClusterMember `json:"initialCluster,omitempty"`
 }
 
+const InitialClusterStateNew InitialClusterState = "New"
+const InitialClusterStateExisting InitialClusterState = "Existing"
+
+// +kubebuilder:validation:Enum=New;Existing
+type InitialClusterState string
+
 // Bootstrap contains bootstrap infromation for the peer to use.
 type Bootstrap struct {
 	// Static boostrapping requires that we know the network names of the
 	// other peers ahead of time.
 	// +optional
 	Static *StaticBootstrap `json:"static,omitempty"`
+
+	// This is passed through directly to the underlying etcd instance as the `ETCD_INITIAL_CLUSTER_STATE` envvar or
+	// `--initial-cluster-state` flag. Like all bootstrap instructions, this is ignored if the data directory already
+	// exists, which for us is if an underlying persistent volume already exists.
+	//
+	// When peers are created during bootstrapping of a new cluster this should be set to `New`. When adding peers to
+	// an existing cluster during a scale-up event this should be set to `Existing`.
+	InitialClusterState InitialClusterState `json:"initialClusterState"`
 }
 
 // EtcdPeerSpec defines the desired state of EtcdPeer

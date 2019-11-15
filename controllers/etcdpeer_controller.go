@@ -82,6 +82,16 @@ func bindAllAddress(port int) *url.URL {
 	}
 }
 
+func clusterStateValue(cs etcdv1alpha1.InitialClusterState) string {
+	if cs == etcdv1alpha1.InitialClusterStateNew {
+		return "new"
+	} else if cs == etcdv1alpha1.InitialClusterStateExisting {
+		return "existing"
+	} else {
+		return ""
+	}
+}
+
 func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 	var replicas int32 = 1
 
@@ -129,6 +139,10 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 									Value: peer.Name,
 								},
 								{
+									Name:  etcdenvvar.InitialClusterToken,
+									Value: peer.Spec.ClusterName,
+								},
+								{
 									Name:  etcdenvvar.InitialAdvertisePeerURLs,
 									Value: advertiseURL(peer, etcdPeerPort).String(),
 								},
@@ -146,7 +160,7 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 								},
 								{
 									Name:  etcdenvvar.InitialClusterState,
-									Value: "new",
+									Value: clusterStateValue(peer.Spec.Bootstrap.InitialClusterState),
 								},
 								{
 									Name:  etcdenvvar.DataDir,

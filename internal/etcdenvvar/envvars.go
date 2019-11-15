@@ -7,6 +7,7 @@ const (
 	InitialCluster           = "ETCD_INITIAL_CLUSTER"
 	ListenClientURLs         = "ETCD_LISTEN_CLIENT_URLS"
 	InitialClusterState      = "ETCD_INITIAL_CLUSTER_STATE"
+	InitialClusterToken      = "ETCD_INITIAL_CLUSTER_TOKEN"
 	Name                     = "ETCD_NAME"
 	DataDir                  = "ETCD_DATA_DIR"
 )

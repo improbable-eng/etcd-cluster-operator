@@ -267,6 +267,7 @@ func TestE2E(t *testing.T) {
 	// with the remaining tests.
 	// Because the Etcd mutating and validating webhook service may not
 	// immediately be responding.
+	kubectl = kubectl.WithDefaultNamespace("default")
 	var out string
 	err := try.Eventually(func() (err error) {
 		out, err = kubectl.DryRun(sampleClusterPath)
@@ -377,7 +378,6 @@ func sampleClusterTests(t *testing.T, kubectl *kubectlContext, sampleClusterPath
 	require.NoError(t, err)
 
 	t.Run("EtcdClusterAvailability", func(t *testing.T) {
-		t.Parallel()
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
 		defer cancel()
 
@@ -399,7 +399,6 @@ func sampleClusterTests(t *testing.T, kubectl *kubectlContext, sampleClusterPath
 	})
 
 	t.Run("EtcdClusterStatus", func(t *testing.T) {
-		t.Parallel()
 		kubectl := kubectl.WithT(t)
 		err := try.Eventually(func() error {
 			t.Log("")
@@ -408,8 +407,47 @@ func sampleClusterTests(t *testing.T, kubectl *kubectlContext, sampleClusterPath
 				return err
 			}
 			// Don't assert on exact members, just that we have three of them.
-			if len(strings.Split(members, " ")) != 3 {
-				return errors.New(fmt.Sprintf("Expected etcd member list to have three members. Had %d.", len(members)))
+			numMembers := len(strings.Split(members, " "))
+			if numMembers != 3 {
+				return errors.New(fmt.Sprintf("Expected etcd member list to have three members. Had %d.", numMembers))
+			}
+			return nil
+		}, time.Minute*2, time.Second*10)
+		require.NoError(t, err)
+	})
+
+	t.Run("ScaleUp", func(t *testing.T) {
+		// Attempt to scale up to five nodes
+		err = kubectl.Scale("etcdcluster/my-cluster", 5)
+		require.NoError(t, err)
+
+		etcdClient, err := etcd.New(etcdConfig)
+		require.NoError(t, err)
+
+		err = try.Eventually(func() error {
+			t.Log("Listing etcd members")
+			members, err := etcd.NewMembersAPI(etcdClient).List(context.Background())
+			if err != nil {
+				return err
+			}
+
+			if len(members) != 5 {
+				return errors.New(fmt.Sprintf("expected %d etcd peers, got %d", 5, len(members)))
+			}
+
+			for _, member := range members {
+				if len(member.ClientURLs) == 0 {
+					return errors.New("peer has no client URLs")
+				}
+				if len(member.PeerURLs) == 0 {
+					return errors.New("peer has no peer URLs")
+				}
+				if member.ID == "" {
+					return errors.New("peer has no ID")
+				}
+				if member.Name == "" {
+					return errors.New("peer has no Name")
+				}
 			}
 			return nil
 		}, time.Minute*2, time.Second*10)
