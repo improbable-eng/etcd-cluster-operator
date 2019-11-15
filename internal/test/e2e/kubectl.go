@@ -45,6 +45,9 @@ func (k *kubectlContext) do(args ...string) ([]byte, error) {
 	if err != nil {
 		err = fmt.Errorf("%s: %w", stderr.String(), err)
 	}
+	if stderr.Len() > 0 {
+		k.t.Logf("STDERR: %s", stderr.String())
+	}
 	return out, err
 }
 

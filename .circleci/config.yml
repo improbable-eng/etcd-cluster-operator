@@ -36,3 +36,5 @@ jobs:
       - run:
          name: End to end tests
          command: make kind
+      - store_artifacts:
+          path: /tmp/kind-logs
