@@ -107,8 +107,11 @@ Contribution guidelines are found in [docs/contributing.md](https://github.com/i
 
 ## Status 
 
+This project is in the early stages of development.
+Please do not expect the operator to be stable, and expect breaking changes to the API until we hit stability.
+
 - [x] In-memory ETCD clusters
-- [ ] Persisted data ETCD clusters
+- [x] Persisted data ETCD clusters
 - [ ] Scaling up/down of existing clusters
 - [ ] Upgrading existing clusters
 - [ ] Backup/restore of cluster data

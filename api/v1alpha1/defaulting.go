@@ -16,9 +16,10 @@ var _ webhook.Defaulter = &EtcdCluster{}
 // have been replaced with concrete pointers.
 // This avoids nil pointer panics later on.
 func (o *EtcdCluster) Default() {
-	if o.Spec.Storage != nil {
-		o.Spec.Storage.setDefaults()
+	if o == nil {
+		return
 	}
+	o.Spec.Storage.setDefaults()
 }
 
 var _ webhook.Defaulter = &EtcdPeer{}
@@ -28,12 +29,16 @@ var _ webhook.Defaulter = &EtcdPeer{}
 // have been replaced with concrete pointers.
 // This avoids nil pointer panics later on.
 func (o *EtcdPeer) Default() {
-	if o.Spec.Storage != nil {
-		o.Spec.Storage.setDefaults()
+	if o == nil {
+		return
 	}
+	o.Spec.Storage.setDefaults()
 }
 
 func (o *EtcdPeerStorage) setDefaults() {
+	if o == nil {
+		return
+	}
 	if o.VolumeClaimTemplate != nil {
 		if o.VolumeClaimTemplate.AccessModes == nil {
 			o.VolumeClaimTemplate.AccessModes = []corev1.PersistentVolumeAccessMode{

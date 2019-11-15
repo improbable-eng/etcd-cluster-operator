@@ -1,9 +1,9 @@
 apiVersion: etcd.improbable.io/v1alpha1
 kind: EtcdCluster
 metadata:
-  name: my-cluster
+  name: cluster1
 spec:
-  replicas: 3
+  replicas: 1
   storage:
     volumeClaimTemplate:
       storageClassName: standard

@@ -12,6 +12,7 @@ import (
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
 	"github.com/improbable-eng/etcd-cluster-operator/controllers"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/etcd"
 	"github.com/improbable-eng/etcd-cluster-operator/webhooks"
 	// +kubebuilder:scaffold:imports
 )
@@ -60,6 +61,7 @@ func main() {
 		Client:   mgr.GetClient(),
 		Log:      ctrl.Log.WithName("controllers").WithName("EtcdCluster"),
 		Recorder: mgr.GetEventRecorderFor("etcdcluster-reconciler"),
+		Etcd:     &etcd.ClientEtcdAPI{},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "EtcdCluster")
 		os.Exit(1)

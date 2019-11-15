@@ -16,6 +16,9 @@ spec:
     singular: etcdcluster
   scope: ""
   subresources:
+    scale:
+      specReplicasPath: .spec.replicas
+      statusReplicasPath: .status.replicas
     status: {}
   validation:
     openAPIV3Schema:
@@ -191,6 +194,17 @@ spec:
                 - name
                 type: object
               type: array
+            replicas:
+              description: Replicas is the number of etcd peer resources we are managing.
+                This doesn't mean the number of pods that exist (as we may have just
+                created a peer resource that doesn't have a pod yet, or the pod could
+                be restarting), and it doesn't mean the number of members the etcd
+                cluster has live, as pods may not be ready yet or network problems
+                may mean the cluster has lost a member.
+              format: int32
+              type: integer
+          required:
+          - replicas
           type: object
       type: object
   version: v1alpha1

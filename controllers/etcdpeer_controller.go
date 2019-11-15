@@ -12,8 +12,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/etcdenvvar"
@@ -78,6 +82,16 @@ func bindAllAddress(port int) *url.URL {
 	}
 }
 
+func clusterStateValue(cs etcdv1alpha1.InitialClusterState) string {
+	if cs == etcdv1alpha1.InitialClusterStateNew {
+		return "new"
+	} else if cs == etcdv1alpha1.InitialClusterStateExisting {
+		return "existing"
+	} else {
+		return ""
+	}
+}
+
 func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 	var replicas int32 = 1
 
@@ -125,6 +139,10 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 									Value: peer.Name,
 								},
 								{
+									Name:  etcdenvvar.InitialClusterToken,
+									Value: peer.Spec.ClusterName,
+								},
+								{
 									Name:  etcdenvvar.InitialAdvertisePeerURLs,
 									Value: advertiseURL(peer, etcdPeerPort).String(),
 								},
@@ -142,7 +160,7 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 								},
 								{
 									Name:  etcdenvvar.InitialClusterState,
-									Value: "new",
+									Value: clusterStateValue(peer.Spec.Bootstrap.InitialClusterState),
 								},
 								{
 									Name:  etcdenvvar.DataDir,
@@ -184,13 +202,17 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 }
 
 func pvcForPeer(peer *etcdv1alpha1.EtcdPeer) *corev1.PersistentVolumeClaim {
+	labels := map[string]string{
+		appLabel:     appName,
+		clusterLabel: peer.Spec.ClusterName,
+		peerLabel:    peer.Name,
+	}
+
 	return &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      peer.Name,
 			Namespace: peer.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(peer, etcdv1alpha1.GroupVersion.WithKind("EtcdPeer")),
-			},
+			Labels:    labels,
 		},
 		Spec: *peer.Spec.Storage.VolumeClaimTemplate.DeepCopy(),
 	}
@@ -287,11 +309,43 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
+type pvcMapper struct{}
+
+var _ handler.Mapper = &pvcMapper{}
+
+// Map looks up the peer name label from the PVC and generates a reconcile
+// request for *that* name in the namespace of the pvc.
+// This mapper ensures that we only wake up the Reconcile function for changes
+// to PVCs related to EtcdPeer resources.
+// PVCs are deliberately not owned by the peer, to ensure that they are not
+// garbage collected along with the peer.
+// So we can't use OwnerReference handler here.
+func (m *pvcMapper) Map(o handler.MapObject) []reconcile.Request {
+	requests := []reconcile.Request{}
+	labels := o.Meta.GetLabels()
+	if peerName, found := labels[peerLabel]; found {
+		requests = append(
+			requests,
+			reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      peerName,
+					Namespace: o.Meta.GetNamespace(),
+				},
+			},
+		)
+	}
+	return requests
+}
+
 func (r *EtcdPeerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&etcdv1alpha1.EtcdPeer{}).
 		// Watch for changes to ReplicaSet resources that an EtcdPeer owns.
 		Owns(&appsv1.ReplicaSet{}).
-		Owns(&corev1.PersistentVolumeClaim{}).
+		// We can use a simple EnqueueRequestForObject handler here as the PVC
+		// has the same name as the EtcdPeer resource that needs to be enqueued
+		Watches(&source.Kind{Type: &corev1.PersistentVolumeClaim{}}, &handler.EnqueueRequestsFromMapFunc{
+			ToRequests: &pvcMapper{},
+		}).
 		Complete(r)
 }

@@ -46,6 +46,9 @@ jobs:
       - run:
          name: End to end tests
          command: make kind
+      - store_artifacts:
+          path: /tmp/kind-logs
+
 workflows:
   version: 2
   build_and_test:
