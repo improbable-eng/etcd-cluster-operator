@@ -2,13 +2,19 @@ package e2e
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const testNameLabelKey = "e2e.etcd.improbable.io/test-name"
@@ -110,6 +116,12 @@ func (k *kubectlContext) Create(args ...string) (string, error) {
 	return string(out), err
 }
 
+// Logs wraps `kubectl logs', returning the unparsed output & any errors that occurred.
+func (k *kubectlContext) Logs(args ...string) (string, error) {
+	out, err := k.do(append([]string{"logs"}, args...)...)
+	return string(out), err
+}
+
 // Label wraps `kubectl label', returning the unparsed output & any errors that occurred.
 func (k *kubectlContext) Label(args ...string) (string, error) {
 	out, err := k.do(append([]string{"label"}, args...)...)
@@ -164,4 +176,54 @@ func NamespaceForTest(t *testing.T, kubectl *kubectlContext) string {
 	require.NoError(t, err, out)
 
 	return name
+}
+
+// EventuallyInCluster runs a command as a Job in the current Kubernetes cluster namespace.
+func EventuallyInCluster(kubectl *kubectlContext, name string, deadline time.Duration, image string, command ...string) (string, error) {
+	job := &batchv1.Job{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Job",
+			APIVersion: "batch/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+		Spec: batchv1.JobSpec{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:    "container1",
+							Image:   image,
+							Command: command,
+						},
+					},
+					RestartPolicy: corev1.RestartPolicyOnFailure,
+				},
+			},
+		},
+	}
+
+	f, err := ioutil.TempFile("", "e2e-job."+name+".json")
+	if err != nil {
+		return "", err
+	}
+	defer os.Remove(f.Name())
+	defer f.Close()
+
+	encoder := json.NewEncoder(f)
+	err = encoder.Encode(job)
+	if err != nil {
+		return "", err
+	}
+	err = kubectl.Apply("--filename", f.Name())
+	if err != nil {
+		return "", err
+	}
+
+	err = kubectl.Wait("job", name, "--for", fmt.Sprintf("condition=%s", batchv1.JobComplete), "--timeout", deadline.String())
+	if err != nil {
+		return "", err
+	}
+	return kubectl.Logs("--selector", fmt.Sprintf("job-name=%s", name))
 }
