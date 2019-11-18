@@ -33,13 +33,13 @@ verify: verify-gomod verify-manifests verify-generate verify-fmt vet
 
 # Run unit tests
 test: bin/kubebuilder
-	KUBEBUILDER_ASSETS="$(shell pwd)/bin/kubebuilder/bin" go test ./... -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell pwd)/bin/kubebuilder/bin" go test ./... -coverprofile cover.out $(ARGS)
 
 # Run end to end tests in a local Kind cluster. We do not clean up after running the tests to
 #  a) speed up the test run time slightly
 #  b) allow debug sessions to be attached to figure out what caused failures
 kind:
-	go test ./internal/test/e2e --kind --repo-root ${CURDIR} -v --cleanup=${CLEANUP}
+	go test ./internal/test/e2e --kind --repo-root ${CURDIR} -v --cleanup=${CLEANUP} $(ARGS)
 
 # Build manager binary
 manager:
