@@ -495,25 +495,6 @@ func sampleClusterTests(t *testing.T, kubectl *kubectlContext, sampleClusterPath
 	})
 }
 
-func etcdctl(kubectl *kubectlContext, svcName string, args ...string) (string, error) {
-	return kubectl.Run(
-		append(
-			[]string{
-				"--quiet",
-				"--restart=Never",
-				"--rm",
-				"--image=quay.io/coreos/etcd:v3.2.27",
-				"--attach",
-				"etcdctl",
-				"--",
-				"etcdctl",
-				"--insecure-discovery",
-				fmt.Sprintf("--discovery-srv=%s", svcName),
-			}, args...,
-		)...,
-	)
-}
-
 func persistenceTests(t *testing.T, kubectl *kubectlContext) {
 	t.Log("Given a 1-node cluster.")
 	configPath := filepath.Join(*fRepoRoot, "config", "test", "e2e", "persistence")
@@ -522,11 +503,15 @@ func persistenceTests(t *testing.T, kubectl *kubectlContext) {
 
 	t.Log("Containing data.")
 	expectedValue := "foobarbaz"
-	var out string
-	err = try.Eventually(func() (err error) {
-		out, err = etcdctl(kubectl, "cluster1", "set", "--", "foo", expectedValue)
-		return err
-	}, time.Minute*2, time.Second*5)
+
+	out, err := EventuallyInCluster(
+		kubectl,
+		"set-etcd-value",
+		time.Minute*2,
+		"quay.io/coreos/etcd:v3.2.27",
+		"etcdctl", "--insecure-discovery", "--discovery-srv=cluster1",
+		"set", "--", "foo", expectedValue,
+	)
 	require.NoError(t, err, out)
 
 	t.Log("If the cluster is deleted.")
@@ -555,12 +540,13 @@ func persistenceTests(t *testing.T, kubectl *kubectlContext) {
 	require.NoError(t, err)
 
 	t.Log("And the data is still available.")
-	err = try.Eventually(
-		func() (err error) {
-			out, err = etcdctl(kubectl, "cluster1", "get", "--quorum", "--", "foo")
-			return err
-		},
-		time.Minute*2, time.Second*5,
+	out, err = EventuallyInCluster(
+		kubectl,
+		"get-etcd-value",
+		time.Minute*2,
+		"quay.io/coreos/etcd:v3.2.27",
+		"etcdctl", "--insecure-discovery", "--discovery-srv=cluster1",
+		"get", "--quorum", "--", "foo",
 	)
 	require.NoError(t, err, out)
 	assert.Equal(t, expectedValue+"\n", out)
