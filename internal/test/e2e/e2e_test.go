@@ -84,29 +84,46 @@ func getSpec(t *testing.T, o interface{}) interface{} {
 }
 
 // Starts a Kind cluster on the local machine, exposing port 2379 accepting ETCD connections.
-func startKind(t *testing.T, ctx context.Context, stopped chan struct{}) (*cluster.Context, error) {
-	clusters, err := cluster.List()
-	for _, c := range clusters {
-		if c.Name() == *fKindClusterName {
-			t.Log("Found existing Kind cluster")
-			return &c, nil
-		}
-	}
-	t.Log("Starting new Kind cluster")
-	kind := cluster.NewContext(*fKindClusterName)
+func startKind(t *testing.T, ctx context.Context, stopped chan struct{}) (kind *cluster.Context, err error) {
+	clusterExists := true
+	// Only attempt to delete the cluster if we created it.
+	// But always ensure that the stopped channel gets closed when the context
+	// ends or is cancelled.
 	go func() {
 		defer close(stopped)
 		<-ctx.Done()
+		if kind == nil {
+			return
+		}
 		t.Log("Collecting Kind logs.")
 		err := kind.CollectLogs(*fKindLogsPath)
 		assert.NoError(t, err, "failed to collect Kind logs")
 		if !*fCleanup {
+			t.Log("Not deleting Kind cluster because --cleanup=false")
+			return
+		}
+		if clusterExists {
+			t.Log("Not deleting Kind cluster because this was an existing cluster.")
 			return
 		}
 		t.Log("Deleting Kind cluster.")
 		err = kind.Delete()
 		assert.NoError(t, err)
 	}()
+
+	clusters, err := cluster.List()
+	if err != nil {
+		return nil, err
+	}
+	for _, kind := range clusters {
+		if kind.Name() == *fKindClusterName {
+			t.Log("Found existing Kind cluster")
+			return &kind, nil
+		}
+	}
+	clusterExists = false
+	t.Log("Starting new Kind cluster")
+	kind = cluster.NewContext(*fKindClusterName)
 	err = kind.Create(create.WithV1Alpha3(&kindv1alpha3.Cluster{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Cluster",
