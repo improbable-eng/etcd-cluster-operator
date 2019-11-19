@@ -90,7 +90,7 @@ func TestEventually(t *testing.T) {
 			fn: func(_ int) error {
 				return nil
 			},
-			tick:      time.Millisecond * 5,
+			tick:      time.Millisecond * 1,
 			duration:  time.Millisecond * 50,
 			expectErr: false,
 		},
@@ -99,7 +99,7 @@ func TestEventually(t *testing.T) {
 			fn: func(_ int) error {
 				return errors.New("foo")
 			},
-			tick:      time.Millisecond * 5,
+			tick:      time.Millisecond * 1,
 			duration:  time.Millisecond * 50,
 			expectErr: true,
 		},
@@ -111,7 +111,7 @@ func TestEventually(t *testing.T) {
 				}
 				return errors.New("foo")
 			},
-			tick:      time.Millisecond * 5,
+			tick:      time.Millisecond * 1,
 			duration:  time.Millisecond * 50,
 			expectErr: false,
 		},
