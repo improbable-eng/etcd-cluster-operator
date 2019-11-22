@@ -36,6 +36,18 @@ func (s *PeerCreatedEvent) Record(recorder record.EventRecorder) {
 		fmt.Sprintf("Created a new EtcdPeer with name %q", s.PeerName))
 }
 
+type PeerRemovedEvent struct {
+	Object   runtime.Object
+	PeerName string
+}
+
+func (s *PeerRemovedEvent) Record(recorder record.EventRecorder) {
+	recorder.Event(s.Object,
+		"Normal",
+		"PeerRemoved",
+		fmt.Sprintf("Removed EtcdPeer with name %q", s.PeerName))
+}
+
 type MemberAddedEvent struct {
 	Object runtime.Object
 	Member *etcdclient.Member
@@ -47,4 +59,17 @@ func (s *MemberAddedEvent) Record(recorder record.EventRecorder) {
 		"Normal",
 		"MemberAdded",
 		fmt.Sprintf("Added a new member with name %q", s.Name))
+}
+
+type MemberRemovedEvent struct {
+	Object runtime.Object
+	Member *etcdclient.Member
+	Name   string
+}
+
+func (s *MemberRemovedEvent) Record(recorder record.EventRecorder) {
+	recorder.Event(s.Object,
+		"Normal",
+		"MemberRemoved",
+		fmt.Sprintf("Removed a member with name %q", s.Name))
 }

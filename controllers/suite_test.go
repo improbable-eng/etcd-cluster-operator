@@ -31,7 +31,7 @@ type controllerSuite struct {
 }
 
 func setupSuite(t *testing.T) (suite *controllerSuite, teardownFunc func()) {
-	ctx, ctxCancel := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, ctxCancel := context.WithTimeout(context.Background(), time.Minute*5)
 
 	testEnv := &envtest.Environment{
 		CRDDirectoryPaths: []string{filepath.Join("..", "config", "crd", "bases")},
