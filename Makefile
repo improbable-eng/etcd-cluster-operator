@@ -38,8 +38,10 @@ test: bin/kubebuilder
 # Run end to end tests in a local Kind cluster. We do not clean up after running the tests to
 #  a) speed up the test run time slightly
 #  b) allow debug sessions to be attached to figure out what caused failures
+# We use -parallel 2 to try and avoid overloading the Circle CI server with too
+# many parallel EtcdClusters
 kind:
-	go test ./internal/test/e2e --kind --repo-root ${CURDIR} -v --cleanup=${CLEANUP} $(ARGS)
+	go test -parallel 2 ./internal/test/e2e --kind --repo-root ${CURDIR} -v --cleanup=${CLEANUP} $(ARGS)
 
 # Build manager binary
 manager:

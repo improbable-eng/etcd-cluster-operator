@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -39,7 +40,7 @@ const (
 
 var (
 	fUseKind           = flag.Bool("kind", false, "Creates a Kind cluster to run the tests against.")
-	fKindLogsPath      = flag.String("kind-logs-path", "/tmp/kind-logs", "The absolute path to a directory where kind logs will be exported.")
+	fOutputDirectory   = flag.String("output-directory", "/tmp/etcd-e2e", "The absolute path to a directory where E2E results logs will be saved.")
 	fKindClusterName   = flag.String("kind-cluster-name", "etcd-e2e", "The name of the Kind cluster to use or create")
 	fUseCurrentContext = flag.Bool("current-context", false, "Runs the tests against the current Kubernetes context, the path to kube config defaults to ~/.kube/config, unless overridden by the KUBECONFIG environment variable.")
 	fRepoRoot          = flag.String("repo-root", "", "The absolute path to the root of the etcd-cluster-operator git repository.")
@@ -97,7 +98,7 @@ func startKind(t *testing.T, ctx context.Context, stopped chan struct{}) (kind *
 			return
 		}
 		t.Log("Collecting Kind logs.")
-		err := kind.CollectLogs(*fKindLogsPath)
+		err := kind.CollectLogs(path.Join(*fOutputDirectory, "kind"))
 		assert.NoError(t, err, "failed to collect Kind logs")
 		if !*fCleanup {
 			t.Log("Not deleting Kind cluster because --cleanup=false")
@@ -301,6 +302,9 @@ func TestE2E(t *testing.T) {
 		t.Skip("Supply either --kind or --current-context to run E2E tests")
 	}
 
+	// Delete all existing test namespaces, to free up resources before running new tests.
+	DeleteAllTestNamespaces(t, kubectl)
+
 	sampleClusterPath := filepath.Join(*fRepoRoot, "config", "samples", "etcd_v1alpha1_etcdcluster.yaml")
 
 	// Pre-flight check that we can submit etcd API resources, before continuing
@@ -321,23 +325,31 @@ func TestE2E(t *testing.T) {
 	t.Run("Parallel", func(t *testing.T) {
 		t.Run("SampleCluster", func(t *testing.T) {
 			t.Parallel()
-			ns := NamespaceForTest(t, kubectl)
-			sampleClusterTests(t, kubectl.WithT(t).WithDefaultNamespace(ns), sampleClusterPath)
+			kubectl := kubectl.WithT(t)
+			ns, cleanup := NamespaceForTest(t, kubectl)
+			defer cleanup()
+			sampleClusterTests(t, kubectl.WithDefaultNamespace(ns), sampleClusterPath)
 		})
 		t.Run("Webhooks", func(t *testing.T) {
 			t.Parallel()
-			ns := NamespaceForTest(t, kubectl)
-			webhookTests(t, kubectl.WithT(t).WithDefaultNamespace(ns))
+			kubectl := kubectl.WithT(t)
+			ns, cleanup := NamespaceForTest(t, kubectl)
+			defer cleanup()
+			webhookTests(t, kubectl.WithDefaultNamespace(ns))
 		})
 		t.Run("Persistence", func(t *testing.T) {
 			t.Parallel()
-			ns := NamespaceForTest(t, kubectl)
-			persistenceTests(t, kubectl.WithT(t).WithDefaultNamespace(ns))
+			kubectl := kubectl.WithT(t)
+			ns, cleanup := NamespaceForTest(t, kubectl)
+			defer cleanup()
+			persistenceTests(t, kubectl.WithDefaultNamespace(ns))
 		})
 		t.Run("ScaleDown", func(t *testing.T) {
 			t.Parallel()
-			ns := NamespaceForTest(t, kubectl)
-			scaleDownTests(t, kubectl.WithT(t).WithDefaultNamespace(ns))
+			kubectl := kubectl.WithT(t)
+			ns, cleanup := NamespaceForTest(t, kubectl)
+			defer cleanup()
+			scaleDownTests(t, kubectl.WithDefaultNamespace(ns))
 		})
 	})
 }

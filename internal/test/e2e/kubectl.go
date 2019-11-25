@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 const testNameLabelKey = "e2e.etcd.improbable.io/test-name"
@@ -151,22 +153,58 @@ func (k *kubectlContext) WithDefaultNamespace(ns string) *kubectlContext {
 	}
 }
 
+// ClusterInfoDump saves calls `kubectl cluster-info dump` to save all the
+// pod-logs from the supplied namespaces.
+// TODO(wallrj) W use --all-namespaces here because the --namespaces flag doesn't work.
+// See https://github.com/kubernetes/kubernetes/issues/72088
+func (k *kubectlContext) ClusterInfoDump(outputDirectory string, namespaces ...string) error {
+	_, err := k.do("cluster-info", "dump", "--all-namespaces", "--output-directory", outputDirectory)
+	if err != nil {
+		return err
+	}
+	entries, err := ioutil.ReadDir(outputDirectory)
+	if err != nil {
+		return err
+	}
+	entriesFound := sets.NewString()
+	for _, entry := range entries {
+		entriesFound.Insert(entry.Name())
+	}
+	entriesToKeep := sets.NewString(namespaces...)
+	entriesToKeep.Insert("eco-system", "nodes.json")
+	entriesToDelete := entriesFound.Difference(entriesToKeep)
+	for _, entry := range entriesToDelete.List() {
+		path := path.Join(outputDirectory, entry)
+		err := os.RemoveAll(path)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // NamespaceForTest creates a new namespace with a name derived from the current
 // running test.
 // It adds a label, so that all such namespaces can easily be found.
 // And if a namespace with that label already exists, it deletes it first to
 // cleanup any resources left over from the previous test.
-func NamespaceForTest(t *testing.T, kubectl *kubectlContext) string {
+func NamespaceForTest(t *testing.T, kubectl *kubectlContext) (string, func()) {
 	testName := t.Name()
 	name := testName
 	name = strings.ReplaceAll(name, "_", "-")
 	name = strings.ReplaceAll(name, "/", "-")
 	name = strings.ToLower(name)
 	label := fmt.Sprintf("%s=%s", testNameLabelKey, name)
-	t.Log("Deleting existing namespace (if present)")
-	err := kubectl.Delete("namespace", "--selector", label, "--wait")
-	require.NoError(t, err)
-
+	cleanup := func() {
+		kubectl := kubectl.WithDefaultNamespace(name)
+		t.Logf("Saving logs for namespace: %s", name)
+		kubectl.ClusterInfoDump(path.Join(*fOutputDirectory, name), name)
+		t.Logf("Evicting all pods from namespace: %s", name)
+		err := kubectl.Apply("--filename", "testdata/zero-resource-quota.yaml")
+		require.NoError(t, err)
+		err = kubectl.Delete("pods", "--all", "--wait=false")
+		require.NoError(t, err)
+	}
 	t.Log("Creating new namespace for test")
 	out, err := kubectl.Create("namespace", name)
 	require.NoError(t, err, out)
@@ -175,7 +213,13 @@ func NamespaceForTest(t *testing.T, kubectl *kubectlContext) string {
 	out, err = kubectl.Label("namespace", name, label)
 	require.NoError(t, err, out)
 
-	return name
+	return name, cleanup
+}
+
+func DeleteAllTestNamespaces(t *testing.T, kubectl *kubectlContext) {
+	t.Log("Deleting existing namespaces")
+	err := kubectl.Delete("namespace", "--selector", testNameLabelKey, "--wait")
+	require.NoError(t, err)
 }
 
 // EventuallyInCluster runs a command as a Job in the current Kubernetes cluster namespace.
