@@ -264,6 +264,32 @@ you must first remove the `PersistentVolumeClaim` associated with any `EtcdPeer`
 operations. Otherwise new `EtcdPeer` and `Pods` will be started with `/var/lib/etcd` data corresponding to an old etcd
 member ID, and the node will fail to join the cluster.
 
+### Backup a cluster
+
+The operator includes two controllers to help taking scheduled backups of etcd data, responding to `EtcdBackup` and `EtcdBackupSchedule` resources.
+
+#### The `EtcdBackup` resource
+
+A backup can be taken at any time by deploying an `EtcdBackup` resource:
+
+```
+$ kubectl apply -f config/samples/etcd_v1alpha1_etcdbackup.yaml
+```
+
+When the operator detects this resource has been applied, it will take a snapshot of the etcd state from the given cluster endpoints.
+This snapshot is then uploaded to the given destination where it can be persisted.
+
+#### The `EtcdBackupSchedule` resource
+
+Backups can be scheduled to be taken at given intervals:
+
+```
+$ kubectl apply -f config/samples/etcd_v1alpha1_etcdbackupschedule.yaml
+```	
+
+The resource specifies a crontab-style schedule defining how often the backup should be taken.
+It includes a spec similar to the  `EtcdBackup` resource to define how the backup should be taken, and where it should be placed.
+
 ## Frequently Asked Questions
 
 ### Why aren't there Liveness Probes for the Etcd Pods?
@@ -298,3 +324,4 @@ because all the Endpoints for the service would be removed when the Readiness Pr
 
 If you disagree with this or if you find a valid use-case for Readiness Probes,
 please [create an issue](https://github.com/improbable-eng/etcd-cluster-operator/issues).
+
