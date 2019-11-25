@@ -20,6 +20,7 @@ import (
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/etcd"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/test"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/test/crontest"
 )
 
 type controllerSuite struct {
@@ -116,6 +117,17 @@ func (s *controllerSuite) setupTest(t *testing.T) (teardownFunc func(), namespac
 	err = clusterController.SetupWithManager(mgr)
 	require.NoError(t, err, "failed to setup EtcdCluster controller")
 
+	backupController := EtcdBackupScheduleReconciler{
+		Client: mgr.GetClient(),
+		Log: logtest.TestLogger{
+			T: t,
+		},
+		CronHandler: crontest.FakeCron{},
+		Schedules:   map[string]Schedule{},
+	}
+	err = backupController.SetupWithManager(mgr)
+	require.NoError(t, err, "failed to setup EtcdBackupSchedule controller")
+
 	go func() {
 		err := mgr.Start(stopCh)
 		require.NoError(t, err, "failed to start manager")
@@ -134,4 +146,5 @@ func TestAPIs(t *testing.T) {
 
 	t.Run("PeerControllers", suite.testPeerController)
 	t.Run("ClusterControllers", suite.testClusterController)
+	t.Run("BackupScheduleControllers", suite.testBackupScheduleController)
 }

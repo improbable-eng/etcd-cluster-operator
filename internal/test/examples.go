@@ -8,19 +8,19 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 
-	"github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
+	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
 )
 
-// ExampleEtcdCluster returns a valid example for testing purposes
-func ExampleEtcdCluster(namespace string) *v1alpha1.EtcdCluster {
-	return &v1alpha1.EtcdCluster{
+// ExampleEtcdCluster returns a valid example for testing purposes.
+func ExampleEtcdCluster(namespace string) *etcdv1alpha1.EtcdCluster {
+	return &etcdv1alpha1.EtcdCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "cluster1",
 			Namespace: namespace,
 		},
-		Spec: v1alpha1.EtcdClusterSpec{
+		Spec: etcdv1alpha1.EtcdClusterSpec{
 			Replicas: pointer.Int32Ptr(3),
-			Storage: &v1alpha1.EtcdPeerStorage{
+			Storage: &etcdv1alpha1.EtcdPeerStorage{
 				VolumeClaimTemplate: &corev1.PersistentVolumeClaimSpec{
 					StorageClassName: pointer.StringPtr("example-class"),
 					Resources: corev1.ResourceRequirements{
@@ -34,18 +34,18 @@ func ExampleEtcdCluster(namespace string) *v1alpha1.EtcdCluster {
 	}
 }
 
-// ExampleEtcdPeer returns a valid example for testing purposes
-func ExampleEtcdPeer(namespace string) *v1alpha1.EtcdPeer {
-	return &v1alpha1.EtcdPeer{
+// ExampleEtcdPeer returns a valid example for testing purposes.
+func ExampleEtcdPeer(namespace string) *etcdv1alpha1.EtcdPeer {
+	return &etcdv1alpha1.EtcdPeer{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "bees",
 			Namespace: namespace,
 		},
-		Spec: v1alpha1.EtcdPeerSpec{
+		Spec: etcdv1alpha1.EtcdPeerSpec{
 			ClusterName: "my-cluster",
-			Bootstrap: &v1alpha1.Bootstrap{
-				Static: &v1alpha1.StaticBootstrap{
-					InitialCluster: []v1alpha1.InitialClusterMember{
+			Bootstrap: &etcdv1alpha1.Bootstrap{
+				Static: &etcdv1alpha1.StaticBootstrap{
+					InitialCluster: []etcdv1alpha1.InitialClusterMember{
 						{
 							Name: "bees",
 							Host: fmt.Sprintf("bees.my-cluster.%s.svc", namespace),
@@ -60,9 +60,9 @@ func ExampleEtcdPeer(namespace string) *v1alpha1.EtcdPeer {
 						},
 					},
 				},
-				InitialClusterState: v1alpha1.InitialClusterStateNew,
+				InitialClusterState: etcdv1alpha1.InitialClusterStateNew,
 			},
-			Storage: &v1alpha1.EtcdPeerStorage{
+			Storage: &etcdv1alpha1.EtcdPeerStorage{
 				VolumeClaimTemplate: &corev1.PersistentVolumeClaimSpec{
 					StorageClassName: pointer.StringPtr("example-class"),
 					Resources: corev1.ResourceRequirements{
@@ -72,6 +72,19 @@ func ExampleEtcdPeer(namespace string) *v1alpha1.EtcdPeer {
 					},
 				},
 			},
+		},
+	}
+}
+
+func ExampleEtcdBackupSchedule(namespace string) *etcdv1alpha1.EtcdBackupSchedule {
+	return &etcdv1alpha1.EtcdBackupSchedule{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "backup-foo",
+			Namespace: namespace,
+		},
+		Spec: etcdv1alpha1.EtcdBackupScheduleSpec{
+			Schedule: "* * * * *",
+			// TODO(adamhosier) add spec
 		},
 	}
 }

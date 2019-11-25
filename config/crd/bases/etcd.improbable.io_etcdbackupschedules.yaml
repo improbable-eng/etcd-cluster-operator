@@ -33,6 +33,13 @@ spec:
           type: object
         spec:
           description: EtcdBackupScheduleSpec defines the desired state of EtcdBackupSchedule
+          properties:
+            schedule:
+              description: Schedule holds a crontab-like scheule holding defining
+                the schedule in which backups will be started.
+              type: string
+          required:
+          - schedule
           type: object
         status:
           description: EtcdBackupScheduleStatus defines the observed state of EtcdBackupSchedule

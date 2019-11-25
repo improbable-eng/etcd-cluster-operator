@@ -7,4 +7,5 @@ const (
 	appName           = "etcd"
 	appLabel          = "app.kubernetes.io/name"
 	clusterLabel      = "etcd.improbable.io/cluster-name"
+	scheduleLabel     = "etcd.improbable.io/backup-schedule-name"
 )
