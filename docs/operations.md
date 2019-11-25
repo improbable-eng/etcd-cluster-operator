@@ -116,3 +116,59 @@ persistentvolumeclaim "cluster1-0" deleted
 
 The exact behaviour depends on the "Reclaim Policy" of the `PersistentVolume` and on the capabilities of the volume provisioners which are being used in the cluster.
 You can read more about this in the Kubernetes documentation:  [Lifecycle of a volume and claim](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#lifecycle-of-a-volume-and-claim).
+
+
+### Scale down a cluster
+
+How do you scale down an `EtcdCluster` and what operations does the `etcd-cluster-operator` perform?
+
+To scale down a cluster you update the `EtcdCluster` setting a lower `.Spec.Replicas` field value.
+For example, you might reduce the size of the sample cluster (used in the examples above) from 3-nodes to 1-node,
+by editing the `EtcdCluster` manifest file, as follows:
+
+```
+...
+spec:
+  replicas: 1
+...
+```
+
+And then applying it:
+```
+kubectl apply -f config/samples/etcd_v1alpha1_etcdcluster.yaml
+```
+
+You could also use `kubectl scale` to do this. E.g.
+
+```
+kubectl scale etcdcluster my-cluster --replicas 1
+```
+
+#### Scale-down operations
+
+The `etcd-cluster-operator` will first connect to the Etcd API and [remove one Etcd member by runtime configuration of the cluster](https://github.com/etcd-io/etcd/blob/master/Documentation/op-guide/runtime-configuration.md#remove-a-member).
+The member with the name containing largest ordinal will be removed first.
+So in the example above, "my-cluster-2" will be removed first.
+
+If "my-cluster-2" was the `etcd` leader, a leader election will take place and the cluster will briefl
+[Leader Failure](https://github.com/etcd-io/etcd/blob/master/Documentation/op-guide/failures.md#leader-failure)
+during which the cluster will *not be able to process write requests*.
+
+The `etcd` process running in Pod "my-cluster-2" will exit with exit-code 0,
+and the Pod will be marked as "Complete".
+
+Next, the `etcd-cluster-operator` will remove the `EtcdPeer` resource for the removed `etcd` member.
+This will trigger the deletiong of the `Replicaset` and the `Pod`  for "my-cluster-2",
+but **not** the `PersistentVolumeClaim` or the `PersistentVolume`,
+for the reasons described in "### Delete a Cluster" (above).
+
+When all these operations are complete the `EtcdCluster.Status` will be updated to show the new number of replicas
+and the new list of `etcd` members.
+
+Additionally, the `etcd-cluster-operator` will generate an `Event` for each operation it successfully performs,
+which allows you to track the progress of the scale down operations.
+
+If you want to scale up an `EtcdCluster` which has previously been scaled down,
+you must first remove the `PersistentVolumeClaim` associated with any `EtcdPeer` that was removed during the scale down operations.
+Otherwise new `EtcdPeer` and `Pods` will be started with `/var/lib/etcd` data corresponding to an old `etcd` member ID,
+and the node will fail to join the cluster.
