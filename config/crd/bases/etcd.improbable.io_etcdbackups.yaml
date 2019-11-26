@@ -106,8 +106,8 @@ spec:
                     volume on the pod taking the backup.
                   properties:
                     path:
-                      description: Path is an absolute filepath to a directory where
-                        backups will be placed.
+                      description: Directory is an absolute filepath to a directory
+                        where backups will be placed.
                       type: string
                   required:
                   - path

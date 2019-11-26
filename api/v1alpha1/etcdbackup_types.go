@@ -39,10 +39,12 @@ type EtcdBackupDestination struct {
 	GCSBucket *EtcdBackupDestinationGCSBucket `json:"gcsBucket,omitempty"`
 }
 
-// EtcdBackupDestinationLocalVolume describes a volume on the local machine where the backup will be placed.
+// EtcdBackupDestinationLocal describes a local directory into which to put the backup file. This is in the
+// filesystem of the pod running the operator. To persist this between pod restarts, ensure that path is
+// inside a mounted volume.
 type EtcdBackupDestinationLocal struct {
-	// Path is an absolute filepath to a directory where backups will be placed.
-	Path string `json:"path"`
+	// Directory is an absolute filepath to a directory where backups will be placed.
+	Directory string `json:"path"`
 }
 
 // EtcdBackupDestinationGCSBucket describes a remote storage bucket on Google Cloud Storage, and the mechanisms used

@@ -45,17 +45,15 @@ func (r *EtcdBackupReconciler) reconcile(
 	localPath := filepath.Join(os.TempDir(), string(resource.UID), "snapshot.db")
 
 	// Extract backup method config.
+	endpoints := make([]string, len(resource.Spec.ClusterEndpoints))
+	for i, e := range resource.Spec.ClusterEndpoints {
+		endpoints[i] = (&url.URL{
+			Scheme: strings.ToLower(string(e.Scheme)),
+			Host:   fmt.Sprintf("%s:%d", e.Host, e.Port.IntVal),
+		}).String()
+	}
 	method := &backup.SnapshotMethod{
-		Endpoints: func() []string {
-			s := make([]string, len(resource.Spec.ClusterEndpoints))
-			for i, e := range resource.Spec.ClusterEndpoints {
-				s[i] = (&url.URL{
-					Scheme: strings.ToLower(string(e.Scheme)),
-					Host:   fmt.Sprintf("%s:%d", e.Host, e.Port.IntVal),
-				}).String()
-			}
-			return s
-		}(),
+		Endpoints: endpoints,
 	}
 
 	// The the backup does not already exist on disk, take it.
@@ -79,7 +77,7 @@ func (r *EtcdBackupReconciler) reconcile(
 	var dest backup.Destination
 	if d.Local != nil {
 		dest = &backup.LocalVolumeDestination{
-			Path: filepath.Join(d.Local.Path, remoteFileName),
+			Path: filepath.Join(d.Local.Directory, remoteFileName),
 		}
 	}
 	if d.GCSBucket != nil {
