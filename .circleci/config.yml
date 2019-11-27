@@ -47,7 +47,7 @@ jobs:
          name: End to end tests
          command: make kind
       - store_artifacts:
-          path: /tmp/kind-logs
+          path: /tmp/etcd-e2e
 
 workflows:
   version: 2

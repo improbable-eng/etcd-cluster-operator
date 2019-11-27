@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -146,7 +148,6 @@ func (r *EtcdClusterReconciler) createPeerForMember(ctx context.Context, cluster
 		return nil, err
 	}
 	return &reconcilerevent.PeerCreatedEvent{Object: cluster, PeerName: peer.Name}, nil
-
 }
 
 func (r *EtcdClusterReconciler) addNewMember(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, peers *etcdv1alpha1.EtcdPeerList) (*reconcilerevent.MemberAddedEvent, error) {
@@ -160,6 +161,30 @@ func (r *EtcdClusterReconciler) addNewMember(ctx context.Context, cluster *etcdv
 		return nil, err
 	}
 	return &reconcilerevent.MemberAddedEvent{Object: cluster, Member: member, Name: peerName}, nil
+}
+
+// MembersByName provides a sort.Sort interface for etcdClient.Member.Name
+type MembersByName []etcdclient.Member
+
+func (a MembersByName) Len() int           { return len(a) }
+func (a MembersByName) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a MembersByName) Less(i, j int) bool { return a[i].Name < a[j].Name }
+
+// removeMember selects the Etcd node which has a name with the largest ordinal,
+// then performs a runtime reconfiguration to remove that member from the Etcd
+// cluster, and generates an Event to record that action.
+// TODO(wallrj) Consider removing a non-leader member to avoid disruptive
+// leader elections while scaling down.
+// See https://github.com/improbable-eng/etcd-cluster-operator/issues/97
+func (r *EtcdClusterReconciler) removeMember(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, members []etcdclient.Member) (*reconcilerevent.MemberRemovedEvent, error) {
+	sortedMembers := append(members[:0:0], members...)
+	sort.Sort(sort.Reverse(MembersByName(sortedMembers)))
+	member := sortedMembers[0]
+	err := r.removeEtcdMember(ctx, cluster, member.ID)
+	if err != nil {
+		return nil, err
+	}
+	return &reconcilerevent.MemberRemovedEvent{Object: cluster, Member: &member, Name: member.Name}, nil
 }
 
 // updateStatus updates the EtcdCluster resource's status to be the current value of the cluster.
@@ -336,9 +361,6 @@ func (r *EtcdClusterReconciler) reconcile(
 			}
 		}
 
-		// Remove EtcdPeer resources which do not have members.
-		// TODO(#35) Implement scale-down
-
 		// If we've reached this point we're sure that the EtcdPeer resources in the cluster match the contents of the
 		// membership API. The next step is checking to see if we want to mutate the membership API of etcd to scale up
 		// or down. However we don't want to do this unless the cluster has stabilised from a previous member addition.
@@ -360,14 +382,45 @@ func (r *EtcdClusterReconciler) reconcile(
 					"peer-url", memberAddedEvent.Member.PeerURLs[0])
 				return result, memberAddedEvent, nil
 			} else if hasTooManyMembers(cluster, *members) {
-				// There are too many members for the expected number of replicas. Remove the member with the highest
-				// ordinal
-				// TODO(#35) Implement scale-down
+				// There are too many members for the expected number of replicas.
+				// Remove the member with the highest ordinal.
+				memberRemovedEvent, err := r.removeMember(ctx, cluster, *members)
+				if err != nil {
+					return result, nil, fmt.Errorf("failed to remove member: %w", err)
+				}
+
+				log.V(1).Info("Too many members for expected replica count, removing member.",
+					"expected-replicas", *cluster.Spec.Replicas,
+					"actual-members", len(*members),
+					"peer-name", memberRemovedEvent.Name,
+					"peer-url", memberRemovedEvent.Member.PeerURLs[0])
+
+				return result, memberRemovedEvent, nil
 			} else {
 				// Exactly the correct number of members. Make no change, all is well with the world.
 				log.V(2).Info("Expected number of replicas aligned with actual number.",
 					"expected-replicas", *cluster.Spec.Replicas,
 					"actual-members", len(*members))
+			}
+
+			// Remove EtcdPeer resources which do not have members.
+			memberNames := sets.NewString()
+			for _, member := range *members {
+				memberNames.Insert(member.Name)
+			}
+
+			for _, peer := range peers.Items {
+				if !memberNames.Has(peer.Name) {
+					err := r.Delete(ctx, &peer)
+					if err != nil {
+						return result, nil, fmt.Errorf("failed to remove peer: %w", err)
+					}
+					peerRemovedEvent := &reconcilerevent.PeerRemovedEvent{
+						Object:   &peer,
+						PeerName: peer.Name,
+					}
+					return result, peerRemovedEvent, nil
+				}
 			}
 		}
 	}
@@ -418,7 +471,7 @@ func peerNameForMember(member etcdclient.Member) (string, error) {
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdclusters,verbs=get;list;watch
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create
-// +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch;create
+// +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 
 func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
@@ -495,6 +548,21 @@ func (r *EtcdClusterReconciler) addEtcdMember(ctx context.Context, cluster *etcd
 	}
 
 	return members, nil
+}
+
+// removeEtcdMember performs a runtime reconfiguration of the Etcd cluster to
+// remove a member from the cluster.
+func (r *EtcdClusterReconciler) removeEtcdMember(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, memberID string) error {
+	c, err := r.Etcd.MembershipAPI(etcdClientConfig(cluster))
+	if err != nil {
+		return fmt.Errorf("unable to connect to etcd: %w", err)
+	}
+	err = c.Remove(ctx, memberID)
+	if err != nil {
+		return fmt.Errorf("unable to remove member from etcd cluster: %w", err)
+	}
+
+	return nil
 }
 
 func (r *EtcdClusterReconciler) getEtcdMembers(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster) ([]etcdclient.Member, error) {

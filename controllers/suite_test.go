@@ -7,7 +7,6 @@ import (
 	"time"
 
 	petname "github.com/dustinkirkland/golang-petname"
-	logtest "github.com/go-logr/logr/testing"
 	"github.com/stretchr/testify/require"
 	etcdclient "go.etcd.io/etcd/client"
 	v1 "k8s.io/api/core/v1"
@@ -20,6 +19,7 @@ import (
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/etcd"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/test"
 )
 
 type controllerSuite struct {
@@ -31,7 +31,7 @@ type controllerSuite struct {
 }
 
 func setupSuite(t *testing.T) (suite *controllerSuite, teardownFunc func()) {
-	ctx, ctxCancel := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, ctxCancel := context.WithTimeout(context.Background(), time.Minute*5)
 
 	testEnv := &envtest.Environment{
 		CRDDirectoryPaths: []string{filepath.Join("..", "config", "crd", "bases")},
@@ -79,8 +79,7 @@ func (s *controllerSuite) MembershipAPI(config etcdclient.Config) (etcdclient.Me
 
 func (s *controllerSuite) setupTest(t *testing.T) (teardownFunc func(), namespaceName string) {
 	stopCh := make(chan struct{})
-
-	logger := logtest.TestLogger{
+	logger := test.TestLogger{
 		T: t,
 	}
 	// This allows us to see controller-runtime logs in the test results.
@@ -103,16 +102,14 @@ func (s *controllerSuite) setupTest(t *testing.T) (teardownFunc func(), namespac
 
 	peerController := EtcdPeerReconciler{
 		Client: mgr.GetClient(),
-		Log:    logger,
+		Log:    logger.WithName("EtcdPeer"),
 	}
 	err = peerController.SetupWithManager(mgr)
 	require.NoError(t, err, "failed to set up EtcdPeer controller")
 
 	clusterController := EtcdClusterReconciler{
-		Client: mgr.GetClient(),
-		Log: logtest.TestLogger{
-			T: t,
-		},
+		Client:   mgr.GetClient(),
+		Log:      logger.WithName("EtcdCluster"),
 		Recorder: mgr.GetEventRecorderFor("etcdcluster-reconciler"),
 		Etcd:     s,
 	}

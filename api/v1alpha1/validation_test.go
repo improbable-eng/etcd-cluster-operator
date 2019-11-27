@@ -62,17 +62,16 @@ func TestEtcdCluster_ValidateUpdate(t *testing.T) {
 		err      string
 	}{
 		{
-			name: "ScaleOut",
+			name: "ScaleUp",
 			modifier: func(o *v1alpha1.EtcdCluster) {
 				*o.Spec.Replicas += 1
 			},
 		},
 		{
-			name: "UnsupportedChange/ScaleIn",
+			name: "ScaleDown",
 			modifier: func(o *v1alpha1.EtcdCluster) {
 				*o.Spec.Replicas -= 1
 			},
-			err: "scale-in is not supported",
 		},
 		{
 			name: "UnsupportedChange/StorageClassName",

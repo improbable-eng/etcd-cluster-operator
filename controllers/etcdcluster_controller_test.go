@@ -8,12 +8,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	etcdclient "go.etcd.io/etcd/client"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
@@ -27,27 +30,38 @@ func (_ *AlwaysFailEtcdAPI) MembershipAPI(_ etcdclient.Config) (etcdclient.Membe
 	return nil, errors.New("fake etcd, nothing is here")
 }
 
+// StaticResponseMembersAPI can be injected into the etcdcluster_controller for
+// testing the interactions with the Etcd client API.
+// The `parent` field is a pointer so that a test and the controller-under-test see the
+// same shared Members list.
+// TODO(wallrj) Add locking if we ever want to have the test mutate the Members list.
 type StaticResponseMembersAPI struct {
-	Members []etcdclient.Member
+	parent *StaticResponseEtcdAPI
 }
 
-func (s StaticResponseMembersAPI) List(ctx context.Context) ([]etcdclient.Member, error) {
-	return s.Members, nil
+func (s *StaticResponseMembersAPI) List(ctx context.Context) ([]etcdclient.Member, error) {
+	return s.parent.Members, nil
 }
 
-func (s StaticResponseMembersAPI) Add(ctx context.Context, peerURL string) (*etcdclient.Member, error) {
+func (s *StaticResponseMembersAPI) Add(ctx context.Context, peerURL string) (*etcdclient.Member, error) {
 	panic("implement me")
 }
 
-func (s StaticResponseMembersAPI) Remove(ctx context.Context, mID string) error {
+func (s *StaticResponseMembersAPI) Remove(ctx context.Context, mID string) error {
+	for i := range s.parent.Members {
+		if s.parent.Members[i].ID == mID {
+			s.parent.Members = append(s.parent.Members[:i], s.parent.Members[i+1:]...)
+			return nil
+		}
+	}
+	return fmt.Errorf("unknown member: %s", mID)
+}
+
+func (s *StaticResponseMembersAPI) Update(ctx context.Context, mID string, peerURLs []string) error {
 	panic("implement me")
 }
 
-func (s StaticResponseMembersAPI) Update(ctx context.Context, mID string, peerURLs []string) error {
-	panic("implement me")
-}
-
-func (s StaticResponseMembersAPI) Leader(ctx context.Context) (*etcdclient.Member, error) {
+func (s *StaticResponseMembersAPI) Leader(ctx context.Context) (*etcdclient.Member, error) {
 	panic("implement me")
 }
 
@@ -56,10 +70,144 @@ type StaticResponseEtcdAPI struct {
 }
 
 func (sr *StaticResponseEtcdAPI) MembershipAPI(_ etcdclient.Config) (etcdclient.MembersAPI, error) {
-	return &StaticResponseMembersAPI{Members: sr.Members}, nil
+	return &StaticResponseMembersAPI{parent: sr}, nil
+}
+
+// fakeEtcdForEtcdCluster returns a fake MembersAPI which simulates an Etcd API
+// which lists all the members of the cluster.
+// I.e. An established and healthy cluster rather than a cluster which is being bootstrapped.
+func fakeEtcdForEtcdCluster(etcdCluster etcdv1alpha1.EtcdCluster) *StaticResponseEtcdAPI {
+	members := make([]etcdclient.Member, *etcdCluster.Spec.Replicas)
+	for i := range members {
+		name := fmt.Sprintf("%s-%d", etcdCluster.Name, i)
+		peerURL := &url.URL{
+			Scheme: etcdScheme,
+			Host: fmt.Sprintf("%s.%s.%s.svc:%d",
+				name,
+				etcdCluster.Name,
+				etcdCluster.Namespace,
+				etcdPeerPort,
+			),
+		}
+		clientURL := &url.URL{
+			Scheme: etcdScheme,
+			Host: fmt.Sprintf("%s.%s.%s.svc:%d",
+				name,
+				etcdCluster.Name,
+				etcdCluster.Namespace,
+				etcdClientPort,
+			),
+		}
+		members[i] = etcdclient.Member{
+			ID:         fmt.Sprintf("SOMEID%d", i),
+			Name:       name,
+			PeerURLs:   []string{peerURL.String()},
+			ClientURLs: []string{clientURL.String()},
+		}
+	}
+	return &StaticResponseEtcdAPI{Members: members}
 }
 
 func (s *controllerSuite) testClusterController(t *testing.T) {
+	t.Run("ScaleDown", func(t *testing.T) {
+		t.Log("Setup.")
+		teardownFunc, namespace := s.setupTest(t)
+		defer teardownFunc()
+
+		etcdCluster := test.ExampleEtcdCluster(namespace)
+		// Apply defaults here so that our expected object has all the same
+		// defaults as those used in the Reconcile function
+		etcdCluster.Default()
+
+		const originalReplicas = 3
+		const expectedReplicas = 1
+
+		*etcdCluster.Spec.Replicas = originalReplicas
+
+		// Give the operator a fake Etcdclient which simulates an established
+		// healthy cluster.
+		s.etcd = fakeEtcdForEtcdCluster(*etcdCluster)
+
+		t.Log("Given an established 3-node cluster.")
+		err := s.k8sClient.Create(s.ctx, etcdCluster)
+		require.NoError(t, err, "failed to create EtcdCluster resource")
+
+		clusterObjectKey := client.ObjectKey{
+			Namespace: namespace,
+			Name:      etcdCluster.Name,
+		}
+		err = try.Eventually(func() error {
+			var updatedCluster etcdv1alpha1.EtcdCluster
+			err := s.k8sClient.Get(s.ctx, clusterObjectKey, &updatedCluster)
+			require.NoError(t, err, "failed to find EtcdCluster")
+			if updatedCluster.Status.Replicas != *etcdCluster.Spec.Replicas {
+				return fmt.Errorf(
+					"unexpected replicas count in cluster status. replicas: %d, status: %#v",
+					updatedCluster.Status.Replicas, updatedCluster.Status,
+				)
+			}
+			return nil
+		}, time.Second*5, time.Millisecond*500)
+		require.NoError(t, err)
+
+		t.Log("When the cluster is scaled down to 1-node.")
+		patch := client.MergeFrom(etcdCluster.DeepCopy())
+		*etcdCluster.Spec.Replicas = 1
+		err = s.k8sClient.Patch(s.ctx, etcdCluster, patch)
+		require.NoError(t, err, "failed to patch EtcdCluster resource")
+
+		t.Run("StatusUpdate", func(t *testing.T) {
+			t.Log("The cluster status is updated when the cluster has been scaled down.")
+			expectedStatus := expectedStatusForCluster(*etcdCluster)
+			err = try.Eventually(func() error {
+				var updatedCluster etcdv1alpha1.EtcdCluster
+				err := s.k8sClient.Get(s.ctx, client.ObjectKey{
+					Namespace: namespace,
+					Name:      etcdCluster.Name,
+				}, &updatedCluster)
+				require.NoError(t, err, "failed to find EtcdCluster")
+
+				if diff := cmp.Diff(expectedStatus, updatedCluster.Status); diff != "" {
+					return fmt.Errorf("unexpected EtcdCluster.Status: diff --- expected, +++ actual\n%s", diff)
+				}
+				return nil
+			}, time.Second*20, time.Millisecond*500)
+			assert.NoError(t, err)
+		})
+		t.Run("EtcdMembersUpdate", func(t *testing.T) {
+			t.Log("The etcd cluster API reports the expected number of nodes")
+			membership, err := s.etcd.MembershipAPI(etcdclient.Config{})
+			require.NoError(t, err)
+			expectedMembers := expectedEtcdMembersForCluster(*etcdCluster)
+			err = try.Eventually(func() error {
+				members, err := membership.List(s.ctx)
+				require.NoError(t, err)
+				if diff := cmp.Diff(expectedMembers, members); diff != "" {
+					return fmt.Errorf("unexpected Etcd API members: diff --- expected, +++ actual\n%s", diff)
+				}
+				return nil
+			}, time.Second*20, time.Millisecond*500)
+			assert.NoError(t, err)
+		})
+		t.Run("EtcdPeersRemoved", func(t *testing.T) {
+			t.Log("The EtcdPeers are removed")
+			expectedPeers := expectedEtcdPeersForCluster(*etcdCluster)
+			expectedPeerNames := setOfNamespacedNamesForEtcdPeers(expectedPeers)
+			err = try.Eventually(func() error {
+				var peers etcdv1alpha1.EtcdPeerList
+				err := s.k8sClient.List(s.ctx, &peers, client.InNamespace(etcdCluster.Namespace))
+				require.NoError(t, err)
+				actualPeerNames := setOfNamespacedNamesForEtcdPeers(peers.Items)
+
+				if diff := cmp.Diff(expectedPeerNames, actualPeerNames); diff != "" {
+					return fmt.Errorf("unexpected peers: diff --- expected, +++ actual\n%s", diff)
+				}
+				return nil
+			}, time.Second*20, time.Millisecond*500)
+			assert.NoError(t, err)
+		})
+	})
+
 	t.Run("OnCreation", func(t *testing.T) {
 		teardownFunc, namespace := s.setupTest(t)
 		defer teardownFunc()
@@ -236,4 +384,58 @@ func assertPeer(t *testing.T, cluster *etcdv1alpha1.EtcdCluster, peer *etcdv1alp
 	assertOwnedByCluster(t, cluster, peer)
 
 	assert.Equal(t, cluster.Spec.Storage, peer.Spec.Storage, "unexpected peer storage")
+}
+
+func expectedStatusForCluster(c etcdv1alpha1.EtcdCluster) etcdv1alpha1.EtcdClusterStatus {
+	members := make([]etcdv1alpha1.EtcdMember, *c.Spec.Replicas)
+	for i := range members {
+		members[i] = etcdv1alpha1.EtcdMember{
+			ID:   fmt.Sprintf("SOMEID%d", i),
+			Name: fmt.Sprintf("%s-%d", c.Name, i),
+		}
+	}
+	return etcdv1alpha1.EtcdClusterStatus{
+		Replicas: *c.Spec.Replicas,
+		Members:  members,
+	}
+}
+
+func expectedEtcdMembersForCluster(c etcdv1alpha1.EtcdCluster) []etcdclient.Member {
+	members := make([]etcdclient.Member, *c.Spec.Replicas)
+	for i := range members {
+		name := fmt.Sprintf("%s-%d", c.Name, i)
+		members[i] = etcdclient.Member{
+			ID:         fmt.Sprintf("SOMEID%d", i),
+			Name:       name,
+			PeerURLs:   []string{fmt.Sprintf("http://%s.%s.%s.svc:2380", name, c.Name, c.Namespace)},
+			ClientURLs: []string{fmt.Sprintf("http://%s.%s.%s.svc:2379", name, c.Name, c.Namespace)},
+		}
+	}
+	return members
+}
+
+func expectedEtcdPeersForCluster(c etcdv1alpha1.EtcdCluster) []etcdv1alpha1.EtcdPeer {
+	peers := make([]etcdv1alpha1.EtcdPeer, *c.Spec.Replicas)
+	for i := range peers {
+		name := fmt.Sprintf("%s-%d", c.Name, i)
+		peers[i] = etcdv1alpha1.EtcdPeer{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: c.Namespace,
+			},
+		}
+	}
+	return peers
+}
+
+func setOfNamespacedNamesForEtcdPeers(peers []etcdv1alpha1.EtcdPeer) sets.String {
+	names := sets.NewString()
+	for _, peer := range peers {
+		nn := types.NamespacedName{
+			Namespace: peer.Namespace,
+			Name:      peer.Name,
+		}
+		names.Insert(nn.String())
+	}
+	return names
 }
