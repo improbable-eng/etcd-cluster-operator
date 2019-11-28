@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -23,12 +22,18 @@ import (
 type EtcdBackupReconciler struct {
 	client.Client
 	Log logr.Logger
+
+	// An absolute path to a directory which will contain backups that have not yet been pushed to their destination.
+	TempDir string
 }
 
 func (r *EtcdBackupReconciler) reconcile(
 	ctx context.Context,
 	resourceID string,
-	resource *etcdv1alpha1.EtcdBackup) (*etcdv1alpha1.EtcdBackupPhase, string, error) {
+	resource *etcdv1alpha1.EtcdBackup) (
+	nextPhase *etcdv1alpha1.EtcdBackupPhase,
+	remoteBackupPath string,
+	err error) {
 
 	// If status is not yet set, the resource was probably just created.
 	if resource.Status.Phase == "" {
@@ -42,7 +47,7 @@ func (r *EtcdBackupReconciler) reconcile(
 	}
 
 	// The backup will live on disk in a well-known location, unique to the resource describing this backup.
-	localPath := filepath.Join(os.TempDir(), string(resource.UID), "snapshot.db")
+	localPath := filepath.Join(r.TempDir, string(resource.UID), "snapshot.db")
 
 	// Extract backup method config.
 	endpoints := make([]string, len(resource.Spec.ClusterEndpoints))
@@ -107,15 +112,16 @@ func (r *EtcdBackupReconciler) reconcile(
 			r.Log.Error(err, "failed to upload the backup")
 			return &etcdv1alpha1.EtcdBackupPhaseFailed, "", err
 		}
+		// We return Uploading as the next phase here, as we need to reconcile once more to clean up the local
+		// snapshot.
+		return &etcdv1alpha1.EtcdBackupPhaseUploading, remoteStoredPath, nil
+	}
 
-		// Clean the backup from the local disk.
-		err = method.Delete(ctx, localPath)
-		if err != nil {
-			r.Log.Error(err, "failed to remove the backup from local disk")
-			return &etcdv1alpha1.EtcdBackupPhaseFailed, "", err
-		}
-
-		return &etcdv1alpha1.EtcdBackupPhaseCompleted, remoteStoredPath, nil
+	// Clean the backup from the local disk.
+	err = method.Delete(ctx, localPath)
+	if err != nil {
+		r.Log.Error(err, "failed to remove the backup from local disk")
+		// No error is returned here - the backup was sucessfully completed but the cleanup failed.
 	}
 
 	// Flow should not reach here, but if it does it means that the backup has already been uploaded.
