@@ -14,7 +14,7 @@ import (
 // Destination is the place to store the backup.
 type Destination interface {
 	// Upload uploads the file on disk to this destination. It takes the local `path' at which the backup is currently
-	// sotred.
+	// stored.
 	Upload(ctx context.Context, source string) error
 
 	// IsUploaded checks if the backup has already been uploaded to this destination.

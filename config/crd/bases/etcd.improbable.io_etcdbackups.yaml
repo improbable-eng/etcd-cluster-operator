@@ -48,11 +48,9 @@ spec:
                     description: An IP address or DNS name of an endpoint.
                     type: string
                   port:
-                    anyOf:
-                    - type: string
-                    - type: integer
                     description: Port that is exposing the etcd client API for this
                       member.
+                    type: integer
                   scheme:
                     description: Scheme to use for connecting to the host.
                     type: string
@@ -72,6 +70,8 @@ spec:
                   properties:
                     bucketName:
                       description: BucketName is the name of the storage bucket.
+                      maxLength: 222
+                      minLength: 3
                       type: string
                     credentials:
                       description: Credentials holds the method of obtaining credentials

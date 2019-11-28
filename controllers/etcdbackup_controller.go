@@ -41,11 +41,6 @@ func (r *EtcdBackupReconciler) reconcile(
 		return &etcdv1alpha1.EtcdBackupPhaseBackingUp, "", nil
 	}
 
-	// If the backup has finished, or failed, don't take any action.
-	if resource.Status.Phase == etcdv1alpha1.EtcdBackupPhaseCompleted || resource.Status.Phase == etcdv1alpha1.EtcdBackupPhaseFailed {
-		return nil, "", nil
-	}
-
 	// The backup will live on disk in a well-known location, unique to the resource describing this backup.
 	localPath := filepath.Join(r.TempDir, string(resource.UID), "snapshot.db")
 
@@ -54,21 +49,32 @@ func (r *EtcdBackupReconciler) reconcile(
 	for i, e := range resource.Spec.ClusterEndpoints {
 		endpoints[i] = (&url.URL{
 			Scheme: strings.ToLower(string(e.Scheme)),
-			Host:   fmt.Sprintf("%s:%d", e.Host, e.Port.IntVal),
+			Host:   fmt.Sprintf("%s:%d", e.Host, e.Port),
 		}).String()
 	}
 	method := &backup.SnapshotMethod{
 		Endpoints: endpoints,
 	}
 
+	// If the backup has finished, or failed, make sure there are no artifacts remaining local to the operator.
+	if resource.Status.Phase == etcdv1alpha1.EtcdBackupPhaseCompleted || resource.Status.Phase == etcdv1alpha1.EtcdBackupPhaseFailed {
+		// Clean the backup from the local disk.
+		err = method.Delete(ctx, localPath)
+		if err != nil {
+			r.Log.Error(err, "Failed to remove the backup from local disk")
+			// No error is returned here - the backup was sucessfully completed but the cleanup failed.
+		}
+		return nil, "", nil
+	}
+
 	// The the backup does not already exist on disk, take it.
 	if saved, err := method.IsSaved(ctx, localPath); err != nil {
-		r.Log.Error(err, "failed to check if the backup already exists on disk")
+		r.Log.Error(err, "Failed to check if the backup already exists on disk")
 		return &etcdv1alpha1.EtcdBackupPhaseFailed, "", err
 	} else if !saved {
 		err := method.Save(ctx, localPath)
 		if err != nil {
-			r.Log.Error(err, "failed to save the backup")
+			r.Log.Error(err, "Failed to save the backup")
 			return &etcdv1alpha1.EtcdBackupPhaseFailed, "", err
 		}
 		return &etcdv1alpha1.EtcdBackupPhaseUploading, "", nil
@@ -97,31 +103,22 @@ func (r *EtcdBackupReconciler) reconcile(
 
 	remoteStoredPath, err := dest.RemotePath()
 	if err != nil {
-		r.Log.Error(err, "failed to compute the remote destination for the backup to be placed")
+		r.Log.Error(err, "Failed to compute the remote destination for the backup to be placed")
 		return &etcdv1alpha1.EtcdBackupPhaseFailed, "", err
 	}
 
 	// Check if it has been sent to the destination already.
 	if uploaded, err := dest.IsUploaded(ctx); err != nil {
-		r.Log.Error(err, "failed to check if the backup has already been uploaded")
+		r.Log.Error(err, "Failed to check if the backup has already been uploaded")
 		return &etcdv1alpha1.EtcdBackupPhaseFailed, "", err
 	} else if !uploaded {
 		// Upload the backup.
 		err := dest.Upload(ctx, localPath)
 		if err != nil {
-			r.Log.Error(err, "failed to upload the backup")
+			r.Log.Error(err, "Failed to upload the backup")
 			return &etcdv1alpha1.EtcdBackupPhaseFailed, "", err
 		}
-		// We return Uploading as the next phase here, as we need to reconcile once more to clean up the local
-		// snapshot.
-		return &etcdv1alpha1.EtcdBackupPhaseUploading, remoteStoredPath, nil
-	}
-
-	// Clean the backup from the local disk.
-	err = method.Delete(ctx, localPath)
-	if err != nil {
-		r.Log.Error(err, "failed to remove the backup from local disk")
-		// No error is returned here - the backup was sucessfully completed but the cleanup failed.
+		return &etcdv1alpha1.EtcdBackupPhaseCompleted, remoteStoredPath, nil
 	}
 
 	// Flow should not reach here, but if it does it means that the backup has already been uploaded.
@@ -177,7 +174,6 @@ func (r *EtcdBackupReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 
 	resource := &etcdv1alpha1.EtcdBackup{}
 	if err := r.Get(ctx, req.NamespacedName, resource); err != nil {
-		log.Error(err, "unable to fetch EtcdBackup")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 

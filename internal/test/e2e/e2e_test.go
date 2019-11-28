@@ -353,7 +353,8 @@ func TestE2E(t *testing.T) {
 		})
 		t.Run("Backup", func(t *testing.T) {
 			t.Parallel()
-			ns := NamespaceForTest(t, kubectl)
+			ns, cleanup := NamespaceForTest(t, kubectl)
+			defer cleanup()
 			backupTests(t, kubectl.WithT(t).WithDefaultNamespace(ns))
 		})
 	})
@@ -645,7 +646,7 @@ func scaleDownTests(t *testing.T, kubectl *kubectlContext) {
 	t.Log("Which contains data")
 	const expectedValue = "foobarbaz"
 
-	out, err := EventuallyInCluster(
+	out, err := eventuallyInCluster(
 		kubectl,
 		"set-etcd-value",
 		time.Minute*2,
@@ -677,7 +678,7 @@ func scaleDownTests(t *testing.T, kubectl *kubectlContext) {
 	require.NoError(t, err)
 
 	t.Log("And the data is still available.")
-	out, err = EventuallyInCluster(
+	out, err = eventuallyInCluster(
 		kubectl,
 		"get-etcd-value",
 		time.Minute*2,

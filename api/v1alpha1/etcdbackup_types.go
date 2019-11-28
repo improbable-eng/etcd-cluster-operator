@@ -3,7 +3,6 @@ package v1alpha1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -21,7 +20,7 @@ var (
 // EtcdClusterEndpoint holds an addressable endpoint for an etcd member.
 type EtcdClusterEndpoint struct {
 	// Port that is exposing the etcd client API for this member.
-	Port intstr.IntOrString `json:"port"`
+	Port int `json:"port"`
 	// An IP address or DNS name of an endpoint.
 	Host string `json:"host"`
 	// Scheme to use for connecting to the host.
@@ -51,6 +50,8 @@ type EtcdBackupDestinationLocal struct {
 // to access this bucket.
 type EtcdBackupDestinationGCSBucket struct {
 	// BucketName is the name of the storage bucket.
+	//+kubebuilder:validation:MinLength=3
+	//+kubebuilder:validation:MaxLength=222
 	BucketName string `json:"bucketName"`
 	// Credentials holds the method of obtaining credentials that will be provided to the
 	// Google Cloud APIs in order to write backup data.
