@@ -84,7 +84,13 @@ func ExampleEtcdBackupSchedule(namespace string) *etcdv1alpha1.EtcdBackupSchedul
 		},
 		Spec: etcdv1alpha1.EtcdBackupScheduleSpec{
 			Schedule: "* * * * *",
-			// TODO(adamhosier) add spec
+			BackupSpec: etcdv1alpha1.EtcdBackupSpec{
+				ClusterEndpoints: []etcdv1alpha1.EtcdClusterEndpoint{{
+					Port:   2379,
+					Host:   "my-cluster.com",
+					Scheme: "http",
+				}},
+			},
 		},
 	}
 }

@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -16,6 +15,7 @@ import (
 
 type CronScheduler interface {
 	AddFunc(spec string, cmd func()) (cron.EntryID, error)
+	Remove(id cron.EntryID)
 }
 
 // EtcdBackupScheduleReconciler reconciles a EtcdBackupSchedule object
@@ -31,7 +31,6 @@ type EtcdBackupScheduleReconciler struct {
 }
 
 type Schedule struct {
-	once      *sync.Once
 	cronEntry cron.EntryID
 }
 
@@ -49,34 +48,54 @@ func (r *EtcdBackupScheduleReconciler) Reconcile(req ctrl.Request) (ctrl.Result,
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	schedule, found := r.Schedules[string(resource.UID)]
-	if !found {
-		schedule = Schedule{
-			once: &sync.Once{},
+	finalizerIsSet := false
+	for _, f := range resource.ObjectMeta.Finalizers {
+		if f == scheduleCancelFinalizer {
+			finalizerIsSet = true
+		}
+	}
+	if !finalizerIsSet {
+		resource.ObjectMeta.Finalizers = append(resource.ObjectMeta.Finalizers, scheduleCancelFinalizer)
+		if err := r.Update(ctx, resource); err != nil {
+			return ctrl.Result{}, err
 		}
 	}
 
-	var err error
-	schedule.once.Do(func() {
-		id, addErr := r.CronHandler.AddFunc(resource.Spec.Schedule, func() {
+	schedule, found := r.Schedules[string(resource.UID)]
+	if !found {
+		id, err := r.CronHandler.AddFunc(resource.Spec.Schedule, func() {
 			log.Info("Creating EtcdBackup resource")
 			err := r.fire(req)
 			if err != nil {
 				log.Error(err, "Backup resource creation failed")
 			}
 		})
-		schedule.cronEntry = id
-		err = addErr
-	})
-	if err != nil {
-		return ctrl.Result{}, err
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		r.Schedules[string(resource.UID)] = Schedule{
+			cronEntry: id,
+		}
+		return ctrl.Result{}, nil
 	}
 
-	r.Schedules[string(resource.UID)] = schedule
+	// If the object is being deleted, clean it up from the cron pool.
+	if !resource.ObjectMeta.DeletionTimestamp.IsZero() {
+		r.CronHandler.Remove(schedule.cronEntry)
+		delete(r.Schedules, string(resource.UID))
 
-	// TODO(adamhosier) remove old etcdbackup resources
-
-	// TODO(adamhosier) delete cron schedule when resource is deleted
+		// Remove the finalizer.
+		var newFinalizers []string
+		for _, f := range resource.ObjectMeta.Finalizers {
+			if f != scheduleCancelFinalizer {
+				newFinalizers = append(newFinalizers, f)
+			}
+		}
+		resource.ObjectMeta.Finalizers = newFinalizers
+		if err := r.Update(ctx, resource); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -101,7 +120,7 @@ func (r *EtcdBackupScheduleReconciler) fire(req ctrl.Request) error {
 				scheduleLabel: resource.ObjectMeta.Name,
 			},
 		},
-		// TODO(adamhosier) copy spec from `resource'.
+		Spec: resource.Spec.BackupSpec,
 	}); err != nil {
 		return err
 	}

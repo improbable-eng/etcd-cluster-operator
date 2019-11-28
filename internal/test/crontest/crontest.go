@@ -18,3 +18,5 @@ func (f FakeCron) AddFunc(spec string, job func()) (cron.EntryID, error) {
 	job()
 	return cron.EntryID(f.counter), nil
 }
+
+func (f FakeCron) Remove(id cron.EntryID) {}

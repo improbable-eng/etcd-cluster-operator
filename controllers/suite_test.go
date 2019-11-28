@@ -118,10 +118,8 @@ func (s *controllerSuite) setupTest(t *testing.T) (teardownFunc func(), namespac
 	require.NoError(t, err, "failed to setup EtcdCluster controller")
 
 	backupController := EtcdBackupScheduleReconciler{
-		Client: mgr.GetClient(),
-		Log: logtest.TestLogger{
-			T: t,
-		},
+		Client:      mgr.GetClient(),
+		Log:         logger.WithName("EtcdCluster"),
 		CronHandler: crontest.FakeCron{},
 		Schedules:   map[string]Schedule{},
 	}
