@@ -45,12 +45,8 @@ rules:
   resources:
   - etcdbackups
   verbs:
-  - create
-  - delete
   - get
   - list
-  - patch
-  - update
   - watch
 - apiGroups:
   - etcd.improbable.io

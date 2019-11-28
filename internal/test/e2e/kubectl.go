@@ -99,6 +99,12 @@ func (k *kubectlContext) Delete(args ...string) error {
 	return err
 }
 
+// Exec wraps `kubectl exec', returning the output of the executed command
+func (k *kubectlContext) Exec(podName string, cmd ...string) (string, error) {
+	out, err := k.do(append([]string{"exec", podName}, cmd...)...)
+	return string(out), err
+}
+
 // DryRun wraps `kubectl apply --server-dry-run', returning the unparsed output & any error that occurred.
 func (k *kubectlContext) DryRun(filename string) (string, error) {
 	out, err := k.do("apply", "--server-dry-run", "--output", "yaml", "--filename", filename)
@@ -222,8 +228,8 @@ func DeleteAllTestNamespaces(t *testing.T, kubectl *kubectlContext) {
 	require.NoError(t, err)
 }
 
-// EventuallyInCluster runs a command as a Job in the current Kubernetes cluster namespace.
-func EventuallyInCluster(kubectl *kubectlContext, name string, deadline time.Duration, image string, command ...string) (string, error) {
+// eventuallyInCluster runs a command as a Job in the current Kubernetes cluster namespace.
+func eventuallyInCluster(kubectl *kubectlContext, name string, deadline time.Duration, image string, command ...string) (string, error) {
 	job := &batchv1.Job{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Job",
