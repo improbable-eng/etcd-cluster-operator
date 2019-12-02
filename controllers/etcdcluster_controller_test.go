@@ -364,25 +364,6 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 		})
 	})
 
-	t.Run("InvalidPodAnnotations", func(t *testing.T) {
-		teardownFunc, namespace := s.setupTest(t)
-		defer teardownFunc()
-
-		etcdCluster := test.ExampleEtcdCluster(namespace)
-
-		etcdCluster.Spec.PodTemplate = &etcdv1alpha1.EtcdPodTemplateSpec{
-			Metadata: &etcdv1alpha1.EtcdPodTemplateObjectMeta{
-				Annotations: map[string]string{
-					"foo":                     "bar",
-					"etcd.improbable.io/test": "someval",
-				},
-			},
-		}
-
-		err := s.k8sClient.Create(s.ctx, etcdCluster)
-		require.Error(t, err, "created EtcdCluster resource with invalid spec.podTemplate.metadata.annotations entry")
-	})
-
 	t.Run("PodAnnotations", func(t *testing.T) {
 		teardownFunc, namespace := s.setupTest(t)
 		defer teardownFunc()

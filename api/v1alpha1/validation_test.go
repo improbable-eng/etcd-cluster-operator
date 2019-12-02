@@ -50,6 +50,22 @@ func TestEtcdCluster_ValidateCreate(t *testing.T) {
 			t.Log(err)
 		}
 	})
+	t.Run("ReservedPodAnnotationUsed", func(t *testing.T) {
+		o := test.ExampleEtcdCluster("ns1")
+
+		o.Spec.PodTemplate = &v1alpha1.EtcdPodTemplateSpec{
+			Metadata: &v1alpha1.EtcdPodTemplateObjectMeta{
+				Annotations: map[string]string{
+					"etcd.improbable.io/test": "some-value",
+				},
+			},
+		}
+
+		err := o.ValidateCreate()
+		if !assert.Error(t, err) {
+			t.Log(err)
+		}
+	})
 }
 
 // TODO Incomplete.
@@ -103,7 +119,6 @@ func TestEtcdCluster_ValidateUpdate(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestEtcdPeer_ValidateCreate(t *testing.T) {
@@ -143,6 +158,22 @@ func TestEtcdPeer_ValidateCreate(t *testing.T) {
 		delete(o.Spec.Storage.VolumeClaimTemplate.Resources.Requests, "storage")
 		err := o.ValidateCreate()
 		if assert.Error(t, err) {
+			t.Log(err)
+		}
+	})
+	t.Run("ReservedPodAnnotationUsed", func(t *testing.T) {
+		o := test.ExampleEtcdPeer("ns1")
+
+		o.Spec.PodTemplate = &v1alpha1.EtcdPodTemplateSpec{
+			Metadata: &v1alpha1.EtcdPodTemplateObjectMeta{
+				Annotations: map[string]string{
+					"etcd.improbable.io/test": "some-value",
+				},
+			},
+		}
+
+		err := o.ValidateCreate()
+		if !assert.Error(t, err) {
 			t.Log(err)
 		}
 	})
