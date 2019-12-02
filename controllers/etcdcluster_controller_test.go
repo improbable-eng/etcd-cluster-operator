@@ -363,6 +363,90 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 			require.NoError(t, err)
 		})
 	})
+
+	t.Run("InvalidPodAnnotations", func(t *testing.T) {
+		teardownFunc, namespace := s.setupTest(t)
+		defer teardownFunc()
+
+		etcdCluster := test.ExampleEtcdCluster(namespace)
+
+		etcdCluster.Spec.PodTemplate = &etcdv1alpha1.EtcdPodTemplateSpec{
+			Metadata: &etcdv1alpha1.EtcdPodTemplateObjectMeta{
+				Annotations: map[string]string{
+					"foo":                     "bar",
+					"etcd.improbable.io/test": "someval",
+				},
+			},
+		}
+
+		err := s.k8sClient.Create(s.ctx, etcdCluster)
+		require.Error(t, err, "created EtcdCluster resource with invalid spec.podTemplate.metadata.annotations entry")
+	})
+
+	t.Run("PodAnnotations", func(t *testing.T) {
+		teardownFunc, namespace := s.setupTest(t)
+		defer teardownFunc()
+
+		etcdCluster := test.ExampleEtcdCluster(namespace)
+
+		expectedAnnotations := map[string]string{
+			"foo":                "bar",
+			"prometheus.io/path": "/_metrics",
+		}
+
+		etcdCluster.Spec.PodTemplate = &etcdv1alpha1.EtcdPodTemplateSpec{
+			Metadata: &etcdv1alpha1.EtcdPodTemplateObjectMeta{
+				Annotations: expectedAnnotations,
+			},
+		}
+
+		err := s.k8sClient.Create(s.ctx, etcdCluster)
+		require.NoError(t, err, "failed to create EtcdCluster resource")
+
+		// Apply defaults here so that our expected object has all the same
+		// defaults as those used in the Reconcile function
+		etcdCluster.Default()
+
+		// Mock out the etcd API with one that always fails - i.e., we're always in 'bootstrap' mode
+		s.etcd = &AlwaysFailEtcdAPI{}
+
+		t.Run("AppliesAnnotationsToPod", func(t *testing.T) {
+			// Search for etcd pods using the clusterLabel
+			replicaSetList := &appsv1.ReplicaSetList{}
+			err = try.Eventually(func() error {
+				err := s.k8sClient.List(s.ctx, replicaSetList,
+					client.InNamespace(namespace),
+				)
+				t.Log(fmt.Sprintf("%v", replicaSetList))
+				if len(replicaSetList.Items) != 3 {
+					return errors.New(fmt.Sprintf("Wrong number of etcd Replica Sets. Had %d wanted %d", len(replicaSetList.Items), 3))
+				}
+				return err
+			}, time.Second*5, time.Millisecond*500)
+			require.NoError(t, err)
+
+			for _, replicaSet := range replicaSetList.Items {
+				// Assert that our expected annotations are in there. In particular we explicitly allow other
+				// annotations to be added beyond the ones we asked for. So a direct comparison of the underlying
+				// map[string]string objects is inappropriate.
+				for expectedName, expectedValue := range expectedAnnotations {
+					foundAnnotation := false
+					for actualName, actualValue := range replicaSet.Spec.Template.Annotations {
+						if expectedName == actualName {
+							foundAnnotation = true
+							require.Equal(t, expectedValue, actualValue, "Annotation value has been changed")
+							break
+						}
+					}
+					if !foundAnnotation {
+						t.Errorf("Could not find annotation %s on ReplicaSet %s's pod spec", expectedName, replicaSet.Name)
+					}
+				}
+			}
+		})
+
+	})
+
 }
 
 func assertOwnedByCluster(t *testing.T, etcdCluster *etcdv1alpha1.EtcdCluster, obj metav1.Object) {
