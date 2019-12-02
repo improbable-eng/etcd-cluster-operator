@@ -2,7 +2,7 @@
 
 This guide provides instructions aimed at Kubernetes cluster administrators who wish to manage etcd clusters. It
 does not cover initial setup or installation of the operator, and instead assumes that it is already present and working
-correctly.
+correctly. Please see [the project README](../README.md) for installation instructions.
 
 The etcd cluster controller uses the Kubernetes API, via
 [Custom Resources](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/), to drive
