@@ -16,11 +16,15 @@ To create a new cluster, create an `EtcdCluster` resource in the namespace you w
 
 ### Replicas
 
-The `spec.replicas` field determines the number of pods that are run in the etcd cluster. It is [strongly suggested that
-this be an odd number](https://etcd.io/docs/v3.4.0/faq/#why-an-odd-number-of-cluster-members). In etcd [adding more
-replicas will degrade write performance](https://etcd.io/docs/v3.4.0/faq/#what-is-maximum-cluster-size). This can be `1`
-for a testing environment, but for durability it is suggested that this is at least `3`. In most situations `5` is the
-highest sensible setting, although neither etcd nor this operator impose a limit.
+The `spec.replicas` field determines the number of pods that are run in the etcd cluster.
+
+For availability reasons it is [strongly suggested that this be an odd
+number](https://etcd.io/docs/v3.4.0/faq/#why-an-odd-number-of-cluster-members), and an etcd cluster with an even number
+of replicas is actually worse for availability than a cluster one smaller to be odd. Note also that [adding more
+replicas will degrade write performance](https://etcd.io/docs/v3.4.0/faq/#what-is-maximum-cluster-size).
+
+This can be `1` for a testing environment, but for durability it is suggested that this is at least `3`. In most
+situations `5` is the highest sensible setting, although neither etcd nor this operator impose a limit.
 
 ### Storage
 
