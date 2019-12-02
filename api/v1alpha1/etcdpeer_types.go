@@ -66,6 +66,12 @@ type EtcdPeerSpec struct {
 	// Storage is the configuration of the disks and mount points of the Etcd
 	// pod.
 	Storage *EtcdPeerStorage `json:"storage,omitempty"`
+
+	// PodTemplate describes metadata that should be applied to the underlying Pods. This may not be applied verbatim,
+	// as additional metadata may be added by the operator. In particular the operator reserves label and annotation
+	// names starting with `etcd.improbable.io`, and pod templates containing these are considered invalid and will be
+	// rejected.
+	PodTemplate *EtcdPodTemplateSpec `json:"podTemplate,omitempty"`
 }
 
 // EtcdPeerStorage defines the desired storage for an EtcdPeer
