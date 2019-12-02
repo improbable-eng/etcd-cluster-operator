@@ -103,7 +103,7 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 		peerLabel:    peer.Name,
 	}
 
-	return appsv1.ReplicaSet{
+	replicaSet := appsv1.ReplicaSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels:          labels,
 			Annotations:     make(map[string]string),
@@ -199,6 +199,28 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 			},
 		},
 	}
+
+	if peer.Spec.PodTemplate != nil {
+		if peer.Spec.PodTemplate.Metadata != nil {
+			// Stamp annotations
+			for name, value := range peer.Spec.PodTemplate.Metadata.Annotations {
+				// Ignore annotations that should have been marked as invalid
+				if !IsInvalidUserProvidedAnnotationName(name) {
+					// Don't replace existing annotations with user-provided ones
+					if _, found := replicaSet.Spec.Template.Annotations[name]; !found {
+						replicaSet.Spec.Template.Annotations[name] = value
+					}
+				}
+			}
+		}
+	}
+
+	return replicaSet
+}
+
+// IsInvalidUserProvidedAnnotation tests to see if the given annotation name is one reserved by the operator
+func IsInvalidUserProvidedAnnotationName(annotationName string) bool {
+	return strings.HasPrefix(annotationName, "etcd.improbable.io")
 }
 
 func pvcForPeer(peer *etcdv1alpha1.EtcdPeer) *corev1.PersistentVolumeClaim {
