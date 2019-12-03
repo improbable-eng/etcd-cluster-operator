@@ -103,6 +103,55 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 		peerLabel:    peer.Name,
 	}
 
+	env := []corev1.EnvVar{
+		{
+			Name:  etcdenvvar.Name,
+			Value: peer.Name,
+		},
+		{
+			Name:  etcdenvvar.InitialClusterToken,
+			Value: peer.Spec.ClusterName,
+		},
+		{
+			Name:  etcdenvvar.InitialAdvertisePeerURLs,
+			Value: advertiseURL(peer, etcdPeerPort).String(),
+		},
+		{
+			Name:  etcdenvvar.AdvertiseClientURLs,
+			Value: advertiseURL(peer, etcdClientPort).String(),
+		},
+		{
+			Name:  etcdenvvar.ListenPeerURLs,
+			Value: bindAllAddress(etcdPeerPort).String(),
+		},
+		{
+			Name:  etcdenvvar.ListenClientURLs,
+			Value: bindAllAddress(etcdClientPort).String(),
+		},
+		{
+			Name:  etcdenvvar.DataDir,
+			Value: etcdDataMountPath,
+		},
+	}
+	if peer.Spec.Bootstrap != nil {
+		env = append(
+			env,
+			corev1.EnvVar{
+				Name:  etcdenvvar.InitialClusterState,
+				Value: clusterStateValue(peer.Spec.Bootstrap.InitialClusterState),
+			},
+		)
+		if peer.Spec.Bootstrap.Static != nil {
+			env = append(
+				env,
+				corev1.EnvVar{
+					Name:  etcdenvvar.InitialCluster,
+					Value: staticBootstrapInitialCluster(*peer.Spec.Bootstrap.Static),
+				},
+			)
+		}
+	}
+
 	return appsv1.ReplicaSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels:          labels,
@@ -129,44 +178,7 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 						{
 							Name:  appName,
 							Image: etcdImage,
-							Env: []corev1.EnvVar{
-								{
-									Name:  etcdenvvar.InitialCluster,
-									Value: staticBootstrapInitialCluster(*peer.Spec.Bootstrap.Static),
-								},
-								{
-									Name:  etcdenvvar.Name,
-									Value: peer.Name,
-								},
-								{
-									Name:  etcdenvvar.InitialClusterToken,
-									Value: peer.Spec.ClusterName,
-								},
-								{
-									Name:  etcdenvvar.InitialAdvertisePeerURLs,
-									Value: advertiseURL(peer, etcdPeerPort).String(),
-								},
-								{
-									Name:  etcdenvvar.AdvertiseClientURLs,
-									Value: advertiseURL(peer, etcdClientPort).String(),
-								},
-								{
-									Name:  etcdenvvar.ListenPeerURLs,
-									Value: bindAllAddress(etcdPeerPort).String(),
-								},
-								{
-									Name:  etcdenvvar.ListenClientURLs,
-									Value: bindAllAddress(etcdClientPort).String(),
-								},
-								{
-									Name:  etcdenvvar.InitialClusterState,
-									Value: clusterStateValue(peer.Spec.Bootstrap.InitialClusterState),
-								},
-								{
-									Name:  etcdenvvar.DataDir,
-									Value: etcdDataMountPath,
-								},
-							},
+							Env:   env,
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "etcd-client",
