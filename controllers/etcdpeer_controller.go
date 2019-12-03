@@ -92,7 +92,7 @@ func clusterStateValue(cs etcdv1alpha1.InitialClusterState) string {
 	}
 }
 
-func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
+func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, log logr.Logger) appsv1.ReplicaSet {
 	var replicas int32 = 1
 
 	// We use the same labels for the replica set itself, the selector on
@@ -204,12 +204,19 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 		if peer.Spec.PodTemplate.Metadata != nil {
 			// Stamp annotations
 			for name, value := range peer.Spec.PodTemplate.Metadata.Annotations {
-				// Ignore annotations that should have been marked as invalid
 				if !etcdv1alpha1.IsInvalidUserProvidedAnnotationName(name) {
-					// Don't replace existing annotations with user-provided ones
 					if _, found := replicaSet.Spec.Template.Annotations[name]; !found {
 						replicaSet.Spec.Template.Annotations[name] = value
+					} else {
+						// This will only check against an annotation that we set ourselves.
+						log.V(2).Info("Ignoring annotation, we already have one with that name",
+							"annotation-name", name)
 					}
+				} else {
+					// In theory, this code is unreachable as we check this validation at the start of the reconcile
+					// loop. See https://xkcd.com/2200
+					log.V(2).Info("Ignoring annotation, applying etcd.improbable.io/ annotations is not supported",
+						"annotation-name", name)
 				}
 			}
 		}
@@ -303,7 +310,7 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	)
 
 	if apierrs.IsNotFound(err) {
-		replicaSet := defineReplicaSet(peer)
+		replicaSet := defineReplicaSet(peer, log)
 		log.V(1).Info("Replica set does not exist, creating",
 			"replica-set", replicaSet.Name)
 		if err := r.Create(ctx, &replicaSet); err != nil {
