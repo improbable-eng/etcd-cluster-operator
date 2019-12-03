@@ -39,6 +39,29 @@ In this example each pod has 50Mi storage and uses a
 [Storage Class](https://kubernetes.io/docs/concepts/storage/storage-classes/#the-storageclass-resource) called
 `standard`.
 
+### Pod Template
+
+The `spec.podTemplate` field can be optionally used to specify annotations that should be applied to the underlying pods
+running etcd. This can be used to configure annotations for Prometheous metrics, or any other requirement. Note that
+annotation names prefixed with `etcd.improbable.io/` are reserved, and cannot be applied with this feature.
+
+Note that the pod template cannot be changed once the cluster has been created.
+
+#### Configuring Prometheus annotations
+
+The etcd pods expose metrics in Prometheus' standard format. If you use annotation-based metrics discovery in your
+cluster, you can apply the following to the `EtcdCluster`:
+
+```yaml
+spec:
+  podTemplate:
+    metadata:
+      annoations:
+        "prometheus.io/path":   "/metrics",
+        "prometheus.io/scrape": "true",
+        "prometheus.io/scheme": "http",
+        "prometheus.io/port":   "2379",
+```
 
 ## Understanding Cluster Status
 
