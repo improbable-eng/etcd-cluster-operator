@@ -123,7 +123,7 @@ func (o *EtcdPeerStorage) validate(path *field.Path) field.ErrorList {
 
 // IsInvalidUserProvidedAnnotation tests to see if the given annotation name is one reserved by the operator
 func IsInvalidUserProvidedAnnotationName(annotationName string) bool {
-	return strings.HasPrefix(annotationName, "etcd.improbable.io")
+	return strings.HasPrefix(annotationName, "etcd.improbable.io/")
 }
 
 func (o *EtcdPodTemplateObjectMeta) validate(path *field.Path) field.ErrorList {
