@@ -6,9 +6,11 @@ import (
 	"testing"
 	"time"
 
+	fuzz "github.com/google/gofuzz"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
@@ -154,4 +156,31 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 
 		require.Equal(t, *peer.Spec.Storage.VolumeClaimTemplate, actualPvc.Spec, "Unexpected PVC spec")
 	})
+}
+
+func TestDefineReplicaSet(t *testing.T) {
+	// Set pointers to nil
+	f := fuzz.New().MaxDepth(10).NilChance(0.5).NumElements(1, 1).Funcs(
+		func(o *metav1.TypeMeta, c fuzz.Continue) {
+		},
+		func(o *metav1.ObjectMeta, c fuzz.Continue) {
+		},
+		func(o *etcdv1alpha1.EtcdPeerStatus, c fuzz.Continue) {
+		},
+		// EtcdPeerStorage is a required field and will always fail validation
+		// if it is set to nil so there's no point fuzzing this.
+		func(o *etcdv1alpha1.EtcdPeerStorage, c fuzz.Continue) {
+		},
+	)
+	for i := 0; i < 100; i++ {
+		o := exampleEtcdPeer("ns1")
+		f.Fuzz(o)
+		o.Default()
+		// Ignore invalid examples
+		err := o.ValidateCreate()
+		if err != nil {
+			continue
+		}
+		defineReplicaSet(*o)
+	}
 }
