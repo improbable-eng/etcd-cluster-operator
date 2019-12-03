@@ -66,6 +66,10 @@ type EtcdPeerSpec struct {
 	// Storage is the configuration of the disks and mount points of the Etcd
 	// pod.
 	Storage *EtcdPeerStorage `json:"storage,omitempty"`
+
+	// Decommissioned is set to true if this EtcdPeer has been removed from an etcd cluster
+	// and its data can be safely deleted.
+	Decommissioned bool `json:"decommissioned"`
 }
 
 // EtcdPeerStorage defines the desired storage for an EtcdPeer

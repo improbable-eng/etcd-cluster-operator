@@ -90,6 +90,10 @@ spec:
                 label on the Pod running etcd.
               maxLength: 64
               type: string
+            decommissioned:
+              description: Decommissioned is set to true if this EtcdPeer has been
+                removed from an etcd cluster and its data can be safely deleted.
+              type: boolean
             storage:
               description: Storage is the configuration of the disks and mount points
                 of the Etcd pod.
@@ -216,6 +220,7 @@ spec:
               type: object
           required:
           - clusterName
+          - decommissioned
           type: object
         status:
           description: EtcdPeerStatus defines the observed state of EtcdPeer
