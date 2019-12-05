@@ -160,6 +160,85 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 
 		require.Equal(t, *peer.Spec.Storage.VolumeClaimTemplate, actualPvc.Spec, "Unexpected PVC spec")
 	})
+	t.Run("DoNotDeletePersistentVolumeClaimByDefault", func(t *testing.T) {
+		teardown, namespace := s.setupTest(t)
+		defer teardown()
+
+		t.Log("Given an EtcdPeer with a PVC")
+		peer := exampleEtcdPeer(namespace)
+		peerKey, err := client.ObjectKeyFromObject(peer)
+		require.NoError(t, err)
+		err = s.k8sClient.Create(s.ctx, peer)
+		require.NoError(t, err, "failed to create EtcdPeer resource")
+		actualPvc := corev1.PersistentVolumeClaim{}
+		err = try.Eventually(
+			func() error { return s.k8sClient.Get(s.ctx, peerKey, &actualPvc) },
+			time.Second*5, time.Millisecond*500,
+		)
+		require.NoError(t, err, "PVC was not created")
+
+		t.Log("If the EtcdPeer is deleted")
+		err = s.k8sClient.Delete(s.ctx, peer)
+		require.NoError(t, err, "failed to delete EtcdPeer resource")
+		err = try.Eventually(
+			func() error {
+				var actualPeer etcdv1alpha1.EtcdPeer
+				err := s.k8sClient.Get(s.ctx, peerKey, &actualPeer)
+				if err == nil {
+					return fmt.Errorf("the EtcdPeer has not been deleted")
+				}
+				return client.IgnoreNotFound(err)
+			},
+			time.Second*5, time.Millisecond*500,
+		)
+		require.NoErrorf(t, err, "EtcdPeer was not deleted: %v", peerKey)
+
+		t.Log("The PVC is not deleted")
+		err = s.k8sClient.Get(s.ctx, peerKey, &actualPvc)
+		require.NoError(t, err, "PVC was deleted")
+	})
+	t.Run("DeletesPersistentVolumeClaimWhenFinalizerPresent", func(t *testing.T) {
+		teardown, namespace := s.setupTest(t)
+		defer teardown()
+
+		t.Log("Given an EtcdPeer with a PVC")
+		peer := exampleEtcdPeer(namespace)
+		peer.ObjectMeta.Finalizers = append(
+			peer.ObjectMeta.Finalizers,
+			"etcdpeer.etcd.improbable.io/pvc-cleanup",
+		)
+		peerKey, err := client.ObjectKeyFromObject(peer)
+		require.NoError(t, err)
+		err = s.k8sClient.Create(s.ctx, peer)
+		require.NoError(t, err, "failed to create EtcdPeer resource")
+		actualPvc := corev1.PersistentVolumeClaim{}
+		err = try.Eventually(
+			func() error { return s.k8sClient.Get(s.ctx, peerKey, &actualPvc) },
+			time.Second*5, time.Millisecond*500,
+		)
+		require.NoError(t, err, "PVC was not created")
+
+		t.Log("If the EtcdPeer is deleted")
+		err = s.k8sClient.Delete(s.ctx, peer)
+		require.NoError(t, err, "failed to delete EtcdPeer resource")
+		err = try.Eventually(
+			func() error {
+				var actualPeer etcdv1alpha1.EtcdPeer
+				err := s.k8sClient.Get(s.ctx, peerKey, &actualPeer)
+				if err == nil {
+					return fmt.Errorf("the EtcdPeer has not been deleted")
+				}
+				return client.IgnoreNotFound(err)
+			},
+			time.Second*5, time.Millisecond*500,
+		)
+		require.NoErrorf(t, err, "EtcdPeer was not deleted: %v", peerKey)
+
+		t.Log("The PVC is deleted")
+		err = s.k8sClient.Get(s.ctx, peerKey, &actualPvc)
+		require.NoError(t, client.IgnoreNotFound(err), "unexpected error")
+		assert.Error(t, err, "expected a NotFound error for deleted PVC")
+	})
 }
 
 func TestGoMaxProcs(t *testing.T) {
