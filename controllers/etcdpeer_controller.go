@@ -45,7 +45,7 @@ const (
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=apps,resources=replicasets,verbs=list;get;create;watch
-// +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=list;get;create;watch
+// +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=list;get;create;watch;delete
 
 func initialMemberURL(member etcdv1alpha1.InitialClusterMember) *url.URL {
 	return &url.URL{

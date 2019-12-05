@@ -28,6 +28,7 @@ rules:
   - persistentvolumeclaims
   verbs:
   - create
+  - delete
   - get
   - list
   - watch
