@@ -69,6 +69,7 @@ type EtcdPeerSpec struct {
 
 	// Decommissioned is set to true if this EtcdPeer has been removed from an etcd cluster
 	// and its data can be safely deleted.
+	// +optional
 	Decommissioned bool `json:"decommissioned"`
 }
 
