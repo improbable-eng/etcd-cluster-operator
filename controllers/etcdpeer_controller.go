@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -32,9 +33,10 @@ type EtcdPeerReconciler struct {
 }
 
 const (
-	etcdImage  = "quay.io/coreos/etcd:v3.2.28"
-	etcdScheme = "http"
-	peerLabel  = "etcd.improbable.io/peer-name"
+	etcdImage           = "quay.io/coreos/etcd:v3.2.28"
+	etcdScheme          = "http"
+	peerLabel           = "etcd.improbable.io/peer-name"
+	pvcCleanupFinalizer = "etcdpeer.etcd.improbable.io/pvc-cleanup"
 )
 
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch
@@ -307,6 +309,20 @@ func (r *EtcdPeerReconciler) maybeCreatePvc(ctx context.Context, peer *etcdv1alp
 	return true, nil
 }
 
+func hasPvcDeletionFinalizer(peer etcdv1alpha1.EtcdPeer) bool {
+	return sets.NewString(peer.ObjectMeta.Finalizers...).Has(pvcCleanupFinalizer)
+}
+
+func removeString(haystack []string, needle string) (result []string) {
+	for _, s := range haystack {
+		if s == needle {
+			continue
+		}
+		result = append(result, s)
+	}
+	return result
+}
+
 func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -328,6 +344,33 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	err := peer.ValidateCreate()
 	if err != nil {
 		log.Error(err, "invalid EtcdPeer")
+		return ctrl.Result{}, nil
+	}
+
+	if !peer.ObjectMeta.DeletionTimestamp.IsZero() {
+		if hasPvcDeletionFinalizer(peer) {
+			log.V(2).Info("Deleting PVC for peer prior to deletion")
+			expectedPvc := pvcForPeer(&peer)
+			err := r.Delete(ctx, expectedPvc)
+			if err == nil {
+				log.V(2).Info("Deleted PVC")
+				return ctrl.Result{}, nil
+			}
+			if client.IgnoreNotFound(err) != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to delete PVC: %w", err)
+			}
+
+			log.V(2).Info("Removing PVC cleanup finalizer")
+			updated := peer.DeepCopy()
+			updated.ObjectMeta.Finalizers = removeString(
+				updated.ObjectMeta.Finalizers,
+				pvcCleanupFinalizer,
+			)
+			if err := r.Patch(ctx, updated, client.MergeFrom(&peer)); err != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to remove PVC cleanup finalizer: %w", err)
+			}
+			log.V(2).Info("Removed PVC cleanup finalizer")
+		}
 		return ctrl.Result{}, nil
 	}
 
