@@ -648,7 +648,7 @@ func scaleDownTests(t *testing.T, kubectl *kubectlContext) {
 	configPath := filepath.Join(*fRepoRoot, "config", "samples", "etcd_v1alpha1_etcdcluster.yaml")
 	err := kubectl.Apply("--filename", configPath)
 	require.NoError(t, err)
-
+	const expectedReplicasOriginal = 3
 	t.Log("Where all the nodes are up")
 	err = try.Eventually(
 		func() error {
@@ -660,8 +660,8 @@ func scaleDownTests(t *testing.T, kubectl *kubectlContext) {
 			if err != nil {
 				return err
 			}
-			if statusReplicas != 3 {
-				return fmt.Errorf("unexpected status.replicas. Wanted: 3, Got: %d", statusReplicas)
+			if statusReplicas != expectedReplicasOriginal {
+				return fmt.Errorf("unexpected status.replicas. Wanted: %d, Got: %d", expectedReplicasOriginal, statusReplicas)
 			}
 			return nil
 		},
@@ -683,8 +683,9 @@ func scaleDownTests(t *testing.T, kubectl *kubectlContext) {
 	require.NoError(t, err, out)
 
 	t.Log("If the cluster is scaled down")
-	const expectedReplicas = 1
-	err = kubectl.Scale("etcdcluster/my-cluster", expectedReplicas)
+	const expectedReplicasNew = 1
+	require.True(t, expectedReplicasNew < expectedReplicasOriginal, "Must use a lower replicas count")
+	err = kubectl.Scale("etcdcluster/my-cluster", expectedReplicasNew)
 	require.NoError(t, err)
 
 	t.Log("The etcdcluster.status is updated when the cluster has been resized.")
@@ -694,8 +695,8 @@ func scaleDownTests(t *testing.T, kubectl *kubectlContext) {
 			require.NoError(t, err, out)
 			statusReplicas, err := strconv.Atoi(out)
 			require.NoError(t, err, out)
-			if expectedReplicas != statusReplicas {
-				return fmt.Errorf("unexpected status.replicas. Wanted: %d, Got: %d", expectedReplicas, statusReplicas)
+			if expectedReplicasNew != statusReplicas {
+				return fmt.Errorf("unexpected status.replicas. Wanted: %d, Got: %d", expectedReplicasNew, statusReplicas)
 			}
 			return err
 		},
@@ -714,4 +715,26 @@ func scaleDownTests(t *testing.T, kubectl *kubectlContext) {
 	)
 	require.NoError(t, err, out)
 	assert.Equal(t, expectedValue+"\n", out)
+
+	t.Log("The cluster can then be scaled back up")
+	err = kubectl.Scale("etcdcluster/my-cluster", expectedReplicasOriginal)
+	require.NoError(t, err)
+	err = try.Eventually(
+		func() error {
+			out, err := kubectl.Get("etcdcluster", "my-cluster", "-o=jsonpath={.status.replicas}")
+			if err != nil {
+				return err
+			}
+			statusReplicas, err := strconv.Atoi(out)
+			if err != nil {
+				return err
+			}
+			if statusReplicas != expectedReplicasOriginal {
+				return fmt.Errorf("unexpected status.replicas. Wanted: %d, Got: %d", expectedReplicasOriginal, statusReplicas)
+			}
+			return nil
+		},
+		time.Minute*2, time.Second*10,
+	)
+	require.NoError(t, err)
 }
