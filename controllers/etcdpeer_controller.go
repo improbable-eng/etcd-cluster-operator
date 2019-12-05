@@ -304,15 +304,14 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	} else {
 		if hasPvcDeletionFinalizer(peer) {
 			if peer.Spec.Decommissioned {
-				log.V(2).Info("Deleting PVC for decommissioned peer prior to deletion")
 				expectedPvc := pvcForPeer(&peer)
 				err := r.Delete(ctx, expectedPvc)
 				if err == nil {
-					log.V(2).Info("Deleted PVC")
+					log.V(2).Info("Deleted PVC for decommissioned peer")
 					return ctrl.Result{}, nil
 				}
 				if client.IgnoreNotFound(err) != nil {
-					return ctrl.Result{}, fmt.Errorf("failed to delete PVC: %w", err)
+					return ctrl.Result{}, fmt.Errorf("failed to delete PVC for decommissioned peer: %w", err)
 				}
 			} else {
 				log.V(2).Info("Not deleting PVC because this peer is not decommissioned")

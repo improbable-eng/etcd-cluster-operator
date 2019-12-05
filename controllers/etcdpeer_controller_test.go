@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -230,17 +231,8 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		require.NoErrorf(t, err, "EtcdPeer was not deleted: %v", peerKey)
 
 		t.Log("The PVC is also deleted")
-		err = try.Eventually(
-			func() error {
-				err = s.k8sClient.Get(s.ctx, peerKey, &actualPvc)
-				require.NoError(t, client.IgnoreNotFound(err))
-				if err == nil {
-					return fmt.Errorf("expected a NotFound error for deleted PVC: %s", peerKey)
-				}
-				return nil
-			},
-			time.Second*5, time.Millisecond*500,
-		)
-		require.NoErrorf(t, err, "PVC was not deleted: %v", peerKey)
+		err = s.k8sClient.Get(s.ctx, peerKey, &actualPvc)
+		require.NoError(t, client.IgnoreNotFound(err))
+		assert.Errorf(t, err, "expected a NotFound error for deleted PVC: %s", peerKey)
 	})
 }
