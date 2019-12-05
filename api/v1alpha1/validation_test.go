@@ -158,6 +158,12 @@ func TestEtcdPeer_ValidateUpdate(t *testing.T) {
 		err      string
 	}{
 		{
+			name: "SupportedChange/Decommissioned",
+			modifier: func(o *v1alpha1.EtcdPeer) {
+				o.Spec.Decommissioned = !o.Spec.Decommissioned
+			},
+		},
+		{
 			name: "UnsupportedChange/StorageClassName",
 			modifier: func(o *v1alpha1.EtcdPeer) {
 				*o.Spec.Storage.VolumeClaimTemplate.StorageClassName += "-changed"

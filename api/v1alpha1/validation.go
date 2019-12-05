@@ -77,7 +77,7 @@ func (o *EtcdPeer) ValidateUpdate(old runtime.Object) error {
 	oldO = oldO.DeepCopy()
 
 	// Overwrite any the fields which are allowed to change
-	// oldO.Spec.Foo = o.Spec.Foo
+	oldO.Spec.Decommissioned = o.Spec.Decommissioned
 
 	if diff := cmp.Diff(oldO.Spec, o.Spec); diff != "" {
 		return fmt.Errorf("Unsupported changes: (- current, + new) %s", diff)
