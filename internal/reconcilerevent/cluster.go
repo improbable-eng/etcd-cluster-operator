@@ -48,6 +48,18 @@ func (s *PeerRemovedEvent) Record(recorder record.EventRecorder) {
 		fmt.Sprintf("Removed EtcdPeer with name %q", s.PeerName))
 }
 
+type PeerDecommissionedEvent struct {
+	Object   runtime.Object
+	PeerName string
+}
+
+func (s *PeerDecommissionedEvent) Record(recorder record.EventRecorder) {
+	recorder.Event(s.Object,
+		"Normal",
+		"PeerDecommissioned",
+		fmt.Sprintf("Decommissioned EtcdPeer with name %q", s.PeerName))
+}
+
 type MemberAddedEvent struct {
 	Object runtime.Object
 	Member *etcdclient.Member

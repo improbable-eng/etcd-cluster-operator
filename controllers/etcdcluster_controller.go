@@ -411,7 +411,21 @@ func (r *EtcdClusterReconciler) reconcile(
 
 			for _, peer := range peers.Items {
 				if !memberNames.Has(peer.Name) {
-					err := r.Delete(ctx, &peer)
+					if !peer.Spec.Decommissioned {
+						log.V(2).Info("Decommissioning peer")
+						updated := peer.DeepCopy()
+						updated.Spec.Decommissioned = true
+						err := r.Patch(ctx, updated, client.MergeFrom(&peer))
+						if err != nil {
+							return result, nil, fmt.Errorf("failed to decommission peer: %w", err)
+						}
+						peerDecommissionedEvent := &reconcilerevent.PeerDecommissionedEvent{
+							Object:   &peer,
+							PeerName: peer.Name,
+						}
+						return result, peerDecommissionedEvent, nil
+					}
+					err = r.Delete(ctx, &peer)
 					if err != nil {
 						return result, nil, fmt.Errorf("failed to remove peer: %w", err)
 					}
