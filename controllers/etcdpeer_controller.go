@@ -252,6 +252,16 @@ func hasPvcDeletionFinalizer(peer etcdv1alpha1.EtcdPeer) bool {
 	return sets.NewString(peer.ObjectMeta.Finalizers...).Has(pvcCleanupFinalizer)
 }
 
+func removeString(haystack []string, needle string) (result []string) {
+	for _, s := range haystack {
+		if s == needle {
+			continue
+		}
+		result = append(result, s)
+	}
+	return result
+}
+
 func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -278,7 +288,7 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	if peer.ObjectMeta.DeletionTimestamp.IsZero() {
 		if !hasPvcDeletionFinalizer(peer) {
-			r.Log.V(2).Info("Adding PVC cleanup finalizer")
+			log.V(2).Info("Adding PVC cleanup finalizer")
 			updated := peer.DeepCopy()
 			updated.ObjectMeta.Finalizers = append(
 				updated.ObjectMeta.Finalizers,
@@ -288,8 +298,37 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			if err != nil {
 				return ctrl.Result{}, fmt.Errorf("failed to add PVC cleanup finalizer: %w", err)
 			}
+			log.V(2).Info("Added PVC cleanup finalizer")
 			return ctrl.Result{}, nil
 		}
+	} else {
+		if hasPvcDeletionFinalizer(peer) {
+			if peer.Spec.Decommissioned {
+				log.V(2).Info("Deleting PVC for decommissioned peer prior to deletion")
+				expectedPvc := pvcForPeer(&peer)
+				err := r.Delete(ctx, expectedPvc)
+				if err == nil {
+					log.V(2).Info("Deleted PVC")
+					return ctrl.Result{}, nil
+				}
+				if client.IgnoreNotFound(err) != nil {
+					return ctrl.Result{}, fmt.Errorf("failed to delete PVC: %w", err)
+				}
+			} else {
+				log.V(2).Info("Not deleting PVC because this peer is not decommissioned")
+			}
+			log.V(2).Info("Removing PVC cleanup finalizer")
+			updated := peer.DeepCopy()
+			updated.ObjectMeta.Finalizers = removeString(
+				updated.ObjectMeta.Finalizers,
+				pvcCleanupFinalizer,
+			)
+			if err := r.Patch(ctx, updated, client.MergeFrom(&peer)); err != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to remove PVC cleanup finalizer: %w", err)
+			}
+			log.V(2).Info("Removed PVC cleanup finalizer")
+		}
+		return ctrl.Result{}, nil
 	}
 
 	created, err := r.maybeCreatePvc(ctx, &peer)

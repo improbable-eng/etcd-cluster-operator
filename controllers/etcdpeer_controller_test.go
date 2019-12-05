@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -209,10 +208,10 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		)
 		require.NoError(t, err, "PVC was not created")
 
-		t.Log("If the EtcdPeer is decommissioned and deleted")
-		patch := client.MergeFrom(peer)
-		peer.Spec.Decommissioned = true
-		err = s.k8sClient.Patch(s.ctx, peer, patch)
+		t.Log("If the EtcdPeer is decommissioned and then deleted")
+		updated := peer.DeepCopy()
+		updated.Spec.Decommissioned = true
+		err = s.k8sClient.Patch(s.ctx, updated, client.MergeFrom(peer))
 		require.NoError(t, err, "failed to patch EtcdPeer resource")
 
 		err = s.k8sClient.Delete(s.ctx, peer)
@@ -230,9 +229,18 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		)
 		require.NoErrorf(t, err, "EtcdPeer was not deleted: %v", peerKey)
 
-		t.Log("The PVC is deleted")
-		err = s.k8sClient.Get(s.ctx, peerKey, &actualPvc)
-		require.NoError(t, client.IgnoreNotFound(err), "unexpected error")
-		assert.Error(t, err, "expected a NotFound error for deleted PVC")
+		t.Log("The PVC is also deleted")
+		err = try.Eventually(
+			func() error {
+				err = s.k8sClient.Get(s.ctx, peerKey, &actualPvc)
+				require.NoError(t, client.IgnoreNotFound(err))
+				if err == nil {
+					return fmt.Errorf("expected a NotFound error for deleted PVC: %s", peerKey)
+				}
+				return nil
+			},
+			time.Second*5, time.Millisecond*500,
+		)
+		require.NoErrorf(t, err, "PVC was not deleted: %v", peerKey)
 	})
 }
