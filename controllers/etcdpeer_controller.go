@@ -13,6 +13,7 @@ import (
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -30,9 +31,10 @@ type EtcdPeerReconciler struct {
 }
 
 const (
-	etcdImage  = "quay.io/coreos/etcd:v3.2.27"
-	etcdScheme = "http"
-	peerLabel  = "etcd.improbable.io/peer-name"
+	etcdImage           = "quay.io/coreos/etcd:v3.2.27"
+	etcdScheme          = "http"
+	peerLabel           = "etcd.improbable.io/peer-name"
+	pvcCleanupFinalizer = "etcdpeer.etcd.improbable.io/pvc-cleanup"
 )
 
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch
@@ -246,6 +248,10 @@ func (r *EtcdPeerReconciler) maybeCreatePvc(ctx context.Context, peer *etcdv1alp
 	return true, nil
 }
 
+func hasPvcDeletionFinalizer(peer etcdv1alpha1.EtcdPeer) bool {
+	return sets.NewString(peer.ObjectMeta.Finalizers...).Has(pvcCleanupFinalizer)
+}
+
 func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -268,6 +274,22 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if err != nil {
 		log.Error(err, "invalid EtcdPeer")
 		return ctrl.Result{}, nil
+	}
+
+	if peer.ObjectMeta.DeletionTimestamp.IsZero() {
+		if !hasPvcDeletionFinalizer(peer) {
+			r.Log.V(2).Info("Adding PVC cleanup finalizer")
+			updated := peer.DeepCopy()
+			updated.ObjectMeta.Finalizers = append(
+				updated.ObjectMeta.Finalizers,
+				pvcCleanupFinalizer,
+			)
+			err := r.Patch(ctx, updated, client.MergeFrom(&peer))
+			if err != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to add PVC cleanup finalizer: %w", err)
+			}
+			return ctrl.Result{}, nil
+		}
 	}
 
 	created, err := r.maybeCreatePvc(ctx, &peer)

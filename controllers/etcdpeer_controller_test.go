@@ -210,7 +210,7 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		require.NoError(t, err, "PVC was not created")
 
 		t.Log("If the EtcdPeer is decommissioned and deleted")
-		patch := client.MergeFrom(peer.DeepCopy())
+		patch := client.MergeFrom(peer)
 		peer.Spec.Decommissioned = true
 		err = s.k8sClient.Patch(s.ctx, peer, patch)
 		require.NoError(t, err, "failed to patch EtcdPeer resource")
