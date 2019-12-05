@@ -292,6 +292,7 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	if peer.ObjectMeta.DeletionTimestamp.IsZero() {
+		// Add the PVC cleanup finalizer when we first see the peer
 		if !hasPvcDeletionFinalizer(peer) {
 			log.V(2).Info("Adding PVC cleanup finalizer")
 			updated := peer.DeepCopy()
@@ -307,20 +308,47 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			return ctrl.Result{}, nil
 		}
 	} else {
+		// Peer has been deleted. Delete the PVC if the peer has been marked Decommissioned.
+		// And remove the PVC cleanup finalizer so the the peer can be garbage collected.
 		if hasPvcDeletionFinalizer(peer) {
 			if peer.Spec.Decommissioned {
+				// Check whether a PVC with the expected name exists
 				expectedPvc := pvcForPeer(&peer)
-				err := r.Delete(ctx, expectedPvc)
-				if err == nil {
-					log.V(2).Info("Deleted PVC for decommissioned peer")
+				expectedPvcNamespacedName, err := client.ObjectKeyFromObject(expectedPvc)
+				if err != nil {
+					log.Error(err, "unable to get ObjectKey frome PVC")
 					return ctrl.Result{}, nil
 				}
-				if client.IgnoreNotFound(err) != nil {
-					return ctrl.Result{}, fmt.Errorf("failed to delete PVC for decommissioned peer: %w", err)
+				var actualPvc corev1.PersistentVolumeClaim
+				err = r.Get(ctx, expectedPvcNamespacedName, &actualPvc)
+				switch {
+				case client.IgnoreNotFound(err) != nil:
+					return ctrl.Result{}, fmt.Errorf("failed to get PVC for decommissioned peer: %w", err)
+				case err == nil:
+					// PVC exists.
+					// Check whether it has already been deleted (probably by us).
+					// It won't actually be deleted until the garbage collector
+					// deletes the Pod which is using it.
+					if actualPvc.ObjectMeta.DeletionTimestamp.IsZero() {
+						log.V(2).Info("Deleting PVC for decommissioned peer")
+						err := r.Delete(ctx, expectedPvc)
+						if err == nil {
+							log.V(2).Info("Deleted PVC for decommissioned peer")
+							return ctrl.Result{}, nil
+						} else {
+							return ctrl.Result{}, fmt.Errorf("failed to delete PVC for decommissioned peer: %w", err)
+						}
+					} else {
+						log.V(2).Info("PVC for decommissioned peer has already been marked for deletion")
+					}
+				case err != nil:
+					log.V(2).Info("PVC not found for peer. Already deleted or never created.")
 				}
 			} else {
 				log.V(2).Info("Not deleting PVC because this peer is not decommissioned")
 			}
+
+			// If we reach this stage, the PVC has been deleted
 			log.V(2).Info("Removing PVC cleanup finalizer")
 			updated := peer.DeepCopy()
 			updated.ObjectMeta.Finalizers = removeString(
