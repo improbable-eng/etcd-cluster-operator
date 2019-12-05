@@ -37,7 +37,12 @@ const (
 	pvcCleanupFinalizer = "etcdpeer.etcd.improbable.io/pvc-cleanup"
 )
 
-// +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch
+// TODO(wallrj) Ideally this controller wouldn't need permission to modify the
+// EtcdPeer resource, but it is required so that it can add and remove
+// finalizers.
+// See https://github.com/kubernetes/kubernetes/issues/59591
+
+// +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=apps,resources=replicasets,verbs=list;get;create;watch
 // +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=list;get;create;watch
