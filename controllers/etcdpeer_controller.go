@@ -348,7 +348,11 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				log.V(2).Info("Not deleting PVC because this peer is not decommissioned")
 			}
 
-			// If we reach this stage, the PVC has been deleted
+			// If we reach this stage, the PVC has been deleted or didn't need
+			// deleting.
+			// Remove the finalizer so that the EtcdPeer can be garbage
+			// collected along with its replicaset, pod...and with that the PVC
+			// will finally be deleted by the garbage collector.
 			log.V(2).Info("Removing PVC cleanup finalizer")
 			updated := peer.DeepCopy()
 			updated.ObjectMeta.Finalizers = removeString(
