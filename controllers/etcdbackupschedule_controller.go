@@ -7,6 +7,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/robfig/cron/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -48,10 +49,12 @@ func (r *EtcdBackupScheduleReconciler) Reconcile(req ctrl.Request) (ctrl.Result,
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	// Add a finalizer if one does not exist.
 	finalizerIsSet := false
 	for _, f := range resource.ObjectMeta.Finalizers {
 		if f == scheduleCancelFinalizer {
 			finalizerIsSet = true
+			break
 		}
 	}
 	if !finalizerIsSet {
@@ -59,13 +62,14 @@ func (r *EtcdBackupScheduleReconciler) Reconcile(req ctrl.Request) (ctrl.Result,
 		if err := r.Update(ctx, resource); err != nil {
 			return ctrl.Result{}, err
 		}
+		return ctrl.Result{}, nil
 	}
 
 	schedule, found := r.Schedules[string(resource.UID)]
 	if !found {
 		id, err := r.CronHandler.AddFunc(resource.Spec.Schedule, func() {
 			log.Info("Creating EtcdBackup resource")
-			err := r.fire(req)
+			err := r.fire(req.NamespacedName)
 			if err != nil {
 				log.Error(err, "Backup resource creation failed")
 			}
@@ -100,12 +104,12 @@ func (r *EtcdBackupScheduleReconciler) Reconcile(req ctrl.Request) (ctrl.Result,
 	return ctrl.Result{}, nil
 }
 
-func (r *EtcdBackupScheduleReconciler) fire(req ctrl.Request) error {
+func (r *EtcdBackupScheduleReconciler) fire(resourceNamespacedName types.NamespacedName) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 
 	resource := &etcdv1alpha1.EtcdBackupSchedule{}
-	if err := r.Get(ctx, req.NamespacedName, resource); err != nil {
+	if err := r.Get(ctx, resourceNamespacedName, resource); err != nil {
 		return client.IgnoreNotFound(err)
 	}
 
