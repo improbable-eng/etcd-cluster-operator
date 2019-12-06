@@ -14,6 +14,7 @@ import (
 	"github.com/improbable-eng/etcd-cluster-operator/controllers"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/etcd"
 	"github.com/improbable-eng/etcd-cluster-operator/webhooks"
+	"github.com/robfig/cron/v3"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -76,8 +77,10 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&controllers.EtcdBackupScheduleReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("EtcdBackupSchedule"),
+		Client:      mgr.GetClient(),
+		Log:         ctrl.Log.WithName("controllers").WithName("EtcdBackupSchedule"),
+		CronHandler: cron.New(),
+		Schedules:   map[string]controllers.Schedule{},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "EtcdBackupSchedule")
 		os.Exit(1)

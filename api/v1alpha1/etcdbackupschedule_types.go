@@ -9,8 +9,11 @@ import (
 
 // EtcdBackupScheduleSpec defines the desired state of EtcdBackupSchedule
 type EtcdBackupScheduleSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Schedule holds a crontab-like scheule holding defining the schedule in which backups will be started.
+	Schedule string `json:"schedule"`
+	// BackupSpec describes the template used to create backup resources. Every time the schedule fires an
+	// `EtcdBackup' will be created with this template.
+	BackupSpec EtcdBackupSpec `json:"backupSpec"`
 }
 
 // EtcdBackupScheduleStatus defines the observed state of EtcdBackupSchedule
