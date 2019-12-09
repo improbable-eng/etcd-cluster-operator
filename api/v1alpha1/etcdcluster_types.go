@@ -19,6 +19,7 @@ type EtcdClusterSpec struct {
 	// as additional metadata may be added by the operator. In particular the operator reserves label and annotation
 	// names starting with `etcd.improbable.io`, and pod templates containing these are considered invalid and will be
 	// rejected.
+	// +optional
 	PodTemplate *EtcdPodTemplateSpec `json:"podTemplate,omitempty"`
 }
 
@@ -27,6 +28,7 @@ type EtcdClusterSpec struct {
 type EtcdPodTemplateSpec struct {
 
 	// Metadata is elements to be applied to the final metadata of the underlying pods.
+	// +optional
 	Metadata *EtcdPodTemplateObjectMeta `json:"metadata,omitempty"`
 }
 
@@ -34,6 +36,7 @@ type EtcdPodTemplateSpec struct {
 type EtcdPodTemplateObjectMeta struct {
 
 	// Annotations are an unstructured string:string map of annotations to be applied to the underlying pods.
+	// +optional
 	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
