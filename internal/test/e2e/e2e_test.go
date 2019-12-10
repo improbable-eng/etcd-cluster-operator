@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"flag"
@@ -28,6 +29,7 @@ import (
 	kindv1alpha3 "sigs.k8s.io/kind/pkg/apis/config/v1alpha3"
 	"sigs.k8s.io/kind/pkg/cluster"
 	"sigs.k8s.io/kind/pkg/cluster/create"
+	"sigs.k8s.io/kind/pkg/cluster/nodes"
 	"sigs.k8s.io/kind/pkg/container/cri"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
@@ -36,6 +38,7 @@ import (
 
 const (
 	expectedClusterSize = 3
+	operatorImage       = "docker.io/library/etcd-cluster-operator:test"
 )
 
 var (
@@ -149,34 +152,35 @@ func startKind(t *testing.T, ctx context.Context, stopped chan struct{}) (kind *
 	return kind, nil
 }
 
-func buildOperator(t *testing.T, ctx context.Context) (imageTar string, err error) {
+func buildOperator(t *testing.T, ctx context.Context) (imageID string, err error) {
 	t.Log("Building the operator")
 	// Tag for running this test, for naming resources.
-	operatorImage := "etcd-cluster-operator:test"
 
 	// Build the operator.
-	out, err := exec.CommandContext(ctx, "docker", "build", "-t", operatorImage, *fRepoRoot, "--build-arg=debug=true").CombinedOutput()
+	out, err := exec.CommandContext(ctx, "docker", "build", "--quiet", "--tag", operatorImage, *fRepoRoot, "--build-arg=debug=true").CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("%w Output: %s", err, out)
 	}
-
-	// Bundle the image to a tar.
-	tmpDir, err := ioutil.TempDir("", "etcd-cluster-operator-e2e-test")
-	if err != nil {
-		return "", err
-	}
-
-	imageTar = filepath.Join(tmpDir, "etcd-cluster-operator.tar")
-
-	t.Log("Exporting the operator image")
-	out, err = exec.CommandContext(ctx, "docker", "save", "-o", imageTar, operatorImage).CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("%w Output: %s", err, out)
-	}
-	return imageTar, nil
+	imageID = strings.TrimSpace(string(out))
+	return imageID, nil
 }
 
-func installOperator(t *testing.T, kubectl *kubectlContext, kind *cluster.Context, imageTar string) {
+func imageExistsOnNode(node nodes.Node, imageID string) (bool, error) {
+	var stderr, stdout bytes.Buffer
+	err := node.Command(
+		"ctr", "--namespace", "k8s.io", "images", "ls", "--quiet",
+		fmt.Sprintf("name==%s", imageID),
+	).SetStderr(&stderr).SetStdout(&stdout).Run()
+	if err != nil {
+		return false, fmt.Errorf("error while checking for existing image: %w, stderr: %s", err, stderr.String())
+	}
+	if stdout.String() == imageID+"\n" {
+		return true, nil
+	}
+	return false, nil
+}
+
+func installOperator(t *testing.T, ctx context.Context, kubectl *kubectlContext, kind *cluster.Context, imageID string) {
 	t.Log("Installing cert-manager")
 	err := kubectl.Apply("--validate=false", "--filename=https://github.com/jetstack/cert-manager/releases/download/v0.11.0/cert-manager.yaml")
 	require.NoError(t, err)
@@ -186,18 +190,53 @@ func installOperator(t *testing.T, kubectl *kubectlContext, kind *cluster.Contex
 	err = kubectl.Apply("--kustomize", filepath.Join(*fRepoRoot, "config", "crd"))
 	require.NoError(t, err)
 
-	imageFile, err := os.Open(imageTar)
-	require.NoError(t, err)
-	defer func() {
-		assert.NoError(t, imageFile.Close(), "failed to close operator image tar")
-	}()
-	// Load the built image into the Kind cluster.
-	t.Log("Loading image in to Kind cluster")
 	nodes, err := kind.ListInternalNodes()
 	require.NoError(t, err)
+
+	// If the image ID file is not present on one or more of the Kind nodes, we
+	// perform the slow process of exporting the saving Docker image to a local
+	// file and then uploading it to each Kind node.
+	// Additionally, if the image does change then we force re-deploy the
+	// operator.
+	// If the image ID file is present, we can skip that process and get
+	// straight to running the tests.
+	t.Logf("Checking if image %s@%s is already present on nodes.", operatorImage, imageID)
+	uploadImages := false
 	for _, node := range nodes {
-		err := node.LoadImageArchive(imageFile)
+		imageExists, err := imageExistsOnNode(node, imageID)
 		require.NoError(t, err)
+		if !imageExists {
+			t.Logf("Image %s@%s is not present on node %s.", operatorImage, imageID, node.Name())
+			uploadImages = true
+			break
+		}
+	}
+
+	if uploadImages {
+		// Bundle the image to a tar.
+		tmpDir, err := ioutil.TempDir("", "etcd-cluster-operator-e2e-test")
+		require.NoError(t, err)
+
+		imageTar := filepath.Join(tmpDir, fmt.Sprintf("%s.tar", imageID))
+
+		t.Log("Exporting the operator image")
+		out, err := exec.CommandContext(ctx, "docker", "save", "-o", imageTar, operatorImage).CombinedOutput()
+		require.NoError(t, err, out)
+
+		imageFile, err := os.Open(imageTar)
+		require.NoError(t, err)
+		defer func() {
+			assert.NoError(t, imageFile.Close(), "failed to close operator image tar")
+		}()
+
+		// Load the built image into the Kind cluster.
+		t.Log("Loading image in to Kind cluster")
+		for _, node := range nodes {
+			err = node.LoadImageArchive(imageFile)
+			require.NoError(t, err)
+		}
+	} else {
+		t.Logf("Image %s@%s is already present on all nodes. Not restarting eco-controller-manager.", operatorImage, imageID)
 	}
 
 	t.Log("Waiting for cert-manager to be ready")
@@ -208,6 +247,12 @@ func installOperator(t *testing.T, kubectl *kubectlContext, kind *cluster.Contex
 	t.Log("Applying operator")
 	err = kubectl.Apply("--kustomize", filepath.Join(*fRepoRoot, "config", "test"))
 	require.NoError(t, err)
+
+	if uploadImages {
+		t.Log("Restarting controller-manager")
+		out, err := kubectl.Do("rollout", "restart", "--namespace", "eco-system", "deploy", "eco-controller-manager")
+		require.NoError(t, err, out)
+	}
 
 	// Ensure the operator starts.
 	err = try.Eventually(func() error {
@@ -262,7 +307,7 @@ func setupKind(t *testing.T, ctx context.Context, stopped chan struct{}) *kubect
 		configPath: kind.KubeConfigPath(),
 	}
 
-	installOperator(t, kubectl, kind, imageTar)
+	installOperator(t, ctx, kubectl, kind, imageTar)
 
 	return kubectl
 }

@@ -59,6 +59,12 @@ func (k *kubectlContext) do(args ...string) ([]byte, error) {
 	return out, err
 }
 
+// Do wraps `kubectl', returning the unparsed output & any error that occurred.
+func (k *kubectlContext) Do(args ...string) (string, error) {
+	out, err := k.do(args...)
+	return string(out), err
+}
+
 // Apply wraps `kubectl apply', returning any error that occurred.
 func (k *kubectlContext) Apply(args ...string) error {
 	out, err := k.do(append([]string{"apply"}, args...)...)
