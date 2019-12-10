@@ -121,7 +121,7 @@ func (s *controllerSuite) setupTest(t *testing.T) (teardownFunc func(), namespac
 		Client:      mgr.GetClient(),
 		Log:         logger.WithName("EtcdCluster"),
 		CronHandler: crontest.FakeCron{},
-		Schedules:   map[string]Schedule{},
+		Schedules:   NewScheduleMap(),
 	}
 	err = backupController.SetupWithManager(mgr)
 	require.NoError(t, err, "failed to setup EtcdBackupSchedule controller")

@@ -11,9 +11,9 @@ import (
 type EtcdBackupScheduleSpec struct {
 	// Schedule holds a crontab-like scheule holding defining the schedule in which backups will be started.
 	Schedule string `json:"schedule"`
-	// BackupSpec describes the template used to create backup resources. Every time the schedule fires an
-	// `EtcdBackup' will be created with this template.
-	BackupSpec EtcdBackupSpec `json:"backupSpec"`
+	// BackupTemplate describes the template used to create backup resources. Every time the schedule fires
+	// an `EtcdBackup' will be created with this template.
+	BackupTemplate EtcdBackupSpec `json:"backupSpec"`
 }
 
 // EtcdBackupScheduleStatus defines the observed state of EtcdBackupSchedule

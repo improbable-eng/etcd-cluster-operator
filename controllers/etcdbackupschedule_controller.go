@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -28,11 +29,43 @@ type EtcdBackupScheduleReconciler struct {
 	CronHandler CronScheduler
 
 	// Schedules holds a mapping of resources to the object responsible for scheduling the backup to be taken.
-	Schedules map[string]Schedule
+	Schedules *ScheduleMap
 }
 
 type Schedule struct {
 	cronEntry cron.EntryID
+}
+
+// ScheduleMap is a thread-safe mapping of backup schedules.
+type ScheduleMap struct {
+	sync.RWMutex
+	data map[string]Schedule
+}
+
+func NewScheduleMap() *ScheduleMap {
+	return &ScheduleMap{
+		RWMutex: sync.RWMutex{},
+		data:    map[string]Schedule{},
+	}
+}
+
+func (s *ScheduleMap) Read(key string) (Schedule, bool) {
+	s.RLock()
+	defer s.RUnlock()
+	value, found := s.data[key]
+	return value, found
+}
+
+func (s *ScheduleMap) Write(key string, value Schedule) {
+	s.Lock()
+	defer s.Unlock()
+	s.data[key] = value
+}
+
+func (s *ScheduleMap) Delete(key string) {
+	s.Lock()
+	defer s.Unlock()
+	delete(s.data, key)
 }
 
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdbackupschedules,verbs=get;list;watch;create;update;patch;delete
@@ -65,7 +98,7 @@ func (r *EtcdBackupScheduleReconciler) Reconcile(req ctrl.Request) (ctrl.Result,
 		return ctrl.Result{}, nil
 	}
 
-	schedule, found := r.Schedules[string(resource.UID)]
+	schedule, found := r.Schedules.Read(string(resource.UID))
 	if !found {
 		id, err := r.CronHandler.AddFunc(resource.Spec.Schedule, func() {
 			log.Info("Creating EtcdBackup resource")
@@ -77,16 +110,16 @@ func (r *EtcdBackupScheduleReconciler) Reconcile(req ctrl.Request) (ctrl.Result,
 		if err != nil {
 			return ctrl.Result{}, err
 		}
-		r.Schedules[string(resource.UID)] = Schedule{
+		r.Schedules.Write(string(resource.UID), Schedule{
 			cronEntry: id,
-		}
+		})
 		return ctrl.Result{}, nil
 	}
 
 	// If the object is being deleted, clean it up from the cron pool.
 	if !resource.ObjectMeta.DeletionTimestamp.IsZero() {
 		r.CronHandler.Remove(schedule.cronEntry)
-		delete(r.Schedules, string(resource.UID))
+		r.Schedules.Delete(string(resource.UID))
 
 		// Remove the finalizer.
 		var newFinalizers []string
@@ -124,7 +157,7 @@ func (r *EtcdBackupScheduleReconciler) fire(resourceNamespacedName types.Namespa
 				scheduleLabel: resource.ObjectMeta.Name,
 			},
 		},
-		Spec: resource.Spec.BackupSpec,
+		Spec: resource.Spec.BackupTemplate,
 	}); err != nil {
 		return err
 	}
