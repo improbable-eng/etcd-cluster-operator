@@ -32,7 +32,17 @@ func (o *EtcdPeer) Default() {
 	if o == nil {
 		return
 	}
+	if o.Spec.Bootstrap == nil {
+		o.Spec.Bootstrap = &Bootstrap{}
+	}
+	o.Spec.Bootstrap.setDefaults()
 	o.Spec.Storage.setDefaults()
+}
+
+func (o *Bootstrap) setDefaults() {
+	if o.InitialClusterState == InitialClusterState("") {
+		o.InitialClusterState = InitialClusterStateExisting
+	}
 }
 
 func (o *EtcdPeerStorage) setDefaults() {

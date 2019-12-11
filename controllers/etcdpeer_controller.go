@@ -132,24 +132,20 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 			Name:  etcdenvvar.DataDir,
 			Value: etcdDataMountPath,
 		},
+		{
+			Name:  etcdenvvar.InitialClusterState,
+			Value: clusterStateValue(peer.Spec.Bootstrap.InitialClusterState),
+		},
 	}
-	if peer.Spec.Bootstrap != nil {
+
+	if peer.Spec.Bootstrap.Static != nil {
 		env = append(
 			env,
 			corev1.EnvVar{
-				Name:  etcdenvvar.InitialClusterState,
-				Value: clusterStateValue(peer.Spec.Bootstrap.InitialClusterState),
+				Name:  etcdenvvar.InitialCluster,
+				Value: staticBootstrapInitialCluster(*peer.Spec.Bootstrap.Static),
 			},
 		)
-		if peer.Spec.Bootstrap.Static != nil {
-			env = append(
-				env,
-				corev1.EnvVar{
-					Name:  etcdenvvar.InitialCluster,
-					Value: staticBootstrapInitialCluster(*peer.Spec.Bootstrap.Static),
-				},
-			)
-		}
 	}
 
 	return appsv1.ReplicaSet{
