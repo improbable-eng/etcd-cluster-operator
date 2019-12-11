@@ -56,6 +56,10 @@ func (o *EtcdPeer) ValidateCreate() error {
 
 	allErrs = append(
 		allErrs,
+		o.Spec.Bootstrap.validate(path.Child("bootstrap"))...,
+	)
+	allErrs = append(
+		allErrs,
 		o.Spec.Storage.validate(path.Child("storage"))...,
 	)
 	return allErrs.ToAggregate()
@@ -98,6 +102,17 @@ func validatePersistentVolumeClaimSpec(path *field.Path, o *corev1.PersistentVol
 	if _, ok := o.Resources.Requests["storage"]; !ok {
 		allErrs = append(allErrs, field.Required(path.Child("resources", "requests", "storage"), ""))
 		return allErrs
+	}
+	return allErrs
+}
+
+func (o *Bootstrap) validate(path *field.Path) field.ErrorList {
+	var allErrs field.ErrorList
+	if *o.InitialClusterState == InitialClusterStateNew && o.Static == nil {
+		allErrs = append(allErrs, field.Required(path, "bootstrap.static must be supplied if initialClusterState: New"))
+	}
+	if *o.InitialClusterState == InitialClusterStateExisting && o.Static != nil {
+		allErrs = append(allErrs, field.Forbidden(path, "bootstap.static must not be supplied if initialClusterState: Existing"))
 	}
 	return allErrs
 }

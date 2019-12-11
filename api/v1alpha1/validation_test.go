@@ -114,7 +114,7 @@ func TestEtcdPeer_ValidateCreate(t *testing.T) {
 			t.Log(err)
 		}
 	})
-	t.Run("StorageMissing", func(t *testing.T) {
+	t.Run("Error/StorageMissing", func(t *testing.T) {
 		o := test.ExampleEtcdPeer("ns1")
 		o.Spec.Storage = nil
 		err := o.ValidateCreate()
@@ -122,7 +122,7 @@ func TestEtcdPeer_ValidateCreate(t *testing.T) {
 			t.Log(err)
 		}
 	})
-	t.Run("VolumeClaimTemplateMissing", func(t *testing.T) {
+	t.Run("Error/VolumeClaimTemplateMissing", func(t *testing.T) {
 		o := test.ExampleEtcdPeer("ns1")
 		o.Spec.Storage.VolumeClaimTemplate = nil
 		err := o.ValidateCreate()
@@ -130,7 +130,7 @@ func TestEtcdPeer_ValidateCreate(t *testing.T) {
 			t.Log(err)
 		}
 	})
-	t.Run("StorageClassNameMissing", func(t *testing.T) {
+	t.Run("Error/StorageClassNameMissing", func(t *testing.T) {
 		o := test.ExampleEtcdPeer("ns1")
 		o.Spec.Storage.VolumeClaimTemplate.StorageClassName = nil
 		err := o.ValidateCreate()
@@ -138,13 +138,51 @@ func TestEtcdPeer_ValidateCreate(t *testing.T) {
 			t.Log(err)
 		}
 	})
-	t.Run("ResourcesStorageMissing", func(t *testing.T) {
+	t.Run("Error/ResourcesStorageMissing", func(t *testing.T) {
 		o := test.ExampleEtcdPeer("ns1")
 		delete(o.Spec.Storage.VolumeClaimTemplate.Resources.Requests, "storage")
 		err := o.ValidateCreate()
 		if assert.Error(t, err) {
 			t.Log(err)
 		}
+	})
+	t.Run("Error/BootstrapInitialClusterStateNewMissingStatic", func(t *testing.T) {
+		o := test.ExampleEtcdPeer("ns1")
+		o.Spec.Bootstrap = &v1alpha1.Bootstrap{
+			InitialClusterState: v1alpha1.InitialClusterStateNew.Pointer(),
+		}
+		err := o.ValidateCreate()
+		if assert.Error(t, err) {
+			t.Log(err)
+		}
+	})
+	t.Run("Error/BootstrapInitialClusterStateExistingWithStatic", func(t *testing.T) {
+		o := test.ExampleEtcdPeer("ns1")
+		o.Spec.Bootstrap = &v1alpha1.Bootstrap{
+			InitialClusterState: v1alpha1.InitialClusterStateExisting.Pointer(),
+			Static: &v1alpha1.StaticBootstrap{
+				InitialCluster: []v1alpha1.InitialClusterMember{
+					{Name: "foo", Host: "bar"},
+				},
+			},
+		}
+		err := o.ValidateCreate()
+		if assert.Error(t, err) {
+			t.Log(err)
+		}
+	})
+	t.Run("Success/BootstrapInitialClusterStateNewWithStatic", func(t *testing.T) {
+		o := test.ExampleEtcdPeer("ns1")
+		o.Spec.Bootstrap = &v1alpha1.Bootstrap{
+			InitialClusterState: v1alpha1.InitialClusterStateNew.Pointer(),
+			Static: &v1alpha1.StaticBootstrap{
+				InitialCluster: []v1alpha1.InitialClusterMember{
+					{Name: "foo", Host: "bar"},
+				},
+			},
+		}
+		err := o.ValidateCreate()
+		assert.NoError(t, err)
 	})
 }
 
