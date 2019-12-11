@@ -625,9 +625,6 @@ func configurePeerBootstrap(peer *etcdv1alpha1.EtcdPeer, cluster *etcdv1alpha1.E
 
 func configureJoinExistingCluster(peer *etcdv1alpha1.EtcdPeer, cluster *etcdv1alpha1.EtcdCluster, members []etcdclient.Member) {
 	peer.Spec.Bootstrap = &etcdv1alpha1.Bootstrap{
-		Static: &etcdv1alpha1.StaticBootstrap{
-			InitialCluster: initialClusterMembersFromMemberList(cluster, members),
-		},
 		InitialClusterState: etcdv1alpha1.InitialClusterStateExisting.Pointer(),
 	}
 }
