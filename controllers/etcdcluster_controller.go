@@ -619,7 +619,7 @@ func configurePeerBootstrap(peer *etcdv1alpha1.EtcdPeer, cluster *etcdv1alpha1.E
 		Static: &etcdv1alpha1.StaticBootstrap{
 			InitialCluster: initialClusterMembers(cluster),
 		},
-		InitialClusterState: etcdv1alpha1.InitialClusterStateNew,
+		InitialClusterState: etcdv1alpha1.InitialClusterStateNew.Pointer(),
 	}
 }
 
@@ -628,7 +628,7 @@ func configureJoinExistingCluster(peer *etcdv1alpha1.EtcdPeer, cluster *etcdv1al
 		Static: &etcdv1alpha1.StaticBootstrap{
 			InitialCluster: initialClusterMembersFromMemberList(cluster, members),
 		},
-		InitialClusterState: etcdv1alpha1.InitialClusterStateExisting,
+		InitialClusterState: etcdv1alpha1.InitialClusterStateExisting.Pointer(),
 	}
 }
 

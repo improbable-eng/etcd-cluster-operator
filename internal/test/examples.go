@@ -60,7 +60,7 @@ func ExampleEtcdPeer(namespace string) *etcdv1alpha1.EtcdPeer {
 						},
 					},
 				},
-				InitialClusterState: etcdv1alpha1.InitialClusterStateNew,
+				InitialClusterState: etcdv1alpha1.InitialClusterStateNew.Pointer(),
 			},
 			Storage: &etcdv1alpha1.EtcdPeerStorage{
 				VolumeClaimTemplate: &corev1.PersistentVolumeClaimSpec{

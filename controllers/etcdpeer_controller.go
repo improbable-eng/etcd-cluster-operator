@@ -134,7 +134,7 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer) appsv1.ReplicaSet {
 		},
 		{
 			Name:  etcdenvvar.InitialClusterState,
-			Value: clusterStateValue(peer.Spec.Bootstrap.InitialClusterState),
+			Value: clusterStateValue(*peer.Spec.Bootstrap.InitialClusterState),
 		},
 	}
 

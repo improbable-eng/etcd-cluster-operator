@@ -33,6 +33,11 @@ const InitialClusterStateExisting InitialClusterState = "Existing"
 // +kubebuilder:validation:Enum=New;Existing
 type InitialClusterState string
 
+func (o InitialClusterState) Pointer() *InitialClusterState {
+	v := o
+	return &v
+}
+
 // Bootstrap contains bootstrap infromation for the peer to use.
 type Bootstrap struct {
 	// Static boostrapping requires that we know the network names of the
@@ -46,7 +51,7 @@ type Bootstrap struct {
 	//
 	// When peers are created during bootstrapping of a new cluster this should be set to `New`. When adding peers to
 	// an existing cluster during a scale-up event this should be set to `Existing`.
-	InitialClusterState InitialClusterState `json:"initialClusterState"`
+	InitialClusterState *InitialClusterState `json:"initialClusterState"`
 }
 
 // EtcdPeerSpec defines the desired state of EtcdPeer

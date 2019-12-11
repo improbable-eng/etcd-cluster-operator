@@ -40,8 +40,8 @@ func (o *EtcdPeer) Default() {
 }
 
 func (o *Bootstrap) setDefaults() {
-	if o.InitialClusterState == InitialClusterState("") {
-		o.InitialClusterState = InitialClusterStateExisting
+	if o.InitialClusterState == nil {
+		o.InitialClusterState = InitialClusterStateExisting.Pointer()
 	}
 }
 
