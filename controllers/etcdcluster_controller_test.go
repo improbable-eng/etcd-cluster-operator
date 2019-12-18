@@ -15,7 +15,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/pointer"
@@ -193,18 +193,23 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 		})
 		t.Run("EtcdPeersRemoved", func(t *testing.T) {
 			t.Log("The EtcdPeers are removed")
-			expectedPeers := expectedEtcdPeersForCluster(*etcdCluster)
-			expectedPeerNames := setOfNamespacedNamesForEtcdPeers(expectedPeers)
+			expected := expectedEtcdPeersForCluster(*etcdCluster)
 			err = try.Eventually(func() error {
-				var peers etcdv1alpha1.EtcdPeerList
-				err := s.k8sClient.List(s.ctx, &peers, client.InNamespace(etcdCluster.Namespace))
+				var actual etcdv1alpha1.EtcdPeerList
+				err := s.k8sClient.List(s.ctx, &actual, client.InNamespace(etcdCluster.Namespace))
 				require.NoError(t, err)
-				actualPeerNames := setOfNamespacedNamesForEtcdPeers(peers.Items)
-
-				if diff := cmp.Diff(expectedPeerNames, actualPeerNames); diff != "" {
-					return fmt.Errorf("unexpected peers: diff --- expected, +++ actual\n%s", diff)
-				}
-				return nil
+				return hasIdenticalListItemNames(&expected, &actual)
+			}, time.Second*20, time.Millisecond*500)
+			assert.NoError(t, err)
+		})
+		t.Run("PersistentVolumeClaimsRemoved", func(t *testing.T) {
+			t.Log("The PersistentVolumeClaims are removed")
+			expected := expectedEtcdPeersForCluster(*etcdCluster)
+			err = try.Eventually(func() error {
+				var actual v1.PersistentVolumeClaimList
+				err := s.k8sClient.List(s.ctx, &actual, client.InNamespace(etcdCluster.Namespace))
+				require.NoError(t, err)
+				return hasIdenticalListItemNames(&expected, &actual)
 			}, time.Second*20, time.Millisecond*500)
 			assert.NoError(t, err)
 		})
@@ -520,28 +525,61 @@ func expectedEtcdMembersForCluster(c etcdv1alpha1.EtcdCluster) []etcdclient.Memb
 	return members
 }
 
-func expectedEtcdPeersForCluster(c etcdv1alpha1.EtcdCluster) []etcdv1alpha1.EtcdPeer {
-	peers := make([]etcdv1alpha1.EtcdPeer, *c.Spec.Replicas)
-	for i := range peers {
+func expectedEtcdPeersForCluster(c etcdv1alpha1.EtcdCluster) etcdv1alpha1.EtcdPeerList {
+	items := make([]etcdv1alpha1.EtcdPeer, *c.Spec.Replicas)
+	for i := range items {
 		name := fmt.Sprintf("%s-%d", c.Name, i)
-		peers[i] = etcdv1alpha1.EtcdPeer{
+		items[i] = etcdv1alpha1.EtcdPeer{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
 				Namespace: c.Namespace,
 			},
 		}
 	}
-	return peers
+	return etcdv1alpha1.EtcdPeerList{
+		Items: items,
+	}
 }
 
-func setOfNamespacedNamesForEtcdPeers(peers []etcdv1alpha1.EtcdPeer) sets.String {
+func listOfRuntimeObjects(list metav1.ListInterface) []runtime.Object {
+	switch l := list.(type) {
+	case *etcdv1alpha1.EtcdPeerList:
+		ol := make([]runtime.Object, len(l.Items))
+		for i := range l.Items {
+			ol[i] = &l.Items[i]
+		}
+		return ol
+	case *v1.PersistentVolumeClaimList:
+		ol := make([]runtime.Object, len(l.Items))
+		for i := range l.Items {
+			ol[i] = &l.Items[i]
+		}
+		return ol
+	default:
+		panic("unknown type")
+	}
+
+}
+
+func setOfNamespacedNamesForList(list []runtime.Object) sets.String {
 	names := sets.NewString()
-	for _, peer := range peers {
-		nn := types.NamespacedName{
-			Namespace: peer.Namespace,
-			Name:      peer.Name,
+	for _, o := range list {
+		nn, err := client.ObjectKeyFromObject(o)
+		if err != nil {
+			panic(err)
 		}
 		names.Insert(nn.String())
 	}
 	return names
+}
+
+func hasIdenticalListItemNames(expected, actual metav1.ListInterface) error {
+	expectedObjects := listOfRuntimeObjects(expected)
+	expectedNames := setOfNamespacedNamesForList(expectedObjects)
+	actualObjects := listOfRuntimeObjects(actual)
+	actualNames := setOfNamespacedNamesForList(actualObjects)
+	if diff := cmp.Diff(expectedNames, actualNames); diff != "" {
+		return fmt.Errorf("unexpected items: diff --- expected, +++ actual\n%s", diff)
+	}
+	return nil
 }
