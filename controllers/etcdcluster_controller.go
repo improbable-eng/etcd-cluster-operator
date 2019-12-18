@@ -411,6 +411,23 @@ func (r *EtcdClusterReconciler) reconcile(
 
 			for _, peer := range peers.Items {
 				if !memberNames.Has(peer.Name) {
+					if !peer.DeletionTimestamp.IsZero() {
+						log.V(2).Info("Peer is already marked for deletion", "peer", peer.Name)
+						continue
+					}
+					if !hasPvcDeletionFinalizer(peer) {
+						updated := peer.DeepCopy()
+						updated.ObjectMeta.Finalizers = append(
+							updated.ObjectMeta.Finalizers,
+							pvcCleanupFinalizer,
+						)
+						err := r.Patch(ctx, updated, client.MergeFrom(&peer))
+						if err != nil {
+							return result, nil, fmt.Errorf("failed to add PVC cleanup finalizer: %w", err)
+						}
+						log.V(2).Info("Added PVC cleanup finalizer", "peer", peer.Name)
+						return result, nil, nil
+					}
 					err := r.Delete(ctx, &peer)
 					if err != nil {
 						return result, nil, fmt.Errorf("failed to remove peer: %w", err)
