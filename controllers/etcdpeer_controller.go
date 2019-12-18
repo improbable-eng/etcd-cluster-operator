@@ -351,15 +351,42 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		if hasPvcDeletionFinalizer(peer) {
 			log.V(2).Info("Deleting PVC for peer prior to deletion")
 			expectedPvc := pvcForPeer(&peer)
-			err := r.Delete(ctx, expectedPvc)
-			if err == nil {
-				log.V(2).Info("Deleted PVC")
+			expectedPvcNamespacedName, err := client.ObjectKeyFromObject(expectedPvc)
+			if err != nil {
+				log.Error(err, "unable to get ObjectKey frome PVC")
 				return ctrl.Result{}, nil
 			}
-			if client.IgnoreNotFound(err) != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to delete PVC: %w", err)
+			var actualPvc corev1.PersistentVolumeClaim
+			err = r.Get(ctx, expectedPvcNamespacedName, &actualPvc)
+			switch {
+			case client.IgnoreNotFound(err) != nil:
+				return ctrl.Result{}, fmt.Errorf("failed to get PVC for deleted peer: %w", err)
+			case err == nil:
+				// PVC exists.
+				// Check whether it has already been deleted (probably by us).
+				// It won't actually be deleted until the garbage collector
+				// deletes the Pod which is using it.
+				if actualPvc.ObjectMeta.DeletionTimestamp.IsZero() {
+					log.V(2).Info("Deleting PVC for peer")
+					err := r.Delete(ctx, expectedPvc)
+					if err == nil {
+						log.V(2).Info("Deleted PVC for peer")
+						return ctrl.Result{}, nil
+					} else {
+						return ctrl.Result{}, fmt.Errorf("failed to delete PVC for peer: %w", err)
+					}
+				} else {
+					log.V(2).Info("PVC for peer has already been marked for deletion")
+				}
+			case err != nil:
+				log.V(2).Info("PVC not found for peer. Already deleted or never created.")
 			}
 
+			// If we reach this stage, the PVC has been deleted or didn't need
+			// deleting.
+			// Remove the finalizer so that the EtcdPeer can be garbage
+			// collected along with its replicaset, pod...and with that the PVC
+			// will finally be deleted by the garbage collector.
 			log.V(2).Info("Removing PVC cleanup finalizer")
 			updated := peer.DeepCopy()
 			updated.ObjectMeta.Finalizers = removeString(
