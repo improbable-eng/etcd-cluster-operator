@@ -56,7 +56,7 @@ cluster, you can apply the following to the `EtcdCluster`:
 spec:
   podTemplate:
     metadata:
-      annoations:
+      annotations:
         "prometheus.io/path":   "/metrics",
         "prometheus.io/scrape": "true",
         "prometheus.io/scheme": "http",
