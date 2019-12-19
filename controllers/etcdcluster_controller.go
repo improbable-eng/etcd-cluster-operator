@@ -594,7 +594,7 @@ func etcdClientConfig(cluster *etcdv1alpha1.EtcdCluster) etcdclient.Config {
 }
 
 func peerForCluster(cluster *etcdv1alpha1.EtcdCluster, peerName string) *etcdv1alpha1.EtcdPeer {
-	return &etcdv1alpha1.EtcdPeer{
+	peer := &etcdv1alpha1.EtcdPeer{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      peerName,
 			Namespace: cluster.Namespace,
@@ -611,6 +611,12 @@ func peerForCluster(cluster *etcdv1alpha1.EtcdCluster, peerName string) *etcdv1a
 			Storage:     cluster.Spec.Storage.DeepCopy(),
 		},
 	}
+
+	if cluster.Spec.PodTemplate != nil {
+		peer.Spec.PodTemplate = cluster.Spec.PodTemplate
+	}
+
+	return peer
 }
 
 // configurePeerBootstrap is used during *cluster* bootstrap to configure the peers to be able to see each other.

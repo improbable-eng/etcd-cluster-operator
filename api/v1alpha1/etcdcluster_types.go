@@ -10,9 +10,34 @@ type EtcdClusterSpec struct {
 	//+kubebuilder:validation:Required
 	//+kubebuilder:validation:Minimum=1
 	Replicas *int32 `json:"replicas"`
+
 	// Storage is the configuration of the disks and mount points of the Etcd
 	// peers.
 	Storage *EtcdPeerStorage `json:"storage,omitempty"`
+
+	// PodTemplate describes metadata that should be applied to the underlying Pods. This may not be applied verbatim,
+	// as additional metadata may be added by the operator. In particular the operator reserves label and annotation
+	// names starting with `etcd.improbable.io`, and pod templates containing these are considered invalid and will be
+	// rejected.
+	// +optional
+	PodTemplate *EtcdPodTemplateSpec `json:"podTemplate,omitempty"`
+}
+
+// EtcdPodTemplateSpec supports a subset of a normal `v1/PodTemplateSpec` that the operator explicitly permits. We don't
+// want to allow a user to set arbitrary features on our underlying pods.
+type EtcdPodTemplateSpec struct {
+
+	// Metadata is elements to be applied to the final metadata of the underlying pods.
+	// +optional
+	Metadata *EtcdPodTemplateObjectMeta `json:"metadata,omitempty"`
+}
+
+// EtcdPodTemplateObjectMeta supports a subset of the features of a normal ObjectMeta. In particular the ones we allow.
+type EtcdPodTemplateObjectMeta struct {
+
+	// Annotations are an unstructured string:string map of annotations to be applied to the underlying pods.
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
 type EtcdMember struct {
