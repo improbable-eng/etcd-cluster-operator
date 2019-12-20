@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/semaphore"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -187,6 +189,58 @@ func (k *kubectlContext) ClusterInfoDump(outputDirectory string, namespaces ...s
 		}
 	}
 	return nil
+}
+
+type ResourceSemaphore struct {
+	cpu    *semaphore.Weighted
+	memory *semaphore.Weighted
+}
+
+func (o *ResourceSemaphore) Acquire(ctx context.Context, rl corev1.ResourceList) error {
+	for rName, rQuant := range rl {
+		switch rName {
+		case corev1.ResourceCPU:
+			if err := o.cpu.Acquire(ctx, rQuant.MilliValue()); err != nil {
+				return err
+			}
+		case corev1.ResourceMemory:
+			if err := o.memory.Acquire(ctx, rQuant.Value()); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("unsupported resource type: %s", rName)
+		}
+	}
+	return nil
+}
+
+func (o *ResourceSemaphore) Release(rl corev1.ResourceList) error {
+	for rName, rQuant := range rl {
+		switch rName {
+		case corev1.ResourceCPU:
+			o.cpu.Release(rQuant.MilliValue())
+		case corev1.ResourceMemory:
+			o.memory.Release(rQuant.Value())
+		default:
+			return fmt.Errorf("unsupported resource type: %s", rName)
+		}
+	}
+	return nil
+}
+
+func NewResourceSemaphore(rl corev1.ResourceList) (*ResourceSemaphore, error) {
+	rs := &ResourceSemaphore{}
+	for rName, rQuant := range rl {
+		switch rName {
+		case corev1.ResourceCPU:
+			rs.cpu = semaphore.NewWeighted(rQuant.MilliValue())
+		case corev1.ResourceMemory:
+			rs.memory = semaphore.NewWeighted(rQuant.Value())
+		default:
+			return nil, fmt.Errorf("unsupported resource type: %s", rName)
+		}
+	}
+	return rs, nil
 }
 
 // NamespaceForTest creates a new namespace with a name derived from the current

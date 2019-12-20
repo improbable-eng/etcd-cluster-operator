@@ -22,6 +22,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	etcd "go.etcd.io/etcd/client"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -319,12 +321,26 @@ func TestE2E(t *testing.T) {
 	}, time.Second*5, time.Second*1)
 	require.NoError(t, err, out)
 
+	resources, err := NewResourceSemaphore(corev1.ResourceList{
+		corev1.ResourceCPU:    resource.MustParse("1"),
+		corev1.ResourceMemory: resource.MustParse("2Gi"),
+	})
+	require.NoError(t, err)
+
 	// This outer function is needed because call to t.Run does not block if
 	// t.Parallel is used in its test function.
 	// See https://github.com/golang/go/issues/17791#issuecomment-258527390
 	t.Run("Parallel", func(t *testing.T) {
 		t.Run("SampleCluster", func(t *testing.T) {
 			t.Parallel()
+			rl := corev1.ResourceList{
+				// 5 node cluster
+				corev1.ResourceCPU:    resource.MustParse("1000m"),
+				corev1.ResourceMemory: resource.MustParse("2500Mi"),
+			}
+			err := resources.Acquire(ctx, rl)
+			require.NoError(t, err)
+			defer resources.Release(rl)
 			kubectl := kubectl.WithT(t)
 			ns, cleanup := NamespaceForTest(t, kubectl)
 			defer cleanup()
@@ -339,6 +355,14 @@ func TestE2E(t *testing.T) {
 		})
 		t.Run("Persistence", func(t *testing.T) {
 			t.Parallel()
+			rl := corev1.ResourceList{
+				// 1-node cluster
+				corev1.ResourceCPU:    resource.MustParse("200m"),
+				corev1.ResourceMemory: resource.MustParse("500Mi"),
+			}
+			err := resources.Acquire(ctx, rl)
+			require.NoError(t, err)
+			defer resources.Release(rl)
 			kubectl := kubectl.WithT(t)
 			ns, cleanup := NamespaceForTest(t, kubectl)
 			defer cleanup()
@@ -346,6 +370,14 @@ func TestE2E(t *testing.T) {
 		})
 		t.Run("ScaleDown", func(t *testing.T) {
 			t.Parallel()
+			rl := corev1.ResourceList{
+				// 3-node cluster
+				corev1.ResourceCPU:    resource.MustParse("600m"),
+				corev1.ResourceMemory: resource.MustParse("1500Mi"),
+			}
+			err := resources.Acquire(ctx, rl)
+			require.NoError(t, err)
+			defer resources.Release(rl)
 			kubectl := kubectl.WithT(t)
 			ns, cleanup := NamespaceForTest(t, kubectl)
 			defer cleanup()
@@ -353,6 +385,14 @@ func TestE2E(t *testing.T) {
 		})
 		t.Run("Backup", func(t *testing.T) {
 			t.Parallel()
+			rl := corev1.ResourceList{
+				// 1-node cluster
+				corev1.ResourceCPU:    resource.MustParse("200m"),
+				corev1.ResourceMemory: resource.MustParse("500Mi"),
+			}
+			err := resources.Acquire(ctx, rl)
+			require.NoError(t, err)
+			defer resources.Release(rl)
 			ns, cleanup := NamespaceForTest(t, kubectl)
 			defer cleanup()
 			backupTests(t, kubectl.WithT(t).WithDefaultNamespace(ns))
