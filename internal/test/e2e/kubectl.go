@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -192,29 +193,45 @@ func (k *kubectlContext) ClusterInfoDump(outputDirectory string, namespaces ...s
 }
 
 type ResourceSemaphore struct {
+	mu     sync.Mutex
 	cpu    *semaphore.Weighted
 	memory *semaphore.Weighted
 }
 
-func (o *ResourceSemaphore) Acquire(ctx context.Context, rl corev1.ResourceList) error {
+func (o *ResourceSemaphore) Acquire(ctx context.Context, rl corev1.ResourceList) (err error) {
+	// Only allow one client to acquire, so that all resources can be acquired in a single transaction
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	acquired := corev1.ResourceList{}
 	for rName, rQuant := range rl {
 		switch rName {
 		case corev1.ResourceCPU:
 			if err := o.cpu.Acquire(ctx, rQuant.MilliValue()); err != nil {
-				return err
+				err = fmt.Errorf("failed to acquire CPU resource: %s", err)
+				break
 			}
+			acquired[rName] = rQuant
 		case corev1.ResourceMemory:
 			if err := o.memory.Acquire(ctx, rQuant.Value()); err != nil {
-				return err
+				err = fmt.Errorf("failed to acquire Memory resource: %s", err)
+				break
 			}
+			acquired[rName] = rQuant
 		default:
-			return fmt.Errorf("unsupported resource type: %s", rName)
+			err = fmt.Errorf("unsupported resource type: %s", rName)
+			break
 		}
 	}
-	return nil
+	if err != nil {
+		// Rollback on error
+		if releaseErr := o.Release(acquired); err != nil {
+			return fmt.Errorf("failed to release resources due to %s after encountering error: %s", releaseErr, err)
+		}
+	}
+	return err
 }
 
-func (o *ResourceSemaphore) Release(rl corev1.ResourceList) error {
+func (o *ResourceSemaphore) Release(rl corev1.ResourceList) (err error) {
 	for rName, rQuant := range rl {
 		switch rName {
 		case corev1.ResourceCPU:
@@ -222,10 +239,10 @@ func (o *ResourceSemaphore) Release(rl corev1.ResourceList) error {
 		case corev1.ResourceMemory:
 			o.memory.Release(rQuant.Value())
 		default:
-			return fmt.Errorf("unsupported resource type: %s", rName)
+			err = fmt.Errorf("unsupported resource type: %s", rName)
 		}
 	}
-	return nil
+	return err
 }
 
 func NewResourceSemaphore(rl corev1.ResourceList) (*ResourceSemaphore, error) {
