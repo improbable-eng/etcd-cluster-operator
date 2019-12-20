@@ -38,6 +38,8 @@ import (
 
 const (
 	expectedClusterSize = 3
+	reservedCPU         = "1"
+	reservedMemory      = "1Gi"
 )
 
 var (
@@ -332,6 +334,8 @@ func TestE2E(t *testing.T) {
 		cpu.Add(resource.MustParse(q))
 	}
 
+	t.Log("Total CPU", cpu.String())
+	cpu.Sub(resource.MustParse(reservedCPU))
 	t.Log("Available CPU", cpu.String())
 
 	res, err = kubectl.Get("nodes", "-o=jsonpath={.items[*].status.allocatable.memory}")
@@ -341,6 +345,8 @@ func TestE2E(t *testing.T) {
 		memory.Add(resource.MustParse(q))
 	}
 
+	t.Log("Total Memory", memory.String())
+	memory.Sub(resource.MustParse(reservedMemory))
 	t.Log("Available Memory", memory.String())
 
 	resources, err := NewResourceSemaphore(corev1.ResourceList{
