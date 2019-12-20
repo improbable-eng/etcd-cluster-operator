@@ -213,11 +213,11 @@ func installOperator(t *testing.T, kubectl *kubectlContext, kind *cluster.Contex
 
 	// Ensure the operator starts.
 	err = try.Eventually(func() error {
-		out, err := kubectl.Get("--namespace", "eco-system", "deploy", "eco-controller-manager", "-o=jsonpath='{.status.readyReplicas}'")
+		out, err := kubectl.Get("--namespace", "eco-system", "deploy", "eco-controller-manager", "-o=jsonpath={.status.readyReplicas}")
 		if err != nil {
 			return err
 		}
-		if out != "'1'" {
+		if out != "1" {
 			return errors.New("expected exactly 1 replica of the operator to be available, got: " + out)
 		}
 		return nil
@@ -325,7 +325,7 @@ func TestE2E(t *testing.T) {
 		res string
 	)
 
-	res, err = kubectl.Get("nodes", "-o=jsonpath='{.items[*].status.allocatable.cpu}'")
+	res, err = kubectl.Get("nodes", "-o=jsonpath={.items[*].status.allocatable.cpu}")
 	require.NoError(t, err)
 	cpu := resource.MustParse("0")
 	for _, q := range strings.Split(res, " ") {
@@ -334,7 +334,7 @@ func TestE2E(t *testing.T) {
 
 	t.Log("Available CPU", cpu.String())
 
-	res, err = kubectl.Get("nodes", "-o=jsonpath='{.items[*].status.allocatable.memory}'")
+	res, err = kubectl.Get("nodes", "-o=jsonpath={.items[*].status.allocatable.memory}")
 	require.NoError(t, err)
 	memory := resource.MustParse("0")
 	for _, q := range strings.Split(res, " ") {
@@ -572,7 +572,7 @@ func sampleClusterTests(t *testing.T, kubectl *kubectlContext, sampleClusterPath
 		kubectl := kubectl.WithT(t)
 		err := try.Eventually(func() error {
 			t.Log("")
-			members, err := kubectl.Get("etcdcluster", "my-cluster", "-o=jsonpath='{.status.members...name}'")
+			members, err := kubectl.Get("etcdcluster", "my-cluster", "-o=jsonpath={.status.members...name}")
 			if err != nil {
 				return err
 			}
