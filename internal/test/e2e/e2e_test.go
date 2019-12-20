@@ -365,14 +365,15 @@ func TestE2E(t *testing.T) {
 			require.NoError(t, err)
 			defer resources.Release(rl)
 			kubectl := kubectl.WithT(t)
-			ns, cleanup := NamespaceForTest(t, kubectl)
+			ns, cleanup := NamespaceForTest(t, kubectl, rl)
 			defer cleanup()
 			sampleClusterTests(t, kubectl.WithDefaultNamespace(ns), sampleClusterPath)
 		})
 		t.Run("Webhooks", func(t *testing.T) {
 			t.Parallel()
+			rl := corev1.ResourceList{}
 			kubectl := kubectl.WithT(t)
-			ns, cleanup := NamespaceForTest(t, kubectl)
+			ns, cleanup := NamespaceForTest(t, kubectl, rl)
 			defer cleanup()
 			webhookTests(t, kubectl.WithDefaultNamespace(ns))
 		})
@@ -380,15 +381,16 @@ func TestE2E(t *testing.T) {
 			t.Parallel()
 			rl := corev1.ResourceList{
 				// 1-node cluster
-				corev1.ResourceCPU:    resource.MustParse("200m"),
-				corev1.ResourceMemory: resource.MustParse("500Mi"),
+				// set and get jobs
+				corev1.ResourceCPU:    resource.MustParse("300m"),
+				corev1.ResourceMemory: resource.MustParse("550Mi"),
 			}
 			t.Log("Acquiring", rl)
 			err := resources.Acquire(ctx, rl)
 			require.NoError(t, err)
 			defer resources.Release(rl)
 			kubectl := kubectl.WithT(t)
-			ns, cleanup := NamespaceForTest(t, kubectl)
+			ns, cleanup := NamespaceForTest(t, kubectl, rl)
 			defer cleanup()
 			persistenceTests(t, kubectl.WithDefaultNamespace(ns))
 		})
@@ -396,15 +398,16 @@ func TestE2E(t *testing.T) {
 			t.Parallel()
 			rl := corev1.ResourceList{
 				// 3-node cluster
-				corev1.ResourceCPU:    resource.MustParse("600m"),
-				corev1.ResourceMemory: resource.MustParse("1500Mi"),
+				// set and get jobs
+				corev1.ResourceCPU:    resource.MustParse("700m"),
+				corev1.ResourceMemory: resource.MustParse("1550Mi"),
 			}
 			t.Log("Acquiring", rl)
 			err := resources.Acquire(ctx, rl)
 			require.NoError(t, err)
 			defer resources.Release(rl)
 			kubectl := kubectl.WithT(t)
-			ns, cleanup := NamespaceForTest(t, kubectl)
+			ns, cleanup := NamespaceForTest(t, kubectl, rl)
 			defer cleanup()
 			scaleDownTests(t, kubectl.WithDefaultNamespace(ns))
 		})
@@ -412,14 +415,15 @@ func TestE2E(t *testing.T) {
 			t.Parallel()
 			rl := corev1.ResourceList{
 				// 1-node cluster
-				corev1.ResourceCPU:    resource.MustParse("200m"),
-				corev1.ResourceMemory: resource.MustParse("500Mi"),
+				// set job
+				corev1.ResourceCPU:    resource.MustParse("300m"),
+				corev1.ResourceMemory: resource.MustParse("550Mi"),
 			}
 			t.Log("Acquiring", rl)
 			err := resources.Acquire(ctx, rl)
 			require.NoError(t, err)
 			defer resources.Release(rl)
-			ns, cleanup := NamespaceForTest(t, kubectl)
+			ns, cleanup := NamespaceForTest(t, kubectl, rl)
 			defer cleanup()
 			backupTests(t, kubectl.WithT(t).WithDefaultNamespace(ns))
 		})

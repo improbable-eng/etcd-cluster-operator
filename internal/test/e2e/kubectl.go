@@ -69,6 +69,24 @@ func (k *kubectlContext) Apply(args ...string) error {
 	return err
 }
 
+// ApplyObject serializes an object to file and applies it `kubectl apply',
+// returning any error that occurred.
+func (k *kubectlContext) ApplyObject(o metav1.Object) error {
+	f, err := ioutil.TempFile("", "etcd-e2e."+o.GetNamespace()+"."+o.GetName()+".json")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	defer f.Close()
+
+	encoder := json.NewEncoder(f)
+	err = encoder.Encode(o)
+	if err != nil {
+		return err
+	}
+	return k.Apply("--filename", f.Name())
+}
+
 // Patch wraps `kubectl patch', returning any error that occurred.
 func (k *kubectlContext) Patch(args ...string) error {
 	out, err := k.do(append([]string{"patch"}, args...)...)
@@ -265,7 +283,7 @@ func NewResourceSemaphore(rl corev1.ResourceList) (*ResourceSemaphore, error) {
 // It adds a label, so that all such namespaces can easily be found.
 // And if a namespace with that label already exists, it deletes it first to
 // cleanup any resources left over from the previous test.
-func NamespaceForTest(t *testing.T, kubectl *kubectlContext) (string, func()) {
+func NamespaceForTest(t *testing.T, kubectl *kubectlContext, rl corev1.ResourceList) (string, func()) {
 	testName := t.Name()
 	name := testName
 	name = strings.ReplaceAll(name, "_", "-")
@@ -289,6 +307,25 @@ func NamespaceForTest(t *testing.T, kubectl *kubectlContext) (string, func()) {
 	t.Log("Labelling namespace")
 	out, err = kubectl.Label("namespace", name, label)
 	require.NoError(t, err, out)
+
+	t.Log("Adding resource quota")
+	rq := &corev1.ResourceQuota{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ResourceQuota",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "compute-resources",
+			Namespace: name,
+		},
+		Spec: corev1.ResourceQuotaSpec{
+			Hard: rl.DeepCopy(),
+		},
+	}
+
+	kubectl = kubectl.WithDefaultNamespace(name)
+	err = kubectl.ApplyObject(rq)
+	require.NoError(t, err)
 
 	return name, cleanup
 }
@@ -325,19 +362,7 @@ func eventuallyInCluster(kubectl *kubectlContext, name string, deadline time.Dur
 		},
 	}
 
-	f, err := ioutil.TempFile("", "e2e-job."+name+".json")
-	if err != nil {
-		return "", err
-	}
-	defer os.Remove(f.Name())
-	defer f.Close()
-
-	encoder := json.NewEncoder(f)
-	err = encoder.Encode(job)
-	if err != nil {
-		return "", err
-	}
-	err = kubectl.Apply("--filename", f.Name())
+	err := kubectl.ApplyObject(job)
 	if err != nil {
 		return "", err
 	}
