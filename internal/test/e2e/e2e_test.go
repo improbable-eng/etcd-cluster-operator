@@ -321,9 +321,31 @@ func TestE2E(t *testing.T) {
 	}, time.Second*5, time.Second*1)
 	require.NoError(t, err, out)
 
+	var (
+		res string
+	)
+
+	res, err = kubectl.Get("nodes", "-o=jsonpath='{.items[*].status.allocatable.cpu}'")
+	require.NoError(t, err)
+	cpu := resource.MustParse("0")
+	for _, q := range strings.Split(res, " ") {
+		cpu.Add(resource.MustParse(q))
+	}
+
+	t.Log("Available CPU", cpu.String())
+
+	res, err = kubectl.Get("nodes", "-o=jsonpath='{.items[*].status.allocatable.memory}'")
+	require.NoError(t, err)
+	memory := resource.MustParse("0")
+	for _, q := range strings.Split(res, " ") {
+		memory.Add(resource.MustParse(q))
+	}
+
+	t.Log("Available Memory", memory.String())
+
 	resources, err := NewResourceSemaphore(corev1.ResourceList{
-		corev1.ResourceCPU:    resource.MustParse("1"),
-		corev1.ResourceMemory: resource.MustParse("2Gi"),
+		corev1.ResourceCPU:    cpu,
+		corev1.ResourceMemory: memory,
 	})
 	require.NoError(t, err)
 
@@ -338,6 +360,7 @@ func TestE2E(t *testing.T) {
 				corev1.ResourceCPU:    resource.MustParse("1000m"),
 				corev1.ResourceMemory: resource.MustParse("2500Mi"),
 			}
+			t.Log("Acquiring", rl)
 			err := resources.Acquire(ctx, rl)
 			require.NoError(t, err)
 			defer resources.Release(rl)
@@ -360,6 +383,7 @@ func TestE2E(t *testing.T) {
 				corev1.ResourceCPU:    resource.MustParse("200m"),
 				corev1.ResourceMemory: resource.MustParse("500Mi"),
 			}
+			t.Log("Acquiring", rl)
 			err := resources.Acquire(ctx, rl)
 			require.NoError(t, err)
 			defer resources.Release(rl)
@@ -375,6 +399,7 @@ func TestE2E(t *testing.T) {
 				corev1.ResourceCPU:    resource.MustParse("600m"),
 				corev1.ResourceMemory: resource.MustParse("1500Mi"),
 			}
+			t.Log("Acquiring", rl)
 			err := resources.Acquire(ctx, rl)
 			require.NoError(t, err)
 			defer resources.Release(rl)
@@ -390,6 +415,7 @@ func TestE2E(t *testing.T) {
 				corev1.ResourceCPU:    resource.MustParse("200m"),
 				corev1.ResourceMemory: resource.MustParse("500Mi"),
 			}
+			t.Log("Acquiring", rl)
 			err := resources.Acquire(ctx, rl)
 			require.NoError(t, err)
 			defer resources.Release(rl)
