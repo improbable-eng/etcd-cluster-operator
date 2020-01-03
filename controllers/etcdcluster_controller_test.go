@@ -42,7 +42,7 @@ type StaticResponseMembersAPI struct {
 }
 
 func (s *StaticResponseMembersAPI) List(ctx context.Context) ([]etcdclient.Member, error) {
-	return s.parent.Members, nil
+	return s.parent.Members[:], nil
 }
 
 func (s *StaticResponseMembersAPI) Add(ctx context.Context, peerURL string) (*etcdclient.Member, error) {
