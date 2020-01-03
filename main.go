@@ -80,7 +80,7 @@ func main() {
 		Client:      mgr.GetClient(),
 		Log:         ctrl.Log.WithName("controllers").WithName("EtcdBackupSchedule"),
 		CronHandler: cron.New(),
-		Schedules:   map[string]controllers.Schedule{},
+		Schedules:   controllers.NewScheduleMap(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "EtcdBackupSchedule")
 		os.Exit(1)

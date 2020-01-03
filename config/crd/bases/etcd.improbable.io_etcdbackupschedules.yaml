@@ -35,7 +35,7 @@ spec:
           description: EtcdBackupScheduleSpec defines the desired state of EtcdBackupSchedule
           properties:
             backupSpec:
-              description: BackupSpec describes the template used to create backup
+              description: BackupTemplate describes the template used to create backup
                 resources. Every time the schedule fires an `EtcdBackup' will be created
                 with this template.
               properties:
