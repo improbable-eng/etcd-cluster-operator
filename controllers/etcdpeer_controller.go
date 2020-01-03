@@ -103,6 +103,69 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, log logr.Logger) appsv1.Replic
 		peerLabel:    peer.Name,
 	}
 
+	etcdContainer := corev1.Container{
+		Name:  appName,
+		Image: etcdImage,
+		Env: []corev1.EnvVar{
+			{
+				Name:  etcdenvvar.InitialCluster,
+				Value: staticBootstrapInitialCluster(*peer.Spec.Bootstrap.Static),
+			},
+			{
+				Name:  etcdenvvar.Name,
+				Value: peer.Name,
+			},
+			{
+				Name:  etcdenvvar.InitialClusterToken,
+				Value: peer.Spec.ClusterName,
+			},
+			{
+				Name:  etcdenvvar.InitialAdvertisePeerURLs,
+				Value: advertiseURL(peer, etcdPeerPort).String(),
+			},
+			{
+				Name:  etcdenvvar.AdvertiseClientURLs,
+				Value: advertiseURL(peer, etcdClientPort).String(),
+			},
+			{
+				Name:  etcdenvvar.ListenPeerURLs,
+				Value: bindAllAddress(etcdPeerPort).String(),
+			},
+			{
+				Name:  etcdenvvar.ListenClientURLs,
+				Value: bindAllAddress(etcdClientPort).String(),
+			},
+			{
+				Name:  etcdenvvar.InitialClusterState,
+				Value: clusterStateValue(peer.Spec.Bootstrap.InitialClusterState),
+			},
+			{
+				Name:  etcdenvvar.DataDir,
+				Value: etcdDataMountPath,
+			},
+		},
+		Ports: []corev1.ContainerPort{
+			{
+				Name:          "etcd-client",
+				ContainerPort: etcdClientPort,
+			},
+			{
+				Name:          "etcd-peer",
+				ContainerPort: etcdPeerPort,
+			},
+		},
+		VolumeMounts: []corev1.VolumeMount{
+			{
+				Name:      "etcd-data",
+				MountPath: etcdDataMountPath,
+			},
+		},
+	}
+	if peer.Spec.PodTemplate != nil {
+		if peer.Spec.PodTemplate.Resources != nil {
+			etcdContainer.Resources = *peer.Spec.PodTemplate.Resources
+		}
+	}
 	replicaSet := appsv1.ReplicaSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels:          labels,
@@ -123,68 +186,9 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, log logr.Logger) appsv1.Replic
 					Namespace:   peer.Namespace,
 				},
 				Spec: corev1.PodSpec{
-					Hostname:  peer.Name,
-					Subdomain: peer.Spec.ClusterName,
-					Containers: []corev1.Container{
-						{
-							Name:  appName,
-							Image: etcdImage,
-							Env: []corev1.EnvVar{
-								{
-									Name:  etcdenvvar.InitialCluster,
-									Value: staticBootstrapInitialCluster(*peer.Spec.Bootstrap.Static),
-								},
-								{
-									Name:  etcdenvvar.Name,
-									Value: peer.Name,
-								},
-								{
-									Name:  etcdenvvar.InitialClusterToken,
-									Value: peer.Spec.ClusterName,
-								},
-								{
-									Name:  etcdenvvar.InitialAdvertisePeerURLs,
-									Value: advertiseURL(peer, etcdPeerPort).String(),
-								},
-								{
-									Name:  etcdenvvar.AdvertiseClientURLs,
-									Value: advertiseURL(peer, etcdClientPort).String(),
-								},
-								{
-									Name:  etcdenvvar.ListenPeerURLs,
-									Value: bindAllAddress(etcdPeerPort).String(),
-								},
-								{
-									Name:  etcdenvvar.ListenClientURLs,
-									Value: bindAllAddress(etcdClientPort).String(),
-								},
-								{
-									Name:  etcdenvvar.InitialClusterState,
-									Value: clusterStateValue(peer.Spec.Bootstrap.InitialClusterState),
-								},
-								{
-									Name:  etcdenvvar.DataDir,
-									Value: etcdDataMountPath,
-								},
-							},
-							Ports: []corev1.ContainerPort{
-								{
-									Name:          "etcd-client",
-									ContainerPort: etcdClientPort,
-								},
-								{
-									Name:          "etcd-peer",
-									ContainerPort: etcdPeerPort,
-								},
-							},
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									Name:      "etcd-data",
-									MountPath: etcdDataMountPath,
-								},
-							},
-						},
-					},
+					Hostname:   peer.Name,
+					Subdomain:  peer.Spec.ClusterName,
+					Containers: []corev1.Container{etcdContainer},
 					Volumes: []corev1.Volume{
 						{
 							Name: "etcd-data",
