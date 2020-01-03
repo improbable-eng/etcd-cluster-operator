@@ -438,6 +438,36 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 
 	})
 
+	t.Run("PodResources", func(t *testing.T) {
+		teardownFunc, namespace := s.setupTest(t)
+		defer teardownFunc()
+
+		etcdCluster := test.ExampleEtcdCluster(namespace)
+		etcdCluster.Spec.Replicas = pointer.Int32Ptr(1)
+
+		err := s.k8sClient.Create(s.ctx, etcdCluster)
+		require.NoError(t, err, "failed to create EtcdCluster resource")
+
+		etcdCluster.Default()
+
+		// Mock out the etcd API with one that always fails - i.e., we're always in 'bootstrap' mode
+		s.etcd = &AlwaysFailEtcdAPI{}
+
+		t.Run("AppliesResourcesToPod", func(t *testing.T) {
+			replicaSetList := &appsv1.ReplicaSetList{}
+			err = try.Eventually(func() error {
+				err := s.k8sClient.List(s.ctx, replicaSetList, client.InNamespace(namespace))
+				if len(replicaSetList.Items) != int(*etcdCluster.Spec.Replicas) {
+					return errors.New(fmt.Sprintf("Wrong number of etcd Replica Sets. Had %d wanted %d", len(replicaSetList.Items), 1))
+				}
+				return err
+			}, time.Second*5, time.Millisecond*500)
+			require.NoError(t, err)
+
+			r1 := replicaSetList.Items[0]
+			assert.Equal(t, *etcdCluster.Spec.PodTemplate.Resources, r1.Spec.Template.Spec.Containers[0].Resources)
+		})
+	})
 }
 
 func assertOwnedByCluster(t *testing.T, etcdCluster *etcdv1alpha1.EtcdCluster, obj metav1.Object) {
