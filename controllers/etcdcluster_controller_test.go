@@ -273,12 +273,18 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 			// Assert on peers
 			peers := &etcdv1alpha1.EtcdPeerList{}
 			err = try.Eventually(func() error {
-				return s.k8sClient.List(s.ctx, peers, &client.ListOptions{
+				err := s.k8sClient.List(s.ctx, peers, &client.ListOptions{
 					Namespace: namespace,
 				})
+				if err != nil {
+					return err
+				}
+				if len(peers.Items) != 3 {
+					return fmt.Errorf("wrong number of peers: %#v", len(peers.Items))
+				}
+				return nil
 			}, time.Second*5, time.Millisecond*500)
 			require.NoError(t, err)
-			require.Lenf(t, peers.Items, 3, "wrong number of peers: %#v", peers)
 
 			expectedInitialCluster := make([]etcdv1alpha1.InitialClusterMember, len(peers.Items))
 			for i, peer := range peers.Items {
