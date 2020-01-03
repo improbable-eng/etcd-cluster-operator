@@ -22,6 +22,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	etcd "go.etcd.io/etcd/client"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -325,35 +327,59 @@ func TestE2E(t *testing.T) {
 	t.Run("Parallel", func(t *testing.T) {
 		t.Run("SampleCluster", func(t *testing.T) {
 			t.Parallel()
+			rl := corev1.ResourceList{
+				// 5 node cluster
+				corev1.ResourceCPU:    resource.MustParse("1000m"),
+				corev1.ResourceMemory: resource.MustParse("550Mi"),
+			}
 			kubectl := kubectl.WithT(t)
-			ns, cleanup := NamespaceForTest(t, kubectl)
+			ns, cleanup := NamespaceForTest(t, kubectl, rl)
 			defer cleanup()
 			sampleClusterTests(t, kubectl.WithDefaultNamespace(ns), sampleClusterPath)
 		})
 		t.Run("Webhooks", func(t *testing.T) {
 			t.Parallel()
+			rl := corev1.ResourceList{}
 			kubectl := kubectl.WithT(t)
-			ns, cleanup := NamespaceForTest(t, kubectl)
+			ns, cleanup := NamespaceForTest(t, kubectl, rl)
 			defer cleanup()
 			webhookTests(t, kubectl.WithDefaultNamespace(ns))
 		})
 		t.Run("Persistence", func(t *testing.T) {
 			t.Parallel()
+			rl := corev1.ResourceList{
+				// 1-node cluster
+				// set and get jobs
+				corev1.ResourceCPU:    resource.MustParse("300m"),
+				corev1.ResourceMemory: resource.MustParse("150Mi"),
+			}
 			kubectl := kubectl.WithT(t)
-			ns, cleanup := NamespaceForTest(t, kubectl)
+			ns, cleanup := NamespaceForTest(t, kubectl, rl)
 			defer cleanup()
 			persistenceTests(t, kubectl.WithDefaultNamespace(ns))
 		})
 		t.Run("ScaleDown", func(t *testing.T) {
 			t.Parallel()
+			rl := corev1.ResourceList{
+				// 3-node cluster
+				// set and get jobs
+				corev1.ResourceCPU:    resource.MustParse("700m"),
+				corev1.ResourceMemory: resource.MustParse("350Mi"),
+			}
 			kubectl := kubectl.WithT(t)
-			ns, cleanup := NamespaceForTest(t, kubectl)
+			ns, cleanup := NamespaceForTest(t, kubectl, rl)
 			defer cleanup()
 			scaleDownTests(t, kubectl.WithDefaultNamespace(ns))
 		})
 		t.Run("Backup", func(t *testing.T) {
 			t.Parallel()
-			ns, cleanup := NamespaceForTest(t, kubectl)
+			rl := corev1.ResourceList{
+				// 1-node cluster
+				// set job
+				corev1.ResourceCPU:    resource.MustParse("300m"),
+				corev1.ResourceMemory: resource.MustParse("150Mi"),
+			}
+			ns, cleanup := NamespaceForTest(t, kubectl, rl)
 			defer cleanup()
 			backupTests(t, kubectl.WithT(t).WithDefaultNamespace(ns))
 		})

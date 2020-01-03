@@ -45,7 +45,8 @@ jobs:
       - checkout
       - run:
          name: End to end tests
-         command: make kind
+         # Limit parallelism of E2E tests to avoid overloading the CircleCI
+         command: make kind TEST_PARALLEL_E2E=1
       - store_artifacts:
           path: /tmp/etcd-e2e
 
