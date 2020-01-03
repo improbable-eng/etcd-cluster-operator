@@ -109,6 +109,25 @@ spec:
                         of annotations to be applied to the underlying pods.
                       type: object
                   type: object
+                resources:
+                  description: 'Resources is for configuring the compute resources
+                    required by the etcd container. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/'
+                  properties:
+                    limits:
+                      additionalProperties:
+                        type: string
+                      description: 'Limits describes the maximum amount of compute
+                        resources allowed. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/'
+                      type: object
+                    requests:
+                      additionalProperties:
+                        type: string
+                      description: 'Requests describes the minimum amount of compute
+                        resources required. If Requests is omitted for a container,
+                        it defaults to Limits if that is explicitly specified, otherwise
+                        to an implementation-defined value. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/'
+                      type: object
+                  type: object
               type: object
             storage:
               description: Storage is the configuration of the disks and mount points

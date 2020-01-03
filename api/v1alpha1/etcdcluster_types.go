@@ -1,6 +1,7 @@
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -30,6 +31,11 @@ type EtcdPodTemplateSpec struct {
 	// Metadata is elements to be applied to the final metadata of the underlying pods.
 	// +optional
 	Metadata *EtcdPodTemplateObjectMeta `json:"metadata,omitempty"`
+
+	// Resources is for configuring the compute resources required by the etcd container. More info:
+	// https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/
+	// +optional
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 }
 
 // EtcdPodTemplateObjectMeta supports a subset of the features of a normal ObjectMeta. In particular the ones we allow.
