@@ -143,6 +143,13 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, log logr.Logger) appsv1.Replic
 				Name:  etcdenvvar.DataDir,
 				Value: etcdDataMountPath,
 			},
+			// GOMAXPROCS defaults to the number of CPUs on the Kubelet host
+			// which may be much higher than the requests and limits defined for the pod,
+			// See https://github.com/golang/go/issues/33803
+			{
+				Name:  "GOMAXPROCS",
+				Value: "1",
+			},
 		},
 		Ports: []corev1.ContainerPort{
 			{
