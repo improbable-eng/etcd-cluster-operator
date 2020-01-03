@@ -284,6 +284,16 @@ func setupCurrentContext(t *testing.T) *kubectlContext {
 	}
 }
 
+func resourceListForCluster(c etcdv1alpha1.EtcdCluster, maxReplicas int) corev1.ResourceList {
+	resources := c.Spec.PodTemplate.Resources.Requests.DeepCopy()
+	for i := 1; i < maxReplicas; i++ {
+		for _, rQuant := range resources {
+			rQuant.Add(rQuant)
+		}
+	}
+	return resources
+}
+
 func TestE2E(t *testing.T) {
 	var kubectl *kubectlContext
 	ctx, cancel := context.WithCancel(context.Background())
