@@ -194,27 +194,28 @@ func (r *EtcdClusterReconciler) updateStatus(ctx context.Context,
 	peers *etcdv1alpha1.EtcdPeerList,
 	reconcilerEvent reconcilerevent.ReconcilerEvent) error {
 
+	updated := cluster.DeepCopy()
+
 	if members != nil {
-		cluster.Status.Members = make([]etcdv1alpha1.EtcdMember, len(*members))
+		updated.Status.Members = make([]etcdv1alpha1.EtcdMember, len(*members))
 		for i, member := range *members {
-			cluster.Status.Members[i] = etcdv1alpha1.EtcdMember{
+			updated.Status.Members[i] = etcdv1alpha1.EtcdMember{
 				Name: member.Name,
 				ID:   member.ID,
 			}
 		}
 	} else {
-		if cluster.Status.Members == nil {
-			cluster.Status.Members = make([]etcdv1alpha1.EtcdMember, 0)
+		if updated.Status.Members == nil {
+			updated.Status.Members = make([]etcdv1alpha1.EtcdMember, 0)
 		} else {
 			// In this case we don't have up-to date members for whatever reason, which could be a temporary disruption
 			// such as a network issue. But we also know the status on the resource already has a member list. So just
 			// leave that (stale) data where it is and don't change it.
 		}
 	}
+	updated.Status.Replicas = int32(len(peers.Items))
 
-	cluster.Status.Replicas = int32(len(peers.Items))
-
-	if err := r.Client.Status().Update(ctx, cluster); err != nil {
+	if err := r.Client.Status().Patch(ctx, updated, client.MergeFrom(cluster)); err != nil {
 		return err
 	}
 
