@@ -21,6 +21,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/etcd"
@@ -417,10 +418,7 @@ func (r *EtcdClusterReconciler) reconcile(
 					}
 					if !hasPvcDeletionFinalizer(peer) {
 						updated := peer.DeepCopy()
-						updated.ObjectMeta.Finalizers = append(
-							updated.ObjectMeta.Finalizers,
-							pvcCleanupFinalizer,
-						)
+						controllerutil.AddFinalizer(updated, pvcCleanupFinalizer)
 						err := r.Patch(ctx, updated, client.MergeFrom(&peer))
 						if err != nil {
 							return result, nil, fmt.Errorf("failed to add PVC cleanup finalizer: %w", err)
