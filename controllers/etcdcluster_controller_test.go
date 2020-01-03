@@ -341,7 +341,7 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 					ClientURLs: []string{clientURL.String()},
 				}
 			}
-			s.etcd = &StaticResponseEtcdAPI{Members: members}
+			s.setEtcd(&StaticResponseEtcdAPI{Members: members})
 
 			err = try.Eventually(func() error {
 				fetchedCluster := &etcdv1alpha1.EtcdCluster{}
