@@ -135,16 +135,21 @@ func (s *controllerSuite) setupTest(t *testing.T) (teardownFunc func(), namespac
 	}
 	err = backupController.SetupWithManager(mgr)
 	require.NoError(t, err, "failed to setup EtcdBackupSchedule controller")
-
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		err := mgr.Start(stopCh)
 		require.NoError(t, err, "failed to start manager")
 	}()
 
 	return func() {
+		defer func() {
+			close(stopCh)
+			wg.Wait()
+		}()
 		err := s.k8sClient.Delete(s.ctx, namespace)
 		require.NoErrorf(t, err, "Failed to delete test namespace: %#v", namespace)
-		close(stopCh)
 	}, namespace.Name
 }
 
