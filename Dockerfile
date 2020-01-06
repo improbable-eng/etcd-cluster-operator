@@ -1,5 +1,3 @@
-ARG user=root
-
 # Build the manager binary
 FROM golang:1.13.1 as builder
 
@@ -24,14 +22,13 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager 
 FROM gcr.io/distroless/static:nonroot as release
 WORKDIR /
 COPY --from=builder /workspace/manager .
-USER $user:$user
+USER nonroot:nonroot
 
 ENTRYPOINT ["/manager"]
 
 FROM alpine:3.10.3 as debug
 WORKDIR /
 COPY --from=builder /workspace/manager .
-USER $user:$user
 
 RUN apk update && apk add ca-certificates bash curl drill jq
 

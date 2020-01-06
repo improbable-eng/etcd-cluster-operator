@@ -97,7 +97,7 @@ verify-gomod:
 
 # Build the docker image. This should be used for release versions, and builds the image on top of distroless.
 docker-build: test
-	docker build . --target release -t ${IMG} --build-arg user=nonroot
+	docker build . --target release -t ${IMG}
 
 # Build the docker image with debug tools installed.
 docker-build-debug: test
