@@ -1,7 +1,3 @@
-# When set, the container will be built with debug tools installed.
-ARG image=alpine:3.10.3
-ARG user=root
-
 # Build the manager binary
 FROM golang:1.13.1 as builder
 
@@ -23,13 +19,17 @@ COPY webhooks/ webhooks/
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager main.go
 
-FROM $image 
+FROM gcr.io/distroless/static:nonroot as release
 WORKDIR /
 COPY --from=builder /workspace/manager .
-USER $user:$user
+USER nonroot:nonroot
 
-ARG debug=false
+ENTRYPOINT ["/manager"]
 
-RUN if [ "$debug" = "true" ] ; then apk update && apk add ca-certificates bash curl drill jq ; fi
+FROM alpine:3.10.3 as debug
+WORKDIR /
+COPY --from=builder /workspace/manager .
+
+RUN apk update && apk add ca-certificates bash curl drill jq
 
 ENTRYPOINT ["/manager"]
