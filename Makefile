@@ -97,11 +97,11 @@ verify-gomod:
 
 # Build the docker image. This should be used for release versions, and builds the image on top of distroless.
 docker-build: test
-	docker build . -t ${IMG} --build-arg image=gcr.io/distroless/static:nonroot --build-arg user=nonroot
+	docker build . --target release -t ${IMG} --build-arg user=nonroot
 
 # Build the docker image with debug tools installed.
 docker-build-debug: test
-	docker build . -t ${IMG} --build-arg debug=true
+	docker build . --target debug -t ${IMG}
 
 # Push the docker image
 docker-push:
