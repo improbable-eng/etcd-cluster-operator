@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
@@ -213,7 +214,10 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 		teardownFunc, namespace := s.setupTest(t)
 		defer teardownFunc()
 
+		const expectedReplicas = 3
+
 		etcdCluster := test.ExampleEtcdCluster(namespace)
+		etcdCluster.Spec.Replicas = pointer.Int32Ptr(expectedReplicas)
 
 		err := s.k8sClient.Create(s.ctx, etcdCluster)
 		require.NoError(t, err, "failed to create EtcdCluster resource")
@@ -273,12 +277,18 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 			// Assert on peers
 			peers := &etcdv1alpha1.EtcdPeerList{}
 			err = try.Eventually(func() error {
-				return s.k8sClient.List(s.ctx, peers, &client.ListOptions{
+				err := s.k8sClient.List(s.ctx, peers, &client.ListOptions{
 					Namespace: namespace,
 				})
+				if err != nil {
+					return err
+				}
+				if len(peers.Items) != expectedReplicas {
+					return fmt.Errorf("wrong number of peers. expected: %d, actual: %d", expectedReplicas, len(peers.Items))
+				}
+				return nil
 			}, time.Second*5, time.Millisecond*500)
 			require.NoError(t, err)
-			require.Lenf(t, peers.Items, 3, "wrong number of peers: %#v", peers)
 
 			expectedInitialCluster := make([]etcdv1alpha1.InitialClusterMember, len(peers.Items))
 			for i, peer := range peers.Items {
