@@ -14,6 +14,12 @@ mechanism capable of modifying and viewing Kubernetes resources.
 To create a new cluster, create an `EtcdCluster` resource in the namespace you want the cluster's pods to run in. The
 `spec` field of the resource is used to configure the desired properties of the cluster.
 
+### Image
+
+The `spec.image` field determines which Docker image is used for each  `EtcdPeer` created by the operator.
+This field is immutable.
+Image changes are not yet supported.
+
 ### Replicas
 
 The `spec.replicas` field determines the number of pods that are run in the etcd cluster.
