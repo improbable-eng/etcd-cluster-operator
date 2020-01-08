@@ -30,7 +30,7 @@ type EtcdPeerReconciler struct {
 }
 
 const (
-	etcdImage  = "quay.io/coreos/etcd:v3.2.27"
+	etcdImage  = "quay.io/coreos/etcd:v3.2.28"
 	etcdScheme = "http"
 	peerLabel  = "etcd.improbable.io/peer-name"
 )
