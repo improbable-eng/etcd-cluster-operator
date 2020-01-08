@@ -90,6 +90,9 @@ spec:
                 label on the Pod running etcd.
               maxLength: 64
               type: string
+            image:
+              description: Image is the Docker image which will be used for each EtcdPeer.
+              type: string
             podTemplate:
               description: PodTemplate describes metadata that should be applied to
                 the underlying Pods. This may not be applied verbatim, as additional
@@ -255,6 +258,7 @@ spec:
               type: object
           required:
           - clusterName
+          - image
           type: object
         status:
           description: EtcdPeerStatus defines the observed state of EtcdPeer

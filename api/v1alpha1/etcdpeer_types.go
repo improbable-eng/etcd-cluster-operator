@@ -51,6 +51,10 @@ type Bootstrap struct {
 
 // EtcdPeerSpec defines the desired state of EtcdPeer
 type EtcdPeerSpec struct {
+	// Image is the Docker image which will be used for each EtcdPeer.
+	//+kubebuilder:validation:Required
+	Image string `json:"image"`
+
 	// The name of the etcd cluster that this peer should join. This will be
 	// used to set the `spec.subdomain` field and the
 	// `etcd.improbable.io/cluster-name` label on the Pod running etcd.

@@ -7,6 +7,10 @@ import (
 
 // EtcdClusterSpec defines the desired state of EtcdCluster
 type EtcdClusterSpec struct {
+	// Image is the Docker image which will be used for each EtcdPeer.
+	//+kubebuilder:validation:Required
+	Image string `json:"image"`
+
 	// Number of instances of etcd to assemble into this cluster
 	//+kubebuilder:validation:Required
 	//+kubebuilder:validation:Minimum=1
