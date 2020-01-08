@@ -170,7 +170,7 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, log logr.Logger) appsv1.Replic
 			// See https://github.com/golang/go/issues/33803
 			// If a CPU limit has been set, then set GOMAXPROCS to an integer
 			// which between 1 and floor(cpuLimit).
-			// Etcd might one day set it's own GOMAXPROCS based on CPU quota:
+			// Etcd might one day set its own GOMAXPROCS based on CPU quota:
 			// See: https://github.com/etcd-io/etcd/issues/11508
 			goMaxProcs := cpuLimit.MilliValue() / 1000
 			if goMaxProcs < 1 {
