@@ -39,10 +39,15 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		teardownFunc, namespace := s.setupTest(t)
 		defer teardownFunc()
 
+		const expectedImage = "registry1/etcd:v1.2.3@sha256:45b23dee08af5e43a7fea6c4cf9c25ccf269ee113168c19722f87876677c5cb2"
+
 		etcdPeer := exampleEtcdPeer(namespace)
+
 		const cpuLimit = "2.2"
 		const expectedGoMaxProcs = "2"
 		etcdPeer.Spec.PodTemplate.Resources.Limits[corev1.ResourceCPU] = resource.MustParse(cpuLimit)
+		etcdPeer.Spec.Image = expectedImage
+
 		err := s.k8sClient.Create(s.ctx, etcdPeer)
 		require.NoError(t, err, "failed to create EtcdPeer resource")
 
@@ -72,6 +77,7 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 			`.spec.template.spec.containers[?(@.name=="etcd")].volumeMounts[?(@.name=="etcd-data")].mountPath`: etcdDataMountPath,
 			`.spec.template.spec.containers[?(@.name=="etcd")].env[?(@.name=="ETCD_DATA_DIR")].value`:          etcdDataMountPath,
 			`.spec.template.spec.containers[?(@.name=="etcd")].env[?(@.name=="GOMAXPROCS")].value`:             expectedGoMaxProcs,
+			`.spec.template.spec.containers[?(@.name=="etcd")].image`:                                          expectedImage,
 		}
 		test.AssertStructFields(t, expectations, replicaSet)
 
@@ -84,9 +90,6 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 			}
 		}
 		require.NotNil(t, etcdContainer, "Failed to find an etcd container")
-
-		image := strings.Split(etcdContainer.Image, ":")[0]
-		require.Equal(t, "quay.io/coreos/etcd", image, "etcd Image was not the CoreOS one")
 
 		peers := strings.Split(requireEnvVar(t, etcdContainer.Env, "ETCD_INITIAL_CLUSTER"), ",")
 		require.Len(t, peers, 3)

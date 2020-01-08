@@ -250,9 +250,11 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 		defer teardownFunc()
 
 		const expectedReplicas = 3
+		const expectedImage = "registry1/etcd:v1.2.3@sha256:45b23dee08af5e43a7fea6c4cf9c25ccf269ee113168c19722f87876677c5cb2"
 
 		etcdCluster := test.ExampleEtcdCluster(namespace)
 		etcdCluster.Spec.Replicas = pointer.Int32Ptr(expectedReplicas)
+		etcdCluster.Spec.Image = expectedImage
 
 		err := s.k8sClient.Create(s.ctx, etcdCluster)
 		require.NoError(t, err, "failed to create EtcdCluster resource")
@@ -525,6 +527,7 @@ func assertPeer(t *testing.T, cluster *etcdv1alpha1.EtcdCluster, peer *etcdv1alp
 	assertOwnedByCluster(t, cluster, peer)
 
 	assert.Equal(t, cluster.Spec.Storage, peer.Spec.Storage, "unexpected peer storage")
+	assert.Equal(t, cluster.Spec.Image, peer.Spec.Image, "unexpected image")
 }
 
 func expectedStatusForCluster(c etcdv1alpha1.EtcdCluster) etcdv1alpha1.EtcdClusterStatus {
