@@ -5,6 +5,7 @@ kind: EtcdPeer
 metadata:
   name: e2e-defaulting-peer
 spec:
+  image: "quay.io/coreos/etcd:v3.2.28"
   clusterName: e2e-defaulting-peer
   storage:
     volumeClaimTemplate:

@@ -3,6 +3,7 @@ kind: EtcdPeer
 metadata:
   name: etcdpeer-sample
 spec:
+  image: "quay.io/coreos/etcd:v3.2.28"
   clusterName: bees
   storage:
     volumeClaimTemplate:

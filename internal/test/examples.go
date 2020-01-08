@@ -19,6 +19,7 @@ func ExampleEtcdCluster(namespace string) *etcdv1alpha1.EtcdCluster {
 			Namespace: namespace,
 		},
 		Spec: etcdv1alpha1.EtcdClusterSpec{
+			Image:    "quay.io/coreos/etcd:v3.2.28",
 			Replicas: pointer.Int32Ptr(3),
 			Storage: &etcdv1alpha1.EtcdPeerStorage{
 				VolumeClaimTemplate: &corev1.PersistentVolumeClaimSpec{
@@ -54,6 +55,7 @@ func ExampleEtcdPeer(namespace string) *etcdv1alpha1.EtcdPeer {
 			Namespace: namespace,
 		},
 		Spec: etcdv1alpha1.EtcdPeerSpec{
+			Image:       "quay.io/coreos/etcd:v3.2.28",
 			ClusterName: "my-cluster",
 			Bootstrap: &etcdv1alpha1.Bootstrap{
 				Static: &etcdv1alpha1.StaticBootstrap{

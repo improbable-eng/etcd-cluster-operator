@@ -3,6 +3,7 @@ kind: EtcdCluster
 metadata:
   name: my-cluster
 spec:
+  image: "quay.io/coreos/etcd:v3.2.28"
   replicas: 3
   storage:
     volumeClaimTemplate:
