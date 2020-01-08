@@ -74,10 +74,10 @@ spec:
     resources:
       requests:
         cpu: 200m
-        memory: 100Mi
+        memory: 200Mi
       limits:
         cpu: 200m
-        memory: 100Mi
+        memory: 200Mi
 ```
 
 In a production cluster you should set these requests higher;

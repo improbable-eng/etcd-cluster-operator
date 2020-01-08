@@ -34,11 +34,11 @@ func ExampleEtcdCluster(namespace string) *etcdv1alpha1.EtcdCluster {
 				Resources: &corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
 						"cpu":    resource.MustParse("200m"),
-						"memory": resource.MustParse("100Mi"),
+						"memory": resource.MustParse("200Mi"),
 					},
 					Limits: corev1.ResourceList{
 						"cpu":    resource.MustParse("200m"),
-						"memory": resource.MustParse("100Mi"),
+						"memory": resource.MustParse("200Mi"),
 					},
 				},
 			},
@@ -88,11 +88,11 @@ func ExampleEtcdPeer(namespace string) *etcdv1alpha1.EtcdPeer {
 				Resources: &corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
 						"cpu":    resource.MustParse("200m"),
-						"memory": resource.MustParse("100Mi"),
+						"memory": resource.MustParse("200Mi"),
 					},
 					Limits: corev1.ResourceList{
 						"cpu":    resource.MustParse("200m"),
-						"memory": resource.MustParse("100Mi"),
+						"memory": resource.MustParse("200Mi"),
 					},
 				},
 			},

@@ -330,7 +330,7 @@ func TestE2E(t *testing.T) {
 			rl := corev1.ResourceList{
 				// 5 node cluster
 				corev1.ResourceCPU:    resource.MustParse("1000m"),
-				corev1.ResourceMemory: resource.MustParse("550Mi"),
+				corev1.ResourceMemory: resource.MustParse("2000Mi"),
 			}
 			kubectl := kubectl.WithT(t)
 			ns, cleanup := NamespaceForTest(t, kubectl, rl)
@@ -351,7 +351,7 @@ func TestE2E(t *testing.T) {
 				// 1-node cluster
 				// set and get jobs
 				corev1.ResourceCPU:    resource.MustParse("300m"),
-				corev1.ResourceMemory: resource.MustParse("150Mi"),
+				corev1.ResourceMemory: resource.MustParse("250Mi"),
 			}
 			kubectl := kubectl.WithT(t)
 			ns, cleanup := NamespaceForTest(t, kubectl, rl)
@@ -364,7 +364,7 @@ func TestE2E(t *testing.T) {
 				// 3-node cluster
 				// set and get jobs
 				corev1.ResourceCPU:    resource.MustParse("700m"),
-				corev1.ResourceMemory: resource.MustParse("350Mi"),
+				corev1.ResourceMemory: resource.MustParse("650Mi"),
 			}
 			kubectl := kubectl.WithT(t)
 			ns, cleanup := NamespaceForTest(t, kubectl, rl)
@@ -377,7 +377,7 @@ func TestE2E(t *testing.T) {
 				// 1-node cluster
 				// set job
 				corev1.ResourceCPU:    resource.MustParse("300m"),
-				corev1.ResourceMemory: resource.MustParse("150Mi"),
+				corev1.ResourceMemory: resource.MustParse("250Mi"),
 			}
 			ns, cleanup := NamespaceForTest(t, kubectl, rl)
 			defer cleanup()
