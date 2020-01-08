@@ -82,6 +82,11 @@ spec:
 
 In a production cluster you should set these requests higher;
 refer to the [Etcd Hardware Recommendations](https://github.com/etcd-io/etcd/blob/release-3.4/Documentation/op-guide/hardware.md).
+
+If you supply a CPU limit, the `etcd-cluster-operator` will also set an [environment variable named `GOMAXPROCS`](https://golang.org/pkg/runtime/#hdr-Environment_Variables)
+which governs the number of threads used by the Golang runtime running the Etcd process.
+The minimum value is 1 and if the CPU limit is greater than 1 core, the value will be the rounded down to the nearest integer.
+
 Alternatively, you can omit the resource requirements altogether and rely on [Limit Ranges](https://kubernetes.io/docs/concepts/policy/limit-range/) to set default requests and limits to the containers that are created by the operator.
 
 ## Understanding Cluster Status
