@@ -205,7 +205,7 @@ $ kubectl apply -f config/samples/etcd_v1alpha1_etcdcluster.yaml
 
 You could also use `kubectl scale` to do this, e.g.,
 
-```bash 
+```bash
 $ kubectl scale etcdcluster my-cluster --replicas 1
 ```
 
@@ -237,3 +237,38 @@ If you want to scale up an `EtcdCluster` which has previously been scaled down,
 you must first remove the `PersistentVolumeClaim` associated with any `EtcdPeer` that was removed during the scale down
 operations. Otherwise new `EtcdPeer` and `Pods` will be started with `/var/lib/etcd` data corresponding to an old etcd
 member ID, and the node will fail to join the cluster.
+
+## Frequently Asked Questions
+
+### Why aren't there Liveness Probes for the Etcd Pods?
+
+Etcd exits with an non-zero exit status if it encounters unrecoverable errors
+or if it fails to join the cluster.
+And we do not know of any Etcd deadlock conditions.
+So the Liveness Probe seems unnecessary.
+
+And furthermore [Liveness Probes may cause more problems than they solve](https://srcco.de/posts/kubernetes-liveness-probes-are-dangerous.html).
+In [our experiments](https://github.com/improbable-eng/etcd-cluster-operator/pull/83#issuecomment-561111653),
+using the a [Liveness Probe based on the Etcd health endpoint, as configured by Kubeadm](https://github.com/kubernetes/kubernetes/pull/81385),
+the Liveness Probe regularly failed:
+during scaling operations due to cluster leader elections, and
+at times of high network latency between Etcd peers.
+This caused Etcd containers to be restarted, which made the situation even worse.
+
+If you disagree with this or if you find a valid use-case for Readiness Probes,
+please [create an issue](https://github.com/improbable-eng/etcd-cluster-operator/issues).
+
+### Why aren't there Readiness Probes for the Etcd Pods?
+
+Our current thinking is that Readiness Probes are unnecessary
+because we assume that clients will connect to multiple Etcd nodes via a Headless Service
+and perform their own health checks.
+
+Additionally, it's not clear how to configure the Readiness Probe.
+An HTTP Readiness Probe, configured to GET the Etcd health endpoint would fail whenever the cluster was unhealthy,
+and all Etcd Pod Readiness Probes would fail at the same time.
+A client connecting to the Service for these pods would have to deal with empty DNS responses
+because all the Endpoints for the service would be removed when the Readiness Probe failed.
+
+If you disagree with this or if you find a valid use-case for Readiness Probes,
+please [create an issue](https://github.com/improbable-eng/etcd-cluster-operator/issues).
