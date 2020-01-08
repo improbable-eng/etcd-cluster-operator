@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -41,8 +42,26 @@ type StaticResponseMembersAPI struct {
 	parent *StaticResponseEtcdAPI
 }
 
+// deepCopyEtcdClientMember makes a copy of the supplied Member
+func deepCopyEtcdClientMember(in etcdclient.Member) (out etcdclient.Member, err error) {
+	encoded, err := json.Marshal(in)
+	if err != nil {
+		return out, err
+	}
+	err = json.Unmarshal(encoded, &out)
+	return out, err
+}
+
 func (s *StaticResponseMembersAPI) List(ctx context.Context) ([]etcdclient.Member, error) {
-	return s.parent.Members[:], nil
+	out := make([]etcdclient.Member, len(s.parent.Members))
+	for i := 0; i < len(out); i++ {
+		new, err := deepCopyEtcdClientMember(s.parent.Members[i])
+		if err != nil {
+			return nil, err
+		}
+		out[i] = new
+	}
+	return out, nil
 }
 
 func (s *StaticResponseMembersAPI) Add(ctx context.Context, peerURL string) (*etcdclient.Member, error) {
