@@ -303,7 +303,7 @@ during scaling operations due to cluster leader elections, and
 at times of high network latency between Etcd peers.
 This caused Etcd containers to be restarted, which made the situation even worse.
 
-If you disagree with this or if you find a valid use-case for Readiness Probes,
+If you disagree with this or if you find a valid use-case for Liveness Probes,
 please [create an issue](https://github.com/improbable-eng/etcd-cluster-operator/issues).
 
 ### Why aren't there Readiness Probes for the Etcd Pods?
