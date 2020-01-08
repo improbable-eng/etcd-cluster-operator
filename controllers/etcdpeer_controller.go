@@ -143,13 +143,6 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, log logr.Logger) appsv1.Replic
 				Name:  etcdenvvar.DataDir,
 				Value: etcdDataMountPath,
 			},
-			// GOMAXPROCS defaults to the number of CPUs on the Kubelet host
-			// which may be much higher than the requests and limits defined for the pod,
-			// See https://github.com/golang/go/issues/33803
-			{
-				Name:  "GOMAXPROCS",
-				Value: "1",
-			},
 		},
 		Ports: []corev1.ContainerPort{
 			{
@@ -171,6 +164,23 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, log logr.Logger) appsv1.Replic
 	if peer.Spec.PodTemplate != nil {
 		if peer.Spec.PodTemplate.Resources != nil {
 			etcdContainer.Resources = *peer.Spec.PodTemplate.Resources
+			cpuLimit := etcdContainer.Resources.Limits.Cpu()
+			// GOMAXPROCS defaults to the number of CPUs on the Kubelet host
+			// which may be much higher than the requests and limits defined for the pod,
+			// See https://github.com/golang/go/issues/33803
+			// If a CPU limit has been set, then set GOMAXPROCS to an integer
+			// which between 1 and floor(cpuLimit).
+			goMaxProcs := cpuLimit.MilliValue() / 1000
+			if goMaxProcs < 1 {
+				goMaxProcs = 1
+			}
+			etcdContainer.Env = append(
+				etcdContainer.Env,
+				corev1.EnvVar{
+					Name:  "GOMAXPROCS",
+					Value: fmt.Sprintf("%d", goMaxProcs),
+				},
+			)
 		}
 	}
 	replicaSet := appsv1.ReplicaSet{
