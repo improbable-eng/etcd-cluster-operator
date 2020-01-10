@@ -10,3 +10,11 @@ spec:
       resources:
         requests:
           storage: 100Mi
+  podTemplate:
+    resources:
+      requests:
+        cpu: 200m
+        memory: 200Mi
+      limits:
+        cpu: 200m
+        memory: 200Mi

@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
@@ -64,6 +65,24 @@ func (k *kubectlContext) Apply(args ...string) error {
 	out, err := k.do(append([]string{"apply"}, args...)...)
 	k.t.Log(string(out))
 	return err
+}
+
+// ApplyObject serializes an object to file and applies it `kubectl apply',
+// returning any error that occurred.
+func (k *kubectlContext) ApplyObject(o metav1.Object) error {
+	f, err := ioutil.TempFile("", "etcd-e2e."+o.GetNamespace()+"."+o.GetName()+".json")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	defer f.Close()
+
+	encoder := json.NewEncoder(f)
+	err = encoder.Encode(o)
+	if err != nil {
+		return err
+	}
+	return k.Apply("--filename", f.Name())
 }
 
 // Patch wraps `kubectl patch', returning any error that occurred.
@@ -194,19 +213,33 @@ func (k *kubectlContext) ClusterInfoDump(outputDirectory string, namespaces ...s
 // It adds a label, so that all such namespaces can easily be found.
 // And if a namespace with that label already exists, it deletes it first to
 // cleanup any resources left over from the previous test.
-func NamespaceForTest(t *testing.T, kubectl *kubectlContext) (string, func()) {
+func NamespaceForTest(t *testing.T, kubectl *kubectlContext, rl corev1.ResourceList) (string, func()) {
 	testName := t.Name()
 	name := testName
 	name = strings.ReplaceAll(name, "_", "-")
 	name = strings.ReplaceAll(name, "/", "-")
 	name = strings.ToLower(name)
 	label := fmt.Sprintf("%s=%s", testNameLabelKey, name)
+	rq := &corev1.ResourceQuota{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ResourceQuota",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "compute-resources",
+			Namespace: name,
+		},
+		Spec: corev1.ResourceQuotaSpec{
+			Hard: rl.DeepCopy(),
+		},
+	}
 	cleanup := func() {
 		kubectl := kubectl.WithDefaultNamespace(name)
 		t.Logf("Saving logs for namespace: %s", name)
 		kubectl.ClusterInfoDump(path.Join(*fOutputDirectory, name), name)
 		t.Logf("Evicting all pods from namespace: %s", name)
-		err := kubectl.Apply("--filename", "testdata/zero-resource-quota.yaml")
+		rq.Spec.Hard[corev1.ResourcePods] = resource.MustParse("0")
+		err := kubectl.ApplyObject(rq)
 		require.NoError(t, err)
 		err = kubectl.Delete("pods", "--all", "--wait=false")
 		require.NoError(t, err)
@@ -218,6 +251,11 @@ func NamespaceForTest(t *testing.T, kubectl *kubectlContext) (string, func()) {
 	t.Log("Labelling namespace")
 	out, err = kubectl.Label("namespace", name, label)
 	require.NoError(t, err, out)
+
+	t.Log("Adding resource quota")
+	kubectl = kubectl.WithDefaultNamespace(name)
+	err = kubectl.ApplyObject(rq)
+	require.NoError(t, err)
 
 	return name, cleanup
 }
@@ -246,6 +284,16 @@ func eventuallyInCluster(kubectl *kubectlContext, name string, deadline time.Dur
 							Name:    "container1",
 							Image:   image,
 							Command: command,
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									"cpu":    resource.MustParse("100m"),
+									"memory": resource.MustParse("50Mi"),
+								},
+								Limits: corev1.ResourceList{
+									"cpu":    resource.MustParse("100m"),
+									"memory": resource.MustParse("50Mi"),
+								},
+							},
 						},
 					},
 					RestartPolicy: corev1.RestartPolicyOnFailure,

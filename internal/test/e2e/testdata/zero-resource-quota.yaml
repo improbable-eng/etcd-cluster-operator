@@ -1,7 +1,0 @@
-apiVersion: v1
-kind: ResourceQuota
-metadata:
-  name: evict-all-pods
-spec:
-  hard:
-    pods: "0"

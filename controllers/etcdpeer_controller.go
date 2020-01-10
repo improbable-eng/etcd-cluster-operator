@@ -11,8 +11,10 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -92,6 +94,28 @@ func clusterStateValue(cs etcdv1alpha1.InitialClusterState) string {
 	}
 }
 
+// goMaxProcs calculates an appropriate Golang thread limit (GOMAXPROCS) for the
+// configured CPU limit.
+//
+// GOMAXPROCS defaults to the number of CPUs on the Kubelet host which may be
+// much higher than the requests and limits defined for the pod,
+// See https://github.com/golang/go/issues/33803
+// If resources have been set and if CPU limit is > 0 then set GOMAXPROCS to an
+// integer between 1 and floor(cpuLimit).
+// Etcd might one day set its own GOMAXPROCS based on CPU quota:
+// See: https://github.com/etcd-io/etcd/issues/11508
+func goMaxProcs(cpuLimit resource.Quantity) *int64 {
+	switch cpuLimit.Sign() {
+	case -1, 0:
+		return nil
+	}
+	goMaxProcs := cpuLimit.MilliValue() / 1000
+	if goMaxProcs < 1 {
+		goMaxProcs = 1
+	}
+	return pointer.Int64Ptr(goMaxProcs)
+}
+
 func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, log logr.Logger) appsv1.ReplicaSet {
 	var replicas int32 = 1
 
@@ -103,6 +127,78 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, log logr.Logger) appsv1.Replic
 		peerLabel:    peer.Name,
 	}
 
+	etcdContainer := corev1.Container{
+		Name:  appName,
+		Image: etcdImage,
+		Env: []corev1.EnvVar{
+			{
+				Name:  etcdenvvar.InitialCluster,
+				Value: staticBootstrapInitialCluster(*peer.Spec.Bootstrap.Static),
+			},
+			{
+				Name:  etcdenvvar.Name,
+				Value: peer.Name,
+			},
+			{
+				Name:  etcdenvvar.InitialClusterToken,
+				Value: peer.Spec.ClusterName,
+			},
+			{
+				Name:  etcdenvvar.InitialAdvertisePeerURLs,
+				Value: advertiseURL(peer, etcdPeerPort).String(),
+			},
+			{
+				Name:  etcdenvvar.AdvertiseClientURLs,
+				Value: advertiseURL(peer, etcdClientPort).String(),
+			},
+			{
+				Name:  etcdenvvar.ListenPeerURLs,
+				Value: bindAllAddress(etcdPeerPort).String(),
+			},
+			{
+				Name:  etcdenvvar.ListenClientURLs,
+				Value: bindAllAddress(etcdClientPort).String(),
+			},
+			{
+				Name:  etcdenvvar.InitialClusterState,
+				Value: clusterStateValue(peer.Spec.Bootstrap.InitialClusterState),
+			},
+			{
+				Name:  etcdenvvar.DataDir,
+				Value: etcdDataMountPath,
+			},
+		},
+		Ports: []corev1.ContainerPort{
+			{
+				Name:          "etcd-client",
+				ContainerPort: etcdClientPort,
+			},
+			{
+				Name:          "etcd-peer",
+				ContainerPort: etcdPeerPort,
+			},
+		},
+		VolumeMounts: []corev1.VolumeMount{
+			{
+				Name:      "etcd-data",
+				MountPath: etcdDataMountPath,
+			},
+		},
+	}
+	if peer.Spec.PodTemplate != nil {
+		if peer.Spec.PodTemplate.Resources != nil {
+			etcdContainer.Resources = *peer.Spec.PodTemplate.Resources.DeepCopy()
+			if value := goMaxProcs(*etcdContainer.Resources.Limits.Cpu()); value != nil {
+				etcdContainer.Env = append(
+					etcdContainer.Env,
+					corev1.EnvVar{
+						Name:  "GOMAXPROCS",
+						Value: fmt.Sprintf("%d", *value),
+					},
+				)
+			}
+		}
+	}
 	replicaSet := appsv1.ReplicaSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels:          labels,
@@ -123,68 +219,9 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, log logr.Logger) appsv1.Replic
 					Namespace:   peer.Namespace,
 				},
 				Spec: corev1.PodSpec{
-					Hostname:  peer.Name,
-					Subdomain: peer.Spec.ClusterName,
-					Containers: []corev1.Container{
-						{
-							Name:  appName,
-							Image: etcdImage,
-							Env: []corev1.EnvVar{
-								{
-									Name:  etcdenvvar.InitialCluster,
-									Value: staticBootstrapInitialCluster(*peer.Spec.Bootstrap.Static),
-								},
-								{
-									Name:  etcdenvvar.Name,
-									Value: peer.Name,
-								},
-								{
-									Name:  etcdenvvar.InitialClusterToken,
-									Value: peer.Spec.ClusterName,
-								},
-								{
-									Name:  etcdenvvar.InitialAdvertisePeerURLs,
-									Value: advertiseURL(peer, etcdPeerPort).String(),
-								},
-								{
-									Name:  etcdenvvar.AdvertiseClientURLs,
-									Value: advertiseURL(peer, etcdClientPort).String(),
-								},
-								{
-									Name:  etcdenvvar.ListenPeerURLs,
-									Value: bindAllAddress(etcdPeerPort).String(),
-								},
-								{
-									Name:  etcdenvvar.ListenClientURLs,
-									Value: bindAllAddress(etcdClientPort).String(),
-								},
-								{
-									Name:  etcdenvvar.InitialClusterState,
-									Value: clusterStateValue(peer.Spec.Bootstrap.InitialClusterState),
-								},
-								{
-									Name:  etcdenvvar.DataDir,
-									Value: etcdDataMountPath,
-								},
-							},
-							Ports: []corev1.ContainerPort{
-								{
-									Name:          "etcd-client",
-									ContainerPort: etcdClientPort,
-								},
-								{
-									Name:          "etcd-peer",
-									ContainerPort: etcdPeerPort,
-								},
-							},
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									Name:      "etcd-data",
-									MountPath: etcdDataMountPath,
-								},
-							},
-						},
-					},
+					Hostname:   peer.Name,
+					Subdomain:  peer.Spec.ClusterName,
+					Containers: []corev1.Container{etcdContainer},
 					Volumes: []corev1.Volume{
 						{
 							Name: "etcd-data",
