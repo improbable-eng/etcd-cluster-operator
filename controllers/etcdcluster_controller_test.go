@@ -458,7 +458,7 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 			err = try.Eventually(func() error {
 				err := s.k8sClient.List(s.ctx, replicaSetList, client.InNamespace(namespace))
 				if len(replicaSetList.Items) != int(*etcdCluster.Spec.Replicas) {
-					return errors.New(fmt.Sprintf("Wrong number of etcd Replica Sets. Had %d wanted %d", len(replicaSetList.Items), 1))
+					return errors.New(fmt.Sprintf("Wrong number of etcd Replica Sets. Had %d wanted %d", len(replicaSetList.Items), int(*etcdCluster.Spec.Replicas)))
 				}
 				return err
 			}, time.Second*5, time.Millisecond*500)
