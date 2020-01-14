@@ -175,6 +175,12 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, etcdRepository string, log log
 				Name:  etcdenvvar.DataDir,
 				Value: etcdDataMountPath,
 			},
+			// Temporarily hardcoded until the EtcdCluster API supports passing in configs
+			{
+				Name: etcdenvvar.AutoCompactionRetention,
+				// Auto compaction retention of 1 hour
+				Value: "1",
+			},
 		},
 		Ports: []corev1.ContainerPort{
 			{

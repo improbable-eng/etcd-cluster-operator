@@ -10,4 +10,5 @@ const (
 	InitialClusterToken      = "ETCD_INITIAL_CLUSTER_TOKEN"
 	Name                     = "ETCD_NAME"
 	DataDir                  = "ETCD_DATA_DIR"
+	AutoCompactionRetention  = "ETCD_AUTO_COMPACTION_RETENTION"
 )
