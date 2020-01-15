@@ -468,6 +468,66 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 			assert.Equal(t, *etcdCluster.Spec.PodTemplate.Resources, r1.Spec.Template.Spec.Containers[0].Resources)
 		})
 	})
+
+	t.Run("PodAffinity", func(t *testing.T) {
+		teardownFunc, namespace := s.setupTest(t)
+		defer teardownFunc()
+
+		etcdCluster := test.ExampleEtcdCluster(namespace)
+
+		expectedAffinity := &v1.Affinity{
+			PodAntiAffinity: &v1.PodAntiAffinity{
+				RequiredDuringSchedulingIgnoredDuringExecution: []v1.PodAffinityTerm{
+					{
+						LabelSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								clusterLabel: "foo",
+							},
+						},
+						TopologyKey: "kubernetes.io/hostname",
+					},
+				},
+				PreferredDuringSchedulingIgnoredDuringExecution: []v1.WeightedPodAffinityTerm{
+					{
+						Weight: 100,
+						PodAffinityTerm: v1.PodAffinityTerm{
+							LabelSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									clusterLabel: "foo",
+								},
+							},
+							TopologyKey: "failure-domain.beta.kubernetes.io/zone",
+						},
+					},
+				},
+			},
+		}
+		etcdCluster.Spec.PodTemplate.Affinity = expectedAffinity
+
+		err := s.k8sClient.Create(s.ctx, etcdCluster)
+		require.NoError(t, err, "failed to create EtcdCluster resource")
+
+		etcdCluster.Default()
+
+		// Mock out the etcd API with one that always fails - i.e., we're always in 'bootstrap' mode
+		s.etcd = &AlwaysFailEtcdAPI{}
+
+		t.Run("AppliesAffinityToPod", func(t *testing.T) {
+			replicaSetList := &appsv1.ReplicaSetList{}
+			err = try.Eventually(func() error {
+				err := s.k8sClient.List(s.ctx, replicaSetList, client.InNamespace(namespace))
+				if len(replicaSetList.Items) != int(*etcdCluster.Spec.Replicas) {
+					return errors.New(fmt.Sprintf("Wrong number of etcd Replica Sets. Had %d wanted %d", len(replicaSetList.Items), int(*etcdCluster.Spec.Replicas)))
+				}
+				return err
+			}, time.Second*5, time.Millisecond*500)
+			require.NoError(t, err)
+
+			for _, replicaSet := range replicaSetList.Items {
+				assert.Equal(t, expectedAffinity, replicaSet.Spec.Template.Spec.Affinity)
+			}
+		})
+	})
 }
 
 func assertOwnedByCluster(t *testing.T, etcdCluster *etcdv1alpha1.EtcdCluster, obj metav1.Object) {
