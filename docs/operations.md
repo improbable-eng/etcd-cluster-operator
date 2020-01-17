@@ -89,6 +89,27 @@ The minimum value is 1 and if the CPU limit is greater than 1 core, the value wi
 
 Alternatively, you can omit the resource requirements altogether and rely on [Limit Ranges](https://kubernetes.io/docs/concepts/policy/limit-range/) to set default requests and limits to the containers that are created by the operator.
 
+#### Configuring pod affinity
+
+You can set [pod affinity and anti-affinity](https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#affinity-and-anti-affinity) for the underlying etcd pods.
+In the sample configuration file, the pod anti-affinity is set as follows to attempt to schedule pods across nodes:
+
+```yaml
+spec:
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: etcd.improbable.io/cluster-name
+                    operator: In
+                    values:
+                      - my-cluster
+              topologyKey: kubernetes.io/hostname
+```
+
 ## Understanding Cluster Status
 
 The `status` field of the `EtcdCluster` resource contains information about the running etcd cluster. This information
