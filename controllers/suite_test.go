@@ -126,6 +126,13 @@ func (s *controllerSuite) setupTest(t *testing.T) (teardownFunc func(), namespac
 	err = backupController.SetupWithManager(mgr)
 	require.NoError(t, err, "failed to setup EtcdBackupSchedule controller")
 
+	restoreController := EtcdRestoreReconciler{
+		Client: mgr.GetClient(),
+		Log:    logger.WithName("EtcdCluster"),
+	}
+	err = restoreController.SetupWithManager(mgr)
+	require.NoError(t, err, "failed to setup EtcdRestoreReconciler controller")
+
 	go func() {
 		err := mgr.Start(stopCh)
 		require.NoError(t, err, "failed to start manager")

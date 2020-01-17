@@ -314,18 +314,25 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("peer", req.NamespacedName)
 
 	var peer etcdv1alpha1.EtcdPeer
-	if err := r.Get(ctx, req.NamespacedName, &peer); err != nil {
-		log.Error(err, "unable to fetch EtcdPeer")
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
+	err := r.Get(ctx, req.NamespacedName, &peer);
 
-	log.V(2).Info("Found EtcdPeer resource")
+	if apierrs.IsNotFound(err) {
+		// Hrm, weird. Maybe it got deleted and we're reconciling that?
+		log.Info("Unable to find the peer we're reconciling, assuming it got deleted.")
+		return ctrl.Result{}, nil
+	} else if err != nil {
+		// There was some other, non non-found error. Exit as we can't handle this case.
+		return ctrl.Result{}, err
+	} else {
+		// We found the peer to reconcile, continue.
+		log.V(2).Info("Found EtcdPeer resource")
+	}
 
 	// Apply defaults in case a defaulting webhook has not been deployed.
 	peer.Default()
 
 	// Validate in case a validating webhook has not been deployed
-	err := peer.ValidateCreate()
+	err = peer.ValidateCreate()
 	if err != nil {
 		log.Error(err, "invalid EtcdPeer")
 		return ctrl.Result{}, nil

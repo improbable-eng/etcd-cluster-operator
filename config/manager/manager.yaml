@@ -20,6 +20,7 @@ spec:
         - /manager
         args:
         - --enable-leader-election
+        - -restore-image-name=etcd-restore-agent:test
         image: controller:latest
         name: manager
         resources:

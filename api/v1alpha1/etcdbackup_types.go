@@ -59,11 +59,6 @@ type EtcdBackupDestinationGCSBucket struct {
 	Credentials *GoogleCloudCredentials `json:"credentials,omitempty"`
 }
 
-type GoogleCloudCredentials struct {
-	// Credentials are taken from the key of a Kubernetes secret.
-	SecretKeyRef *corev1.SecretKeySelector `json:"secretKeySelector,omitempty"`
-}
-
 // EtcdBackupSpec defines the desired state of EtcdBackup
 type EtcdBackupSpec struct {
 	// ClusterEndpoints holds one or more endpoints fronting etcd's gRPC API.

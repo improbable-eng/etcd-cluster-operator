@@ -1,5 +1,6 @@
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
+RESTORE_AGENT_IMG ?= restore-agent:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 
@@ -63,7 +64,6 @@ deploy:
 	cd config/manager && kustomize edit set image controller=${IMG}
 	kustomize build config/default | kubectl apply -f -
 
-
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
@@ -95,6 +95,9 @@ gomod:
 verify-gomod:
 	./hack/verify.sh make -s gomod
 
+docker-restoreagent-build: test
+	docker build . --file restoreagent.Dockerfile -t ${RESTORE_AGENT_IMG}
+
 # Build the docker image. This should be used for release versions, and builds the image on top of distroless.
 docker-build: test
 	docker build . --target release -t ${IMG}
@@ -106,6 +109,9 @@ docker-build-debug: test
 # Push the docker image
 docker-push:
 	docker push ${IMG}
+
+docker-restoreagent-push:
+	docker push ${RESTORE_AGENT_IMG}
 
 # find or download controller-gen
 # download controller-gen if necessary

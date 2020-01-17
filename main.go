@@ -33,10 +33,12 @@ func init() {
 func main() {
 	var metricsAddr, backupTempDir string
 	var enableLeaderElection bool
+	var restoreImageName string
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&backupTempDir, "backup-tmp-dir", os.TempDir(), "The directory to temporarily place backups before they are uploaded to their destination.")
+	flag.StringVar(&restoreImageName, "restore-image-name", "", "The Docker image to use to perform a restore")
 	flag.Parse()
 
 	ctrl.SetLogger(zap.Logger(true))
@@ -83,6 +85,14 @@ func main() {
 		Schedules:   controllers.NewScheduleMap(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "EtcdBackupSchedule")
+		os.Exit(1)
+	}
+	if err = (&controllers.EtcdRestoreReconciler{
+		Client:          mgr.GetClient(),
+		Log:             ctrl.Log.WithName("controllers").WithName("EtcdRestore"),
+		RestorePodImage: restoreImageName,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "EtcdRestore")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

@@ -4,9 +4,9 @@ metadata:
   name: e2e-backup-cluster
 spec:
   clusterEndpoints:
-  - scheme: http
-    host: e2e-backup-cluster.teste2e-parallel-backup
-    port: 2379
+    - scheme: http
+      host: e2e-backup-cluster.teste2e-parallel-backup
+      port: 2379
   destination:
-    local:    
+    local:
       path: /tmp/backups

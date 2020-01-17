@@ -62,7 +62,7 @@ func (r *EtcdBackupReconciler) reconcile(
 		err = method.Delete(ctx, localPath)
 		if err != nil {
 			r.Log.Error(err, "Failed to remove the backup from local disk")
-			// No error is returned here - the backup was sucessfully completed but the cleanup failed.
+			// No error is returned here - the backup was successfully completed but the cleanup failed.
 		}
 		return nil, "", nil
 	}
