@@ -327,14 +327,13 @@ spec:
 ```
 
 The `spec.source` field is used to define the source of the backup `.db` file. Currently the only supported option is
-`bucket` which can pull a restore file from Google Cloud Storage, Amazon S3, or Azure Blob Storage. The `bucketURL`
-field should have a scheme to indicate which source is being used.
+`bucket` which can pull a restore file from Google Cloud Storage or Amazon S3. The `bucketURL` field should have a
+scheme to indicate which source is being used.
 
 | Storage Type         | Bucket URL Scheme |
 | -------------------- | ----------------- |
 | Google Cloud Storage | `gs://`           |
 | Amazon S3            | `s3://`           |
-| Azure Blob Storage   | `azblob://`       |
 
 The `objectPath` should be the path to the backup file object inside the bucket. The `credentials` field can be used to
 provide credentials (via a Secret) to access the storage bucket in question, in a provider specific manner.

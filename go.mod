@@ -26,7 +26,7 @@ require (
 	go.etcd.io/etcd v3.3.17+incompatible
 	go.opencensus.io v0.22.1 // indirect
 	go.uber.org/zap v1.10.0
-	gocloud.dev v0.18.0
+	gocloud.dev v0.17.0
 	google.golang.org/api v0.13.0 // indirect
 	k8s.io/api v0.0.0-20190918195907-bd6ac527cfd2
 	k8s.io/apimachinery v0.0.0-20190913080033-27d36303b655

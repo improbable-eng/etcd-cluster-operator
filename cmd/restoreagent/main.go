@@ -13,7 +13,6 @@ import (
 	"github.com/spf13/viper"
 	"go.etcd.io/etcd/clientv3/snapshot"
 	"gocloud.dev/blob"
-	_ "gocloud.dev/blob/azureblob"
 	_ "gocloud.dev/blob/gcsblob"
 	_ "gocloud.dev/blob/s3blob"
 )
