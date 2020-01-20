@@ -46,7 +46,7 @@ spec:
                   type: string
                 spec:
                   description: Spec is the specification of the cluster that will
-                    be created by this operation
+                    be created by this operation.
                   properties:
                     podTemplate:
                       description: PodTemplate describes metadata that should be applied
@@ -66,6 +66,26 @@ spec:
                               description: Annotations are an unstructured string:string
                                 map of annotations to be applied to the underlying
                                 pods.
+                              type: object
+                          type: object
+                        resources:
+                          description: 'Resources is for configuring the compute resources
+                            required by the etcd container. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/'
+                          properties:
+                            limits:
+                              additionalProperties:
+                                type: string
+                              description: 'Limits describes the maximum amount of
+                                compute resources allowed. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/'
+                              type: object
+                            requests:
+                              additionalProperties:
+                                type: string
+                              description: 'Requests describes the minimum amount
+                                of compute resources required. If Requests is omitted
+                                for a container, it defaults to Limits if that is
+                                explicitly specified, otherwise to an implementation-defined
+                                value. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/'
                               type: object
                           type: object
                       type: object
@@ -224,14 +244,13 @@ spec:
                       description: BucketURL is the name of the storage bucket. This
                         is a go-cloud bucket URL https://gocloud.dev/howto/blob/ and
                         should use a URL scheme of the bucket provider. For example
-                        `s3://my-amazon-bucket` or `gcs://my-google-cloud-bucket`.
+                        `s3://my-amazon-bucket` or `gs://my-google-cloud-bucket`.
                       maxLength: 222
                       minLength: 3
                       type: string
                     credentials:
                       description: Credentials holds the method of obtaining credentials
-                        that will be provided to the Google Cloud APIs in order to
-                        write backup data.
+                        that will be passed to the storage provider.
                       properties:
                         googleCloud:
                           description: Provide credentials for Google Cloud Platform.
