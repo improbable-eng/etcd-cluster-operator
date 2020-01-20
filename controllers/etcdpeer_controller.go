@@ -314,7 +314,7 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("peer", req.NamespacedName)
 
 	var peer etcdv1alpha1.EtcdPeer
-	err := r.Get(ctx, req.NamespacedName, &peer);
+	err := r.Get(ctx, req.NamespacedName, &peer)
 
 	if apierrs.IsNotFound(err) {
 		// Hrm, weird. Maybe it got deleted and we're reconciling that?
