@@ -5,7 +5,7 @@ set -o nounset
 set -o pipefail
 
 # If you change this version, update the checksums below!
-version="2.0.1"
+version="2.2.0"
 arch=$(go env GOARCH)
 os=$(go env GOOS)
 
@@ -30,7 +30,7 @@ fi
 # Verify Checksum
 if [ "$os" == "darwin" ] && [ "$arch" == "amd64" ]
 then
-    if [ "$checksum" == "a2cd518da553584aee2e8a74818da1521f5dd4a9a4a97c8e18b2634e8a8266ca" ]
+    if [ "$checksum" == "5ccb9803d391e819b606b0c702610093619ad08e429ae34401b3e4d448dd2553" ]
     then
         echo "Checksum verified"
     else
@@ -39,7 +39,7 @@ then
     fi
 elif [ "$os" == "linux" ] && [ "$arch" == "amd64" ]
 then
-    if [ "$checksum" == "e8d287535c79013bfebcee22f748153686128926ae5992f023725e7b17996a04" ]
+    if [ "$checksum" == "9ef35a4a4e92408f7606f1dd1e68fe986fa222a88d34e40ecc07b6ffffcc8c12" ]
     then
         echo "Checksum verified"
     else
