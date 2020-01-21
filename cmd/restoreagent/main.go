@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/otiai10/copy"
 	"github.com/spf13/viper"
@@ -21,6 +22,8 @@ func main() {
 	viper.SetEnvPrefix("restore")
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	viper.AutomaticEnv()
+
+	viper.SetDefault("timeout-seconds", "300")
 
 	etcdPeerName := viper.GetString("etcd-peer-name")
 	fmt.Printf("Using etcd peer name %s\n", etcdPeerName)
@@ -46,9 +49,14 @@ func main() {
 	objectPath := viper.GetString("object-path")
 	fmt.Printf("Using Object Path %s\n", objectPath)
 
+	timeoutSeconds := viper.GetInt64("timeout-seconds")
+	fmt.Printf("Using %d seconds timeout`n", timeoutSeconds)
+
 	// Pull the object from cloud storage into the snapshot directory.
 	fmt.Printf("Pulling object from %s/%s\n", bucketURL, objectPath)
-	ctx := context.Background()
+	ctx, ctxCancel := context.WithTimeout(context.Background(), time.Second*time.Duration(timeoutSeconds))
+	defer ctxCancel()
+
 	bucket, err := blob.OpenBucket(ctx, bucketURL)
 	if err != nil {
 		panic(err)
