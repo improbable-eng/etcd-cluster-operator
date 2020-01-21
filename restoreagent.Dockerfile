@@ -19,6 +19,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o restorea
 FROM gcr.io/distroless/static as release
 WORKDIR /
 COPY --from=builder /workspace/restoreagent .
+# Need to run as root so that we can write to the PVC as root.
+# See https://github.com/improbable-eng/etcd-cluster-operator/issues/139
 USER root:root
 
 ENTRYPOINT ["/restoreagent"]
