@@ -42,9 +42,6 @@ type EtcdClusterTemplate struct {
 
 // EtcdRestoreSpec defines the desired state of EtcdRestore
 type EtcdRestoreSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
 	// Source describes the location the backup is pulled from
 	Source EtcdRestoreSource `json:"source"`
 
@@ -62,9 +59,6 @@ var (
 
 // EtcdRestoreStatus defines the observed state of EtcdRestore
 type EtcdRestoreStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
 	// Phase is what the restore is doing last time it was checked. The possible end states are "Failed" and
 	// "Completed".
 	Phase EtcdRestorePhase `json:"phase,omitempty"`
