@@ -310,7 +310,7 @@ spec:
       objectPath: foo.db
       credentials:
         googleCloud:
-          secretKeySelector:
+          secretKeyRef:
             name: backup-gcs-cred
             key: gcp.json
             optional: false

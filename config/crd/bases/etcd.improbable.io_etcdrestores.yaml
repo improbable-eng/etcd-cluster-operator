@@ -255,7 +255,7 @@ spec:
                         googleCloud:
                           description: Provide credentials for Google Cloud Platform.
                           properties:
-                            secretKeySelector:
+                            secretKeyRef:
                               description: Credentials are taken from the key of a
                                 Kubernetes secret.
                               properties:

@@ -19,5 +19,5 @@ type BucketCredentials struct {
 // operation at hand (write for backup, read for restore).
 type GoogleCloudCredentials struct {
 	// Credentials are taken from the key of a Kubernetes secret.
-	SecretKeyRef *corev1.SecretKeySelector `json:"secretKeySelector,omitempty"`
+	SecretKeyRef *corev1.SecretKeySelector `json:"secretKeyRef,omitempty"`
 }

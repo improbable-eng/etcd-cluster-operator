@@ -81,7 +81,7 @@ spec:
                             that will be provided to the Google Cloud APIs in order
                             to write backup data.
                           properties:
-                            secretKeySelector:
+                            secretKeyRef:
                               description: Credentials are taken from the key of a
                                 Kubernetes secret.
                               properties:
