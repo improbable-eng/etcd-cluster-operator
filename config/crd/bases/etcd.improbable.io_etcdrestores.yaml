@@ -240,7 +240,7 @@ spec:
                   description: Bucket identifies a generic blob Storage bucket to
                     pull the snapshot from.
                   properties:
-                    bucketUrl:
+                    bucketURL:
                       description: BucketURL is the name of the storage bucket. This
                         is a go-cloud bucket URL https://gocloud.dev/howto/blob/ and
                         should use a URL scheme of the bucket provider. For example
@@ -283,7 +283,7 @@ spec:
                       minLength: 1
                       type: string
                   required:
-                  - bucketUrl
+                  - bucketURL
                   - objectPath
                   type: object
               required:

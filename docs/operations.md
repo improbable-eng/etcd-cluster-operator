@@ -306,7 +306,7 @@ metadata:
 spec:
   source:
     bucket:
-      bucketUrl: gs://etcd-backup-test
+      bucketURL: gs://etcd-backup-test
       objectPath: foo.db
       credentials:
         googleCloud:

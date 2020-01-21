@@ -4,9 +4,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 type EtcdRestoreSource struct {
 
 	// Note: This structure requires that you provide a `bucket`. But is designed such that you could modify this struct
@@ -23,7 +20,7 @@ type EtcdRestoreSourceBucket struct {
 	// `gs://my-google-cloud-bucket`.
 	// +kubebuilder:validation:MinLength=3
 	// +kubebuilder:validation:MaxLength=222
-	BucketURL string `json:"bucketUrl"`
+	BucketURL string `json:"bucketURL"`
 
 	// ObjectPath is the path to the object inside the bucket.
 	// +kubebuilder:validation:MinLength=1
