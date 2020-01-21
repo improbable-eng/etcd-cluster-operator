@@ -2,12 +2,15 @@ package controllers
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/coreos/go-semver/semver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	etcdclient "go.etcd.io/etcd/client"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -18,6 +21,41 @@ import (
 	"github.com/improbable-eng/etcd-cluster-operator/internal/test"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/test/try"
 )
+
+// fakeEtcdForEtcdPeer returns a fake MembersAPI which simulates an Etcd API
+// which lists this peer only.
+func fakeEtcdForEtcdPeer(etcdPeer etcdv1alpha1.EtcdPeer) *StaticResponseEtcdAPI {
+	clusterName := etcdPeer.Spec.ClusterName
+	clusterNamespace := etcdPeer.Namespace
+	i := 1
+	name := fmt.Sprintf("%s-%d", clusterName, i)
+	peerURL := &url.URL{
+		Scheme: etcdScheme,
+		Host: fmt.Sprintf("%s.%s.%s.svc:%d",
+			name,
+			clusterName,
+			clusterNamespace,
+			etcdPeerPort,
+		),
+	}
+	clientURL := &url.URL{
+		Scheme: etcdScheme,
+		Host: fmt.Sprintf("%s.%s.%s.svc:%d",
+			name,
+			clusterName,
+			clusterNamespace,
+			etcdClientPort,
+		),
+	}
+	return &StaticResponseEtcdAPI{Members: []etcdclient.Member{
+		{
+			ID:         fmt.Sprintf("SOMEID%d", i),
+			Name:       name,
+			PeerURLs:   []string{peerURL.String()},
+			ClientURLs: []string{clientURL.String()},
+		},
+	}}
+}
 
 // requireEnvVar finds an environment variable and returns its value, or fails
 func requireEnvVar(t *testing.T, env []corev1.EnvVar, evName string) string {
@@ -36,7 +74,7 @@ func exampleEtcdPeer(namespace string) *etcdv1alpha1.EtcdPeer {
 
 func (s *controllerSuite) testPeerController(t *testing.T) {
 	t.Run("TestPeerController_OnCreation_CreatesReplicaSet", func(t *testing.T) {
-		teardownFunc, namespace := s.setupTest(t)
+		teardownFunc, namespace := s.setupTest(t, &AlwaysFailEtcdAPI{})
 		defer teardownFunc()
 
 		etcdPeer := exampleEtcdPeer(namespace)
@@ -137,7 +175,7 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		)
 	})
 	t.Run("CreatesPersistentVolumeClaim", func(t *testing.T) {
-		teardown, namespace := s.setupTest(t)
+		teardown, namespace := s.setupTest(t, &AlwaysFailEtcdAPI{})
 		defer teardown()
 		peer := exampleEtcdPeer(namespace)
 		err := s.k8sClient.Create(s.ctx, peer)
@@ -160,8 +198,9 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 
 		require.Equal(t, *peer.Spec.Storage.VolumeClaimTemplate, actualPvc.Spec, "Unexpected PVC spec")
 	})
+
 	t.Run("DoNotDeletePersistentVolumeClaimByDefault", func(t *testing.T) {
-		teardown, namespace := s.setupTest(t)
+		teardown, namespace := s.setupTest(t, &AlwaysFailEtcdAPI{})
 		defer teardown()
 
 		t.Log("Given an EtcdPeer with a PVC")
@@ -197,8 +236,9 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		err = s.k8sClient.Get(s.ctx, peerKey, &actualPvc)
 		require.NoError(t, err, "PVC was deleted")
 	})
+
 	t.Run("DeletesPersistentVolumeClaimWhenFinalizerPresent", func(t *testing.T) {
-		teardown, namespace := s.setupTest(t)
+		teardown, namespace := s.setupTest(t, &AlwaysFailEtcdAPI{})
 		defer teardown()
 
 		t.Log("Given an EtcdPeer with a PVC")
@@ -238,6 +278,81 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		err = s.k8sClient.Get(s.ctx, peerKey, &actualPvc)
 		require.NoError(t, client.IgnoreNotFound(err), "unexpected error")
 		assert.Error(t, err, "expected a NotFound error for deleted PVC")
+	})
+
+	t.Run("StatusVersion", func(t *testing.T) {
+		etcdAPI := &WrapperEtcdAPI{wrapped: &AlwaysFailEtcdAPI{}}
+
+		teardownFunc, namespace := s.setupTest(t, etcdAPI)
+		defer teardownFunc()
+
+		etcdPeer := test.ExampleEtcdPeer(namespace)
+
+		err := s.k8sClient.Create(s.ctx, etcdPeer)
+		require.NoError(t, err, "failed to create EtcdPeer resource")
+
+		etcdPeer.Default()
+
+		etcdPeerKey, err := client.ObjectKeyFromObject(etcdPeer)
+		require.NoError(t, err)
+
+		t.Run("ReportsEmptyVersion", func(t *testing.T) {
+			etcdAPI.Wrap(&AlwaysFailEtcdAPI{})
+
+			err = try.Eventually(func() error {
+				var fetchedPeer etcdv1alpha1.EtcdPeer
+				err := s.k8sClient.Get(s.ctx, etcdPeerKey, &fetchedPeer)
+				require.NoError(t, err)
+
+				defer func() {
+					err = s.triggerReconcile(&fetchedPeer)
+					require.NoError(t, err)
+				}()
+
+				const expectedVersion = ""
+				actualVersion := fetchedPeer.Status.ServerVersion
+				if expectedVersion != actualVersion {
+					return fmt.Errorf(
+						"unexpected Status.ServerVersion. Wanted: %s, Got: %s",
+						expectedVersion, actualVersion,
+					)
+				}
+				return nil
+			}, time.Second*5, time.Second)
+			require.NoError(t, err)
+		})
+
+		t.Run("ReportsExpectedVersion", func(t *testing.T) {
+			expectedVersion := semver.Must(semver.NewVersion("3.2.28"))
+			staticAPI := fakeEtcdForEtcdPeer(*etcdPeer)
+			staticAPI.ServerVersion = expectedVersion.String()
+			etcdAPI.Wrap(staticAPI)
+
+			err = try.Eventually(func() error {
+				var fetchedPeer etcdv1alpha1.EtcdPeer
+				err := s.k8sClient.Get(s.ctx, etcdPeerKey, &fetchedPeer)
+				require.NoError(t, err)
+
+				defer func() {
+					err = s.triggerReconcile(&fetchedPeer)
+					require.NoError(t, err)
+				}()
+
+				if fetchedPeer.Status.ServerVersion == "" {
+					return fmt.Errorf("Status.ServerVersion was empty")
+				}
+				actualVersion, err := semver.NewVersion(fetchedPeer.Status.ServerVersion)
+				require.NoError(t, err)
+				if !expectedVersion.Equal(*actualVersion) {
+					return fmt.Errorf(
+						"unexpected Status.ServerVersion. Wanted: %s, Got: %s",
+						expectedVersion, actualVersion,
+					)
+				}
+				return nil
+			}, time.Second*5, time.Second)
+			require.NoError(t, err)
+		})
 	})
 }
 

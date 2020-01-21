@@ -15,6 +15,8 @@ spec:
     plural: etcdpeers
     singular: etcdpeer
   scope: Namespaced
+  subresources:
+    status: {}
   validation:
     openAPIV3Schema:
       description: EtcdPeer is the Schema for the etcdpeers API
@@ -258,6 +260,12 @@ spec:
           type: object
         status:
           description: EtcdPeerStatus defines the observed state of EtcdPeer
+          properties:
+            serverVersion:
+              description: ServerVersion contains the Member server version
+              type: string
+          required:
+          - serverVersion
           type: object
       type: object
   version: v1alpha1

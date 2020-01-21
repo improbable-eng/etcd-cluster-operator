@@ -213,6 +213,9 @@ spec:
         status:
           description: EtcdClusterStatus defines the observed state of EtcdCluster
           properties:
+            clusterVersion:
+              description: ClusterVersion contains the cluster API version
+              type: string
             members:
               description: Members contains information about each member from the
                 etcd cluster.
