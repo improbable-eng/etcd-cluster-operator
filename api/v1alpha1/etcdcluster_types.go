@@ -72,6 +72,10 @@ type EtcdClusterStatus struct {
 	// Members contains information about each member from the etcd cluster.
 	// +optional
 	Members []EtcdMember `json:"members"`
+
+	// ClusterVersion contains the cluster API version
+	// +optional
+	ClusterVersion string `json:"clusterVersion"`
 }
 
 // +kubebuilder:object:root=true

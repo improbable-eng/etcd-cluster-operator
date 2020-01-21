@@ -86,9 +86,12 @@ type EtcdPeerStorage struct {
 
 // EtcdPeerStatus defines the observed state of EtcdPeer
 type EtcdPeerStatus struct {
+	// ServerVersion contains the Member server version
+	ServerVersion string `json:"serverVersion"`
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 
 // EtcdPeer is the Schema for the etcdpeers API
 type EtcdPeer struct {

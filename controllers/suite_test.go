@@ -3,15 +3,17 @@ package controllers
 import (
 	"context"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
 
 	petname "github.com/dustinkirkland/golang-petname"
 	"github.com/stretchr/testify/require"
-	etcdclient "go.etcd.io/etcd/client"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -25,12 +27,10 @@ import (
 )
 
 type controllerSuite struct {
-	sync.RWMutex
 	ctx       context.Context
 	cfg       *rest.Config
 	k8sClient client.Client
 	testEnv   *envtest.Environment
-	etcd      etcd.EtcdAPI
 }
 
 func setupSuite(t *testing.T) (suite *controllerSuite, teardownFunc func()) {
@@ -69,26 +69,10 @@ func setupSuite(t *testing.T) (suite *controllerSuite, teardownFunc func()) {
 		cfg:       cfg,
 		k8sClient: k8sClient,
 		testEnv:   testEnv,
-		etcd:      nil,
 	}, stopFunc
 }
 
-// MembershipAPI exists so we can 'forward' the method on the EtcdAPI interface to our internal etcd. This is so that we
-// can pass ourselves in as an implementation of an EtcdAPI at test assembly time, but a test can switch out it's
-// internal implementation in the middle of a test by setting `controllerSuite.etcd`
-func (s *controllerSuite) MembershipAPI(config etcdclient.Config) (etcdclient.MembersAPI, error) {
-	s.RLock()
-	defer s.RUnlock()
-	return s.etcd.MembershipAPI(config)
-}
-
-func (s *controllerSuite) setEtcd(api etcd.EtcdAPI) {
-	s.Lock()
-	defer s.Unlock()
-	s.etcd = api
-}
-
-func (s *controllerSuite) setupTest(t *testing.T) (teardownFunc func(), namespaceName string) {
+func (s *controllerSuite) setupTest(t *testing.T, etcdAPI etcd.APIBuilder) (teardownFunc func(), namespaceName string) {
 	stopCh := make(chan struct{})
 	logger := test.TestLogger{
 		T: t,
@@ -114,6 +98,7 @@ func (s *controllerSuite) setupTest(t *testing.T) (teardownFunc func(), namespac
 	peerController := EtcdPeerReconciler{
 		Client: mgr.GetClient(),
 		Log:    logger.WithName("EtcdPeer"),
+		Etcd:   etcdAPI,
 	}
 	err = peerController.SetupWithManager(mgr)
 	require.NoError(t, err, "failed to set up EtcdPeer controller")
@@ -122,7 +107,7 @@ func (s *controllerSuite) setupTest(t *testing.T) (teardownFunc func(), namespac
 		Client:   mgr.GetClient(),
 		Log:      logger.WithName("EtcdCluster"),
 		Recorder: mgr.GetEventRecorderFor("etcdcluster-reconciler"),
-		Etcd:     s,
+		Etcd:     etcdAPI,
 	}
 	err = clusterController.SetupWithManager(mgr)
 	require.NoError(t, err, "failed to setup EtcdCluster controller")
@@ -151,6 +136,36 @@ func (s *controllerSuite) setupTest(t *testing.T) (teardownFunc func(), namespac
 		err := s.k8sClient.Delete(s.ctx, namespace)
 		require.NoErrorf(t, err, "Failed to delete test namespace: %#v", namespace)
 	}, namespace.Name
+}
+
+// triggerReconcile forces a Reconcile by making a trivial change to the annotations
+// of the supplied object.
+// A work around for https://github.com/improbable-eng/etcd-cluster-operator/issues/76
+func (s *controllerSuite) triggerReconcile(obj runtime.Object) error {
+	m := meta.NewAccessor()
+	updated := obj.DeepCopyObject()
+	annotations, err := m.Annotations(updated)
+	if err != nil {
+		return err
+	}
+	if annotations == nil {
+		annotations = map[string]string{}
+	}
+	value, found := annotations["last-trigger-value"]
+	if !found {
+		value = "0"
+	}
+	index, err := strconv.Atoi(value)
+	if err != nil {
+		return err
+	}
+	value = strconv.Itoa(index + 1)
+	annotations["last-trigger-value"] = value
+	err = m.SetAnnotations(updated, annotations)
+	if err != nil {
+		return err
+	}
+	return s.k8sClient.Patch(s.ctx, updated, client.MergeFrom(obj))
 }
 
 func TestAPIs(t *testing.T) {

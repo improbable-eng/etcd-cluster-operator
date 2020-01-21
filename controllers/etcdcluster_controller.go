@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -37,7 +38,7 @@ type EtcdClusterReconciler struct {
 	client.Client
 	Log      logr.Logger
 	Recorder record.EventRecorder
-	Etcd     etcd.EtcdAPI
+	Etcd     etcd.APIBuilder
 }
 
 func headlessServiceForCluster(cluster *etcdv1alpha1.EtcdCluster) *v1.Service {
@@ -190,12 +191,16 @@ func (r *EtcdClusterReconciler) removeMember(ctx context.Context, cluster *etcdv
 
 // updateStatus updates the EtcdCluster resource's status to be the current value of the cluster.
 func (r *EtcdClusterReconciler) updateStatus(ctx context.Context,
+	log logr.Logger,
 	cluster *etcdv1alpha1.EtcdCluster,
 	members *[]etcdclient.Member,
 	peers *etcdv1alpha1.EtcdPeerList,
 	reconcilerEvent reconcilerevent.ReconcilerEvent) error {
 
 	updated := cluster.DeepCopy()
+
+	// Get Etcd version
+	r.updateStatusClusterVersion(ctx, log, updated)
 
 	if members != nil {
 		updated.Status.Members = make([]etcdv1alpha1.EtcdMember, len(*members))
@@ -215,7 +220,9 @@ func (r *EtcdClusterReconciler) updateStatus(ctx context.Context,
 		}
 	}
 	updated.Status.Replicas = int32(len(peers.Items))
-
+	if reflect.DeepEqual(updated.Status, cluster.Status) {
+		return nil
+	}
 	if err := r.Client.Status().Patch(ctx, updated, client.MergeFrom(cluster)); err != nil {
 		return err
 	}
@@ -490,6 +497,22 @@ func peerNameForMember(member etcdclient.Member) (string, error) {
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch;create;delete;patch
 // +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 
+func (r *EtcdClusterReconciler) updateStatusClusterVersion(ctx context.Context, log logr.Logger, cluster *etcdv1alpha1.EtcdCluster) {
+	cluster.Status.ClusterVersion = ""
+
+	etcdAPI, err := r.Etcd.New(etcdClientConfig(cluster))
+	if err != nil {
+		log.Error(err, "Failed to connect to ETCD")
+		return
+	}
+	etcdVersion, err := etcdAPI.GetVersion(ctx)
+	if err != nil {
+		log.Error(err, "Failed to get Etcd version")
+		return
+	}
+	cluster.Status.ClusterVersion = etcdVersion.Cluster
+}
+
 func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -539,7 +562,7 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	// The update status takes in the cluster definition, and the member list from etcd as of *before we ran reconcile*.
 	// We also get the event, which may contain rich information about what we did (such as the new member name on a
 	// MemberAdded event).
-	updateStatusErr := r.updateStatus(ctx, cluster, members, peers, clusterEvent)
+	updateStatusErr := r.updateStatus(ctx, log, cluster, members, peers, clusterEvent)
 	if updateStatusErr != nil {
 		log.Error(updateStatusErr, "Failed to update status")
 	}
@@ -553,7 +576,7 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 }
 
 func (r *EtcdClusterReconciler) addEtcdMember(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, peerURL string) (*etcdclient.Member, error) {
-	c, err := r.Etcd.MembershipAPI(etcdClientConfig(cluster))
+	c, err := r.Etcd.New(etcdClientConfig(cluster))
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect to etcd: %w", err)
 	}
@@ -569,7 +592,7 @@ func (r *EtcdClusterReconciler) addEtcdMember(ctx context.Context, cluster *etcd
 // removeEtcdMember performs a runtime reconfiguration of the Etcd cluster to
 // remove a member from the cluster.
 func (r *EtcdClusterReconciler) removeEtcdMember(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, memberID string) error {
-	c, err := r.Etcd.MembershipAPI(etcdClientConfig(cluster))
+	c, err := r.Etcd.New(etcdClientConfig(cluster))
 	if err != nil {
 		return fmt.Errorf("unable to connect to etcd: %w", err)
 	}
@@ -582,7 +605,7 @@ func (r *EtcdClusterReconciler) removeEtcdMember(ctx context.Context, cluster *e
 }
 
 func (r *EtcdClusterReconciler) getEtcdMembers(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster) ([]etcdclient.Member, error) {
-	c, err := r.Etcd.MembershipAPI(etcdClientConfig(cluster))
+	c, err := r.Etcd.New(etcdClientConfig(cluster))
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect to etcd: %w", err)
 	}

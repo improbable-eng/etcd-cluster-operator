@@ -113,7 +113,12 @@ func TestEtcdCluster_ValidateUpdate(t *testing.T) {
 		{
 			name: "UnsupportedChange/ResourcesStorage",
 			modifier: func(o *v1alpha1.EtcdCluster) {
-				o.Spec.Storage.VolumeClaimTemplate.Resources.Requests["storage"] = resource.MustParse("1Mi")
+				storage, found := o.Spec.Storage.VolumeClaimTemplate.Resources.Requests["storage"]
+				if !found {
+					panic("A storage request must be set for this test")
+				}
+				storage.Add(resource.MustParse("1Mi"))
+				o.Spec.Storage.VolumeClaimTemplate.Resources.Requests["storage"] = storage
 			},
 			err: `^Unsupported changes:`,
 		},
@@ -212,7 +217,12 @@ func TestEtcdPeer_ValidateUpdate(t *testing.T) {
 		{
 			name: "UnsupportedChange/ResourcesStorage",
 			modifier: func(o *v1alpha1.EtcdPeer) {
-				o.Spec.Storage.VolumeClaimTemplate.Resources.Requests["storage"] = resource.MustParse("1Mi")
+				storage, found := o.Spec.Storage.VolumeClaimTemplate.Resources.Requests["storage"]
+				if !found {
+					panic("A storage request must be set for this test")
+				}
+				storage.Add(resource.MustParse("1Mi"))
+				o.Spec.Storage.VolumeClaimTemplate.Resources.Requests["storage"] = storage
 			},
 			err: `^Unsupported changes:`,
 		},

@@ -13,7 +13,7 @@ import (
 )
 
 func (s *controllerSuite) testBackupScheduleController(t *testing.T) {
-	teardownFunc, namespace := s.setupTest(t)
+	teardownFunc, namespace := s.setupTest(t, &AlwaysFailEtcdAPI{})
 	defer teardownFunc()
 
 	backupSchedule := test.ExampleEtcdBackupSchedule(namespace)
