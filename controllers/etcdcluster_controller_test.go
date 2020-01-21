@@ -22,58 +22,59 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/etcd"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/test"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/test/try"
 )
 
 type AlwaysFailEtcdAPI struct{}
 
-func (_ *AlwaysFailEtcdAPI) MembershipAPI(_ etcdclient.Config) (etcdclient.MembersAPI, error) {
+var _ etcd.APIBuilder = &AlwaysFailEtcdAPI{}
+
+func (_ *AlwaysFailEtcdAPI) New(_ etcdclient.Config) (etcd.API, error) {
 	return nil, errors.New("fake etcd, nothing is here")
 }
 
-// StaticResponseMembersAPI can be injected into the etcdcluster_controller for
+// StaticResponseEtcdAPI can be injected into the etcdcluster_controller for
 // testing the interactions with the Etcd client API.
 // The `parent` field is a pointer so that a test and the controller-under-test see the
 // same shared Members list.
 // TODO(wallrj) Add locking if we ever want to have the test mutate the Members list.
-type StaticResponseMembersAPI struct {
-	parent *StaticResponseEtcdAPI
+type StaticResponseEtcdAPI struct {
+	Members []etcdclient.Member
 }
 
-func (s *StaticResponseMembersAPI) List(ctx context.Context) ([]etcdclient.Member, error) {
-	return s.parent.Members, nil
+var _ etcd.APIBuilder = &StaticResponseEtcdAPI{}
+
+func (s *StaticResponseEtcdAPI) New(config etcdclient.Config) (etcd.API, error) {
+	return s, nil
 }
 
-func (s *StaticResponseMembersAPI) Add(ctx context.Context, peerURL string) (*etcdclient.Member, error) {
+var _ etcd.API = &StaticResponseEtcdAPI{}
+
+func (s *StaticResponseEtcdAPI) List(ctx context.Context) ([]etcdclient.Member, error) {
+	return s.Members, nil
+}
+
+func (s *StaticResponseEtcdAPI) Add(ctx context.Context, peerURL string) (*etcdclient.Member, error) {
 	panic("implement me")
 }
 
-func (s *StaticResponseMembersAPI) Remove(ctx context.Context, mID string) error {
-	for i := range s.parent.Members {
-		if s.parent.Members[i].ID == mID {
-			s.parent.Members = append(s.parent.Members[:i], s.parent.Members[i+1:]...)
+func (s *StaticResponseEtcdAPI) Remove(ctx context.Context, mID string) error {
+	for i := range s.Members {
+		if s.Members[i].ID == mID {
+			s.Members = append(s.Members[:i], s.Members[i+1:]...)
 			return nil
 		}
 	}
 	return fmt.Errorf("unknown member: %s", mID)
 }
 
-func (s *StaticResponseMembersAPI) Update(ctx context.Context, mID string, peerURLs []string) error {
-	panic("implement me")
+type WrapperEtcdAPI struct {
+	etcd.APIBuilder
 }
 
-func (s *StaticResponseMembersAPI) Leader(ctx context.Context) (*etcdclient.Member, error) {
-	panic("implement me")
-}
-
-type StaticResponseEtcdAPI struct {
-	Members []etcdclient.Member
-}
-
-func (sr *StaticResponseEtcdAPI) MembershipAPI(_ etcdclient.Config) (etcdclient.MembersAPI, error) {
-	return &StaticResponseMembersAPI{parent: sr}, nil
-}
+var _ etcd.APIBuilder = &WrapperEtcdAPI{}
 
 // fakeEtcdForEtcdCluster returns a fake MembersAPI which simulates an Etcd API
 // which lists all the members of the cluster.
@@ -113,7 +114,9 @@ func fakeEtcdForEtcdCluster(etcdCluster etcdv1alpha1.EtcdCluster) *StaticRespons
 func (s *controllerSuite) testClusterController(t *testing.T) {
 	t.Run("ScaleDown", func(t *testing.T) {
 		t.Log("Setup.")
-		teardownFunc, namespace := s.setupTest(t)
+		etcdAPI := &WrapperEtcdAPI{APIBuilder: &AlwaysFailEtcdAPI{}}
+
+		teardownFunc, namespace := s.setupTest(t, etcdAPI)
 		defer teardownFunc()
 
 		etcdCluster := test.ExampleEtcdCluster(namespace)
@@ -125,10 +128,8 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 		const expectedReplicas = 1
 
 		*etcdCluster.Spec.Replicas = originalReplicas
-
-		// Give the operator a fake Etcdclient which simulates an established
-		// healthy cluster.
-		s.etcd = fakeEtcdForEtcdCluster(*etcdCluster)
+		etcdAPIStatic := fakeEtcdForEtcdCluster(*etcdCluster)
+		etcdAPI.APIBuilder = etcdAPIStatic
 
 		t.Log("Given an established 3-node cluster.")
 		err := s.k8sClient.Create(s.ctx, etcdCluster)
@@ -178,7 +179,7 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 		})
 		t.Run("EtcdMembersUpdate", func(t *testing.T) {
 			t.Log("The etcd cluster API reports the expected number of nodes")
-			membership, err := s.etcd.MembershipAPI(etcdclient.Config{})
+			membership, err := etcdAPI.New(etcdclient.Config{})
 			require.NoError(t, err)
 			expectedMembers := expectedEtcdMembersForCluster(*etcdCluster)
 			err = try.Eventually(func() error {
@@ -211,7 +212,11 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 	})
 
 	t.Run("OnCreation", func(t *testing.T) {
-		teardownFunc, namespace := s.setupTest(t)
+		// Mock out the etcd API with one that always fails - i.e., we're always
+		// in 'bootstrap' mode.
+		// But use a wrapper so that the implementation can be switched later.
+		etcdAPI := &WrapperEtcdAPI{APIBuilder: &AlwaysFailEtcdAPI{}}
+		teardownFunc, namespace := s.setupTest(t, etcdAPI)
 		defer teardownFunc()
 
 		const expectedReplicas = 3
@@ -225,9 +230,6 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 		// Apply defaults here so that our expected object has all the same
 		// defaults as those used in the Reconcile function
 		etcdCluster.Default()
-
-		// Mock out the etcd API with one that always fails - i.e., we're always in 'bootstrap' mode
-		s.etcd = &AlwaysFailEtcdAPI{}
 
 		t.Run("CreatesService", func(t *testing.T) {
 			service := &v1.Service{}
@@ -341,7 +343,9 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 					ClientURLs: []string{clientURL.String()},
 				}
 			}
-			s.etcd = &StaticResponseEtcdAPI{Members: members}
+			// Swap the wrapped implementation, to one which responds with a
+			// fixed list of members
+			etcdAPI.APIBuilder = &StaticResponseEtcdAPI{Members: members}
 
 			err = try.Eventually(func() error {
 				fetchedCluster := &etcdv1alpha1.EtcdCluster{}
@@ -375,7 +379,8 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 	})
 
 	t.Run("PodAnnotations", func(t *testing.T) {
-		teardownFunc, namespace := s.setupTest(t)
+		// Mock out the etcd API with one that always fails - i.e., we're always in 'bootstrap' mode
+		teardownFunc, namespace := s.setupTest(t, &AlwaysFailEtcdAPI{})
 		defer teardownFunc()
 
 		etcdCluster := test.ExampleEtcdCluster(namespace)
@@ -397,9 +402,6 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 		// Apply defaults here so that our expected object has all the same
 		// defaults as those used in the Reconcile function
 		etcdCluster.Default()
-
-		// Mock out the etcd API with one that always fails - i.e., we're always in 'bootstrap' mode
-		s.etcd = &AlwaysFailEtcdAPI{}
 
 		t.Run("AppliesAnnotationsToPod", func(t *testing.T) {
 			// Search for etcd pods using the clusterLabel
@@ -439,7 +441,8 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 	})
 
 	t.Run("PodResources", func(t *testing.T) {
-		teardownFunc, namespace := s.setupTest(t)
+		// Mock out the etcd API with one that always fails - i.e., we're always in 'bootstrap' mode
+		teardownFunc, namespace := s.setupTest(t, &AlwaysFailEtcdAPI{})
 		defer teardownFunc()
 
 		etcdCluster := test.ExampleEtcdCluster(namespace)
@@ -449,9 +452,6 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 		require.NoError(t, err, "failed to create EtcdCluster resource")
 
 		etcdCluster.Default()
-
-		// Mock out the etcd API with one that always fails - i.e., we're always in 'bootstrap' mode
-		s.etcd = &AlwaysFailEtcdAPI{}
 
 		t.Run("AppliesResourcesToPod", func(t *testing.T) {
 			replicaSetList := &appsv1.ReplicaSetList{}

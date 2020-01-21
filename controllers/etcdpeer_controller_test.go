@@ -36,7 +36,7 @@ func exampleEtcdPeer(namespace string) *etcdv1alpha1.EtcdPeer {
 
 func (s *controllerSuite) testPeerController(t *testing.T) {
 	t.Run("TestPeerController_OnCreation_CreatesReplicaSet", func(t *testing.T) {
-		teardownFunc, namespace := s.setupTest(t)
+		teardownFunc, namespace := s.setupTest(t, &AlwaysFailEtcdAPI{})
 		defer teardownFunc()
 
 		etcdPeer := exampleEtcdPeer(namespace)
@@ -137,7 +137,7 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		)
 	})
 	t.Run("CreatesPersistentVolumeClaim", func(t *testing.T) {
-		teardown, namespace := s.setupTest(t)
+		teardown, namespace := s.setupTest(t, &AlwaysFailEtcdAPI{})
 		defer teardown()
 		peer := exampleEtcdPeer(namespace)
 		err := s.k8sClient.Create(s.ctx, peer)

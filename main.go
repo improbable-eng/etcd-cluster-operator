@@ -63,7 +63,7 @@ func main() {
 		Client:   mgr.GetClient(),
 		Log:      ctrl.Log.WithName("controllers").WithName("EtcdCluster"),
 		Recorder: mgr.GetEventRecorderFor("etcdcluster-reconciler"),
-		Etcd:     &etcd.ClientEtcdAPI{},
+		Etcd:     &etcd.ClientEtcdAPIBuilder{},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "EtcdCluster")
 		os.Exit(1)

@@ -8,7 +8,6 @@ import (
 
 	petname "github.com/dustinkirkland/golang-petname"
 	"github.com/stretchr/testify/require"
-	etcdclient "go.etcd.io/etcd/client"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -28,7 +27,6 @@ type controllerSuite struct {
 	cfg       *rest.Config
 	k8sClient client.Client
 	testEnv   *envtest.Environment
-	etcd      etcd.EtcdAPI
 }
 
 func setupSuite(t *testing.T) (suite *controllerSuite, teardownFunc func()) {
@@ -67,18 +65,10 @@ func setupSuite(t *testing.T) (suite *controllerSuite, teardownFunc func()) {
 		cfg:       cfg,
 		k8sClient: k8sClient,
 		testEnv:   testEnv,
-		etcd:      nil,
 	}, stopFunc
 }
 
-// MembershipAPI exists so we can 'forward' the method on the EtcdAPI interface to our internal etcd. This is so that we
-// can pass ourselves in as an implementation of an EtcdAPI at test assembly time, but a test can switch out it's
-// internal implementation in the middle of a test by setting `controllerSuite.etcd`
-func (s *controllerSuite) MembershipAPI(config etcdclient.Config) (etcdclient.MembersAPI, error) {
-	return s.etcd.MembershipAPI(config)
-}
-
-func (s *controllerSuite) setupTest(t *testing.T) (teardownFunc func(), namespaceName string) {
+func (s *controllerSuite) setupTest(t *testing.T, etcdAPI etcd.APIBuilder) (teardownFunc func(), namespaceName string) {
 	stopCh := make(chan struct{})
 	logger := test.TestLogger{
 		T: t,
@@ -112,7 +102,7 @@ func (s *controllerSuite) setupTest(t *testing.T) (teardownFunc func(), namespac
 		Client:   mgr.GetClient(),
 		Log:      logger.WithName("EtcdCluster"),
 		Recorder: mgr.GetEventRecorderFor("etcdcluster-reconciler"),
-		Etcd:     s,
+		Etcd:     etcdAPI,
 	}
 	err = clusterController.SetupWithManager(mgr)
 	require.NoError(t, err, "failed to setup EtcdCluster controller")

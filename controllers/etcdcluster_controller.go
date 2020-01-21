@@ -36,7 +36,7 @@ type EtcdClusterReconciler struct {
 	client.Client
 	Log      logr.Logger
 	Recorder record.EventRecorder
-	Etcd     etcd.EtcdAPI
+	Etcd     etcd.APIBuilder
 }
 
 func headlessServiceForCluster(cluster *etcdv1alpha1.EtcdCluster) *v1.Service {
@@ -537,7 +537,7 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 }
 
 func (r *EtcdClusterReconciler) addEtcdMember(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, peerURL string) (*etcdclient.Member, error) {
-	c, err := r.Etcd.MembershipAPI(etcdClientConfig(cluster))
+	c, err := r.Etcd.New(etcdClientConfig(cluster))
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect to etcd: %w", err)
 	}
@@ -553,7 +553,7 @@ func (r *EtcdClusterReconciler) addEtcdMember(ctx context.Context, cluster *etcd
 // removeEtcdMember performs a runtime reconfiguration of the Etcd cluster to
 // remove a member from the cluster.
 func (r *EtcdClusterReconciler) removeEtcdMember(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, memberID string) error {
-	c, err := r.Etcd.MembershipAPI(etcdClientConfig(cluster))
+	c, err := r.Etcd.New(etcdClientConfig(cluster))
 	if err != nil {
 		return fmt.Errorf("unable to connect to etcd: %w", err)
 	}
@@ -566,7 +566,7 @@ func (r *EtcdClusterReconciler) removeEtcdMember(ctx context.Context, cluster *e
 }
 
 func (r *EtcdClusterReconciler) getEtcdMembers(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster) ([]etcdclient.Member, error) {
-	c, err := r.Etcd.MembershipAPI(etcdClientConfig(cluster))
+	c, err := r.Etcd.New(etcdClientConfig(cluster))
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect to etcd: %w", err)
 	}
