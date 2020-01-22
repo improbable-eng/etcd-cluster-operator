@@ -182,10 +182,9 @@ func (r *EtcdRestoreReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 			// There was some other, non non-found error. Exit as we can't handle this case.
 			log.Info("Encountered error while finding PVC")
 			return ctrl.Result{}, err
-		} else {
-			log.Info("PVC already exists. continuing", "pvc-name", name(&pvc))
-			// The PVC is there already. Continue.
 		}
+		log.Info("PVC already exists. continuing", "pvc-name", name(&pvc))
+		// The PVC is there already. Continue.
 
 		// Check to make sure we're expecting to restore into this PVC
 		if !IsOurPVC(restore, pvc) {
@@ -195,11 +194,11 @@ func (r *EtcdRestoreReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 			restore.Status.Phase = etcdv1alpha1.EtcdRestorePhaseFailed
 			err := r.Client.Status().Update(ctx, &restore)
 			return ctrl.Result{}, err
-		} else {
-			log.Info("PVC correctly marked as ours", "pvc-name", name(&pvc))
-			// Great, this PVC is marked as *our* restore (and not any random PVC, or one for an existing cluster, or
-			// a conflicting restore).
 		}
+		log.Info("PVC correctly marked as ours", "pvc-name", name(&pvc))
+		// Great, this PVC is marked as *our* restore (and not any random PVC, or one for an existing cluster, or
+		// a conflicting restore).
+
 	}
 
 	// So the peer restore is like a distributed fork/join. We need to launch n restore pods, where n is the number of
