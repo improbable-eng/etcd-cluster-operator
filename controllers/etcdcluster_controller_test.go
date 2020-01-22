@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/coreos/etcd/version"
+	"github.com/coreos/go-semver/semver"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -41,7 +43,8 @@ func (_ *AlwaysFailEtcdAPI) New(_ etcdclient.Config) (etcd.API, error) {
 // same shared Members list.
 // TODO(wallrj) Add locking if we ever want to have the test mutate the Members list.
 type StaticResponseEtcdAPI struct {
-	Members []etcdclient.Member
+	Members        []etcdclient.Member
+	ClusterVersion string
 }
 
 var _ etcd.APIBuilder = &StaticResponseEtcdAPI{}
@@ -68,6 +71,12 @@ func (s *StaticResponseEtcdAPI) Remove(ctx context.Context, mID string) error {
 		}
 	}
 	return fmt.Errorf("unknown member: %s", mID)
+}
+
+func (s *StaticResponseEtcdAPI) GetVersion(ctx context.Context) (*version.Versions, error) {
+	return &version.Versions{
+		Cluster: s.ClusterVersion,
+	}, nil
 }
 
 type WrapperEtcdAPI struct {
@@ -111,6 +120,22 @@ func fakeEtcdForEtcdCluster(etcdCluster etcdv1alpha1.EtcdCluster) *StaticRespons
 	return &StaticResponseEtcdAPI{Members: members}
 }
 
+// triggerReconcile forces a Reconcile by making a trivial change to the labels
+// of the supplied object.
+// A work around for https://github.com/improbable-eng/etcd-cluster-operator/issues/76
+func (s *controllerSuite) triggerReconcile(obj etcdv1alpha1.EtcdCluster) error {
+	updated := obj.DeepCopy()
+	labels := updated.GetLabels()
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	value := labels["trigger-an-update"]
+	labels["trigger-an-update"] = value + "X"
+	updated.SetLabels(labels)
+
+	return s.k8sClient.Patch(s.ctx, updated, client.MergeFrom(obj.DeepCopy()))
+}
+
 func (s *controllerSuite) testClusterController(t *testing.T) {
 	t.Run("ScaleDown", func(t *testing.T) {
 		t.Log("Setup.")
@@ -125,7 +150,6 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 		etcdCluster.Default()
 
 		const originalReplicas = 3
-		const expectedReplicas = 1
 
 		*etcdCluster.Spec.Replicas = originalReplicas
 		etcdAPIStatic := fakeEtcdForEtcdCluster(*etcdCluster)
@@ -466,6 +490,78 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 
 			r1 := replicaSetList.Items[0]
 			assert.Equal(t, *etcdCluster.Spec.PodTemplate.Resources, r1.Spec.Template.Spec.Containers[0].Resources)
+		})
+	})
+
+	t.Run("StatusVersion", func(t *testing.T) {
+		etcdAPI := &WrapperEtcdAPI{APIBuilder: &AlwaysFailEtcdAPI{}}
+
+		teardownFunc, namespace := s.setupTest(t, etcdAPI)
+		defer teardownFunc()
+
+		etcdCluster := test.ExampleEtcdCluster(namespace)
+
+		err := s.k8sClient.Create(s.ctx, etcdCluster)
+		require.NoError(t, err, "failed to create EtcdCluster resource")
+
+		etcdCluster.Default()
+
+		etcdClusterKey, err := client.ObjectKeyFromObject(etcdCluster)
+		require.NoError(t, err)
+
+		t.Run("ReportsEmptyVersion", func(t *testing.T) {
+			etcdAPI.APIBuilder = &AlwaysFailEtcdAPI{}
+
+			err := s.triggerReconcile(*etcdCluster)
+			require.NoError(t, err)
+
+			err = try.Eventually(func() error {
+				var fetchedCluster etcdv1alpha1.EtcdCluster
+				err := s.k8sClient.Get(s.ctx, etcdClusterKey, &fetchedCluster)
+				require.NoError(t, err)
+
+				const expectedVersion = ""
+				actualVersion := fetchedCluster.Status.APIVersion
+				if expectedVersion != actualVersion {
+					return fmt.Errorf(
+						"unexpected Status.APIVersion. Wanted: %s, Got: %s",
+						expectedVersion, actualVersion,
+					)
+				}
+				return nil
+			}, time.Second*5, time.Millisecond*500)
+			require.NoError(t, err)
+		})
+
+		t.Run("ReportsExpectedVersion", func(t *testing.T) {
+			expectedVersion := semver.Must(semver.NewVersion("3.2.0"))
+			staticAPI := fakeEtcdForEtcdCluster(*etcdCluster)
+			staticAPI.ClusterVersion = "3.2.0"
+			etcdAPI.APIBuilder = staticAPI
+
+			err := s.triggerReconcile(*etcdCluster)
+			require.NoError(t, err)
+
+			err = try.Eventually(func() error {
+
+				var fetchedCluster etcdv1alpha1.EtcdCluster
+				err := s.k8sClient.Get(s.ctx, etcdClusterKey, &fetchedCluster)
+				require.NoError(t, err)
+
+				if len(fetchedCluster.Status.APIVersion) == 0 {
+					return fmt.Errorf("Status.APIVersion was empty")
+				}
+				actualVersion, err := semver.NewVersion(fetchedCluster.Status.APIVersion)
+				require.NoError(t, err)
+				if !expectedVersion.Equal(*actualVersion) {
+					return fmt.Errorf(
+						"unexpected Status.APIVersion. Wanted: %s, Got: %s",
+						expectedVersion, actualVersion,
+					)
+				}
+				return nil
+			}, time.Second*5, time.Millisecond*500)
+			require.NoError(t, err)
 		})
 	})
 }

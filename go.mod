@@ -14,6 +14,7 @@ replace (
 require (
 	cloud.google.com/go v0.38.0
 	github.com/coreos/etcd v3.3.17+incompatible
+	github.com/coreos/go-semver v0.3.0
 	github.com/dustinkirkland/golang-petname v0.0.0-20190613200456-11339a705ed2
 	github.com/go-logr/logr v0.1.0
 	github.com/google/go-cmp v0.3.0

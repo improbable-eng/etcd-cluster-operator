@@ -27,12 +27,15 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/utils/pointer"
 	kindv1alpha3 "sigs.k8s.io/kind/pkg/apis/config/v1alpha3"
 	"sigs.k8s.io/kind/pkg/cluster"
 	"sigs.k8s.io/kind/pkg/cluster/create"
 	"sigs.k8s.io/kind/pkg/container/cri"
 
+	semver "github.com/coreos/go-semver/semver"
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/test"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/test/try"
 )
 
@@ -383,6 +386,19 @@ func TestE2E(t *testing.T) {
 			defer cleanup()
 			backupTests(t, kubectl.WithT(t).WithDefaultNamespace(ns))
 		})
+		t.Run("Version", func(t *testing.T) {
+			t.Parallel()
+			rl := corev1.ResourceList{
+				// 1-node cluster
+				// set and get jobs
+				corev1.ResourceCPU:    resource.MustParse("300m"),
+				corev1.ResourceMemory: resource.MustParse("250Mi"),
+			}
+			kubectl := kubectl.WithT(t)
+			ns, cleanup := NamespaceForTest(t, kubectl, rl)
+			defer cleanup()
+			versionTests(t, kubectl.WithDefaultNamespace(ns))
+		})
 	})
 }
 
@@ -714,4 +730,50 @@ func scaleDownTests(t *testing.T, kubectl *kubectlContext) {
 	)
 	require.NoError(t, err, out)
 	assert.Equal(t, expectedValue+"\n", out)
+}
+
+func versionTests(t *testing.T, kubectl *kubectlContext) {
+	t.Log("Given a 1-node cluster.")
+	const expectedReplicas = 1
+	cluster1 := test.ExampleEtcdCluster(*kubectl.defaultNamespace)
+	cluster1.Spec.Replicas = pointer.Int32Ptr(expectedReplicas)
+	err := kubectl.ApplyObject(cluster1)
+	require.NoError(t, err)
+
+	t.Log("Containing data.")
+	expectedValue := "foobarbaz"
+
+	out, err := eventuallyInCluster(
+		kubectl,
+		"set-etcd-value",
+		time.Minute*2,
+		"quay.io/coreos/etcd:v3.2.28",
+		"etcdctl", "--insecure-discovery", "--discovery-srv=cluster1",
+		"set", "--", "foo", expectedValue,
+	)
+	require.NoError(t, err, out)
+
+	t.Log("The EtcdCluster.Status should contain the Etcd version")
+	expectedVersion := semver.Must(semver.NewVersion("3.2.0"))
+	err = try.Eventually(
+		func() error {
+			out, err := kubectl.Get("etcdcluster", "cluster1", "-o=jsonpath={.status.apiVersion}")
+			if err != nil {
+				return err
+			}
+			actualVersion, err := semver.NewVersion(out)
+			if err != nil {
+				return fmt.Errorf("Invalid version %q: %s", out, err)
+			}
+			if !expectedVersion.Equal(*actualVersion) {
+				return fmt.Errorf(
+					"unexpected Status.APIVersion. Wanted: %s, Got: %s",
+					expectedVersion, actualVersion,
+				)
+			}
+			return nil
+		},
+		time.Minute*2, time.Second*10,
+	)
+	require.NoError(t, err)
 }

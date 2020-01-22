@@ -474,6 +474,22 @@ func peerNameForMember(member etcdclient.Member) (string, error) {
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 
+func (r *EtcdClusterReconciler) updateStatusVersion(ctx context.Context, log logr.Logger, cluster *etcdv1alpha1.EtcdCluster) {
+	cluster.Status.APIVersion = ""
+
+	etcdAPI, err := r.Etcd.New(etcdClientConfig(cluster))
+	if err != nil {
+		log.Error(err, "Failed to connect to ETCD")
+		return
+	}
+	etcdVersion, err := etcdAPI.GetVersion(ctx)
+	if err != nil {
+		log.Error(err, "Failed to get Etcd version")
+		return
+	}
+	cluster.Status.APIVersion = etcdVersion.Cluster
+}
+
 func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -512,6 +528,9 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		client.MatchingFields{clusterNameSpecField: cluster.Name}); err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to list peers: %w", err)
 	}
+
+	// Get Etcd version
+	r.updateStatusVersion(ctx, log, cluster)
 
 	// Perform a reconcile, getting back the desired result, any utilerrors, and a clusterEvent. This is an internal concept
 	// and is not the same as the Kubernetes event, although it is used to make one later.

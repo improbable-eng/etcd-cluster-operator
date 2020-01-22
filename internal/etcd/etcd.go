@@ -3,6 +3,7 @@ package etcd
 import (
 	"context"
 
+	"github.com/coreos/etcd/version"
 	etcdclient "go.etcd.io/etcd/client"
 )
 
@@ -17,6 +18,9 @@ type API interface {
 
 	// Remove demotes an existing Member out of the cluster.
 	Remove(ctx context.Context, mID string) error
+
+	// GetVersion retrieves the current etcd server and cluster version
+	GetVersion(ctx context.Context) (*version.Versions, error)
 }
 
 // APIBuilder is used to connect to etcd in the first place
@@ -26,6 +30,7 @@ type APIBuilder interface {
 
 type ClientEtcdAPI struct {
 	etcdclient.MembersAPI
+	etcdclient.Client
 }
 
 var _ API = &ClientEtcdAPI{}
@@ -41,5 +46,6 @@ func (o *ClientEtcdAPIBuilder) New(config etcdclient.Config) (API, error) {
 	}
 	return &ClientEtcdAPI{
 		MembersAPI: etcdclient.NewMembersAPI(client),
+		Client:     client,
 	}, nil
 }

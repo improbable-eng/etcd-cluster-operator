@@ -14,6 +14,10 @@ import (
 // ExampleEtcdCluster returns a valid example for testing purposes.
 func ExampleEtcdCluster(namespace string) *etcdv1alpha1.EtcdCluster {
 	return &etcdv1alpha1.EtcdCluster{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "EtcdCluster",
+			APIVersion: "etcd.improbable.io/v1alpha1",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "cluster1",
 			Namespace: namespace,
@@ -22,10 +26,10 @@ func ExampleEtcdCluster(namespace string) *etcdv1alpha1.EtcdCluster {
 			Replicas: pointer.Int32Ptr(3),
 			Storage: &etcdv1alpha1.EtcdPeerStorage{
 				VolumeClaimTemplate: &corev1.PersistentVolumeClaimSpec{
-					StorageClassName: pointer.StringPtr("example-class"),
+					StorageClassName: pointer.StringPtr("standard"),
 					Resources: corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
-							"storage": resource.MustParse("999Gi"),
+							"storage": resource.MustParse("1Mi"),
 						},
 					},
 				},
@@ -76,10 +80,10 @@ func ExampleEtcdPeer(namespace string) *etcdv1alpha1.EtcdPeer {
 			},
 			Storage: &etcdv1alpha1.EtcdPeerStorage{
 				VolumeClaimTemplate: &corev1.PersistentVolumeClaimSpec{
-					StorageClassName: pointer.StringPtr("example-class"),
+					StorageClassName: pointer.StringPtr("standard"),
 					Resources: corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
-							"storage": resource.MustParse("999Gi"),
+							"storage": resource.MustParse("1Mi"),
 						},
 					},
 				},
