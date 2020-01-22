@@ -5,8 +5,8 @@ import (
 )
 
 const (
-	k8sEventTypeNormal  = "Normal"
-	k8sEventTypeWarning = "Warning"
+	K8sEventTypeNormal  = "Normal"
+	K8sEventTypeWarning = "Warning"
 )
 
 // ReconcilerEvent represents the action of the operator having actually done anything. Any meaningful change should
