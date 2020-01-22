@@ -179,7 +179,7 @@ func (r *EtcdRestoreReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 			err := r.Create(ctx, &expectedPVC)
 			return ctrl.Result{}, err
 		} else if err != nil {
-			// There was some other, non non-found error. Exit as we can't handle this case.
+			// There was some other, non-notfound error. Exit as we can't handle this case.
 			log.Info("Encountered error while finding PVC")
 			return ctrl.Result{}, err
 		}
