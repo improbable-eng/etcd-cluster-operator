@@ -90,6 +90,7 @@ func main() {
 	if err = (&controllers.EtcdRestoreReconciler{
 		Client:          mgr.GetClient(),
 		Log:             ctrl.Log.WithName("controllers").WithName("EtcdRestore"),
+		Recorder:        mgr.GetEventRecorderFor("etcdrestore-reconciler"),
 		RestorePodImage: restoreImageName,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "EtcdRestore")

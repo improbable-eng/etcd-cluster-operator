@@ -3,6 +3,8 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/reconcilerevent"
+	"k8s.io/client-go/tools/record"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -25,6 +27,7 @@ import (
 type EtcdRestoreReconciler struct {
 	client.Client
 	Log             logr.Logger
+	Recorder        record.EventRecorder
 	RestorePodImage string
 }
 
@@ -42,9 +45,15 @@ func name(o metav1.Object) types.NamespacedName {
 }
 
 const (
-	restoreContainerName = "etcd-restore"
-	restoredFromLabel    = "etcd.improbable.io/restored-from"
-	restorePodLabel      = "etcd.improbable.io/restore-pod"
+	restoreContainerName      = "etcd-restore"
+	restoredFromLabel         = "etcd.improbable.io/restored-from"
+	restorePodLabel           = "etcd.improbable.io/restore-pod"
+	pvcCreatedEventReason     = "PVCCreated"
+	pvcInvalidEventReason     = "PVCInvalid"
+	podCreatedEventReason     = "PodCreated"
+	podInvalidEventReason     = "PodInvalid"
+	podFailedEventReason      = "PodFailed"
+	clusterCreatedEventReason = "ClusterCreated"
 )
 
 func markPVC(restore etcdv1alpha1.EtcdRestore, pvc *corev1.PersistentVolumeClaim) {
@@ -177,7 +186,16 @@ func (r *EtcdRestoreReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 			// No PVC. Make it!
 			log.Info("Creating PVC", "pvc-name", name(&expectedPVC))
 			err := r.Create(ctx, &expectedPVC)
-			return ctrl.Result{}, err
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			r.Recorder.Eventf(&restore,
+				reconcilerevent.K8sEventTypeNormal,
+				pvcCreatedEventReason,
+				"Created PVC '%s/%s'",
+				pvc.Namespace,
+				pvc.Name)
+			return ctrl.Result{}, nil
 		} else if err != nil {
 			// There was some other, non-notfound error. Exit as we can't handle this case.
 			log.Info("Encountered error while finding PVC")
@@ -190,7 +208,23 @@ func (r *EtcdRestoreReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		if !IsOurPVC(restore, pvc) {
 			// It's unsafe to take any further action. We don't control the PVC.
 			log.Info("PVC is not marked as our PVC. Failing", "pvc-name", name(&pvc))
-			// TODO Report error reason
+			// Construct error reason string
+			var reason string
+			if restoredFrom, found := pvc.Labels[restoredFromLabel]; found {
+				reason = fmt.Sprintf("Label %s indicates a different restore %s made this PVC.",
+					restoredFromLabel,
+					restoredFrom)
+			} else {
+				reason = fmt.Sprintf("Label %s not set, indicating this is a pre-existing PVC.",
+					restoredFromLabel)
+			}
+			r.Recorder.Eventf(&restore,
+				reconcilerevent.K8sEventTypeWarning,
+				pvcInvalidEventReason,
+				"Found a PVC '%s/%s' as expected, but it wasn't labeled as ours: %s",
+				pvc.Namespace,
+				pvc.Name,
+				reason)
 			restore.Status.Phase = etcdv1alpha1.EtcdRestorePhaseFailed
 			err := r.Client.Status().Update(ctx, &restore)
 			return ctrl.Result{}, err
@@ -198,7 +232,6 @@ func (r *EtcdRestoreReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		log.Info("PVC correctly marked as ours", "pvc-name", name(&pvc))
 		// Great, this PVC is marked as *our* restore (and not any random PVC, or one for an existing cluster, or
 		// a conflicting restore).
-
 	}
 
 	// So the peer restore is like a distributed fork/join. We need to launch n restore pods, where n is the number of
@@ -223,7 +256,23 @@ func (r *EtcdRestoreReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	// Verify each pod we found is actually ours
 	for _, restorePod := range restorePods {
 		if restorePod != nil && !IsOurPod(restore, *restorePod) {
-			// TODO Report error reason
+			// Construct error reason string
+			var reason string
+			if restoredFrom, found := restorePod.Labels[restoredFromLabel]; found {
+				reason = fmt.Sprintf("Label %s indicates a different restore %s made this Pod.",
+					restoredFromLabel,
+					restoredFrom)
+			} else {
+				reason = fmt.Sprintf("Label %s not set, indicating this is a pre-existing Pod.",
+					restoredFromLabel)
+			}
+			r.Recorder.Eventf(&restore,
+				reconcilerevent.K8sEventTypeWarning,
+				podInvalidEventReason,
+				"Found a Pod '%s/%s' as expected, but it wasn't labeled as ours: %s",
+				restorePod.Namespace,
+				restorePod.Name,
+				reason)
 			log.Info("Restore Pod isn't ours", "pod-name", name(restorePod))
 			restore.Status.Phase = etcdv1alpha1.EtcdRestorePhaseFailed
 			err := r.Client.Status().Update(ctx, &restore)
@@ -241,7 +290,18 @@ func (r *EtcdRestoreReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 			log.Info("Launching restore pod", "pod-name", name(toCreatePod))
 			// No Pod. Launch it! We then exit. Next time we'll make the next one.
 			err := r.Create(ctx, toCreatePod)
-			return ctrl.Result{}, err
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			r.Recorder.Eventf(&restore,
+				reconcilerevent.K8sEventTypeNormal,
+				podCreatedEventReason,
+				"Launched Pod '%s/%s' to restore data to PVC '%s/%s'",
+				toCreatePod.Namespace,
+				toCreatePod.Name,
+				expectedPVCs[i].Namespace,
+				expectedPVCs[i].Name)
+			return ctrl.Result{}, nil
 		}
 	}
 	log.Info("All restore pods are launched")
@@ -266,10 +326,16 @@ func (r *EtcdRestoreReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	}
 
 	if anyFailed {
-		// TODO Report error reason
 		log.Info("One or more restore pods were not successful. Marking the restore as failed.")
 		restore.Status.Phase = etcdv1alpha1.EtcdRestorePhaseFailed
 		err := r.Client.Status().Update(ctx, &restore)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		r.Recorder.Event(&restore,
+			reconcilerevent.K8sEventTypeWarning,
+			podFailedEventReason,
+			"One or more Pods failed, please inspect the Pod logs for further details.")
 		return ctrl.Result{}, err
 	}
 	if !allSuccess {
@@ -286,6 +352,15 @@ func (r *EtcdRestoreReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		// No Cluster. Create it
 		log.Info("Creating new cluster", "cluster-name", name(expectedCluster))
 		err := r.Create(ctx, expectedCluster)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		r.Recorder.Eventf(&restore,
+			reconcilerevent.K8sEventTypeNormal,
+			clusterCreatedEventReason,
+			"Created EtcdCluster '%s/%s'.",
+			expectedCluster.Namespace,
+			expectedCluster.Name)
 		return ctrl.Result{}, err
 	} else if err != nil {
 		log.Info("Error creating cluster", "cluster-name", name(expectedCluster))

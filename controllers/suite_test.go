@@ -127,8 +127,9 @@ func (s *controllerSuite) setupTest(t *testing.T) (teardownFunc func(), namespac
 	require.NoError(t, err, "failed to setup EtcdBackupSchedule controller")
 
 	restoreController := EtcdRestoreReconciler{
-		Client: mgr.GetClient(),
-		Log:    logger.WithName("EtcdCluster"),
+		Client:   mgr.GetClient(),
+		Recorder: mgr.GetEventRecorderFor("etcdrestore-reconciler"),
+		Log:      logger.WithName("EtcdCluster"),
 	}
 	err = restoreController.SetupWithManager(mgr)
 	require.NoError(t, err, "failed to setup EtcdRestoreReconciler controller")
