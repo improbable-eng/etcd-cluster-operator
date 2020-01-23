@@ -87,44 +87,6 @@ func markCluster(restore etcdv1alpha1.EtcdRestore, cluster *etcdv1alpha1.EtcdClu
 	cluster.Labels[restoredFromLabel] = restore.Name
 }
 
-func (r *EtcdRestoreReconciler) podForRestore(restore etcdv1alpha1.EtcdRestore, pvc *corev1.PersistentVolumeClaim) *corev1.Pod {
-	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      restore.Name,
-			Namespace: restore.Namespace,
-			Labels: map[string]string{
-				restoredFromLabel: restore.Name,
-				restorePodLabel:   "true",
-			},
-		},
-		Spec: corev1.PodSpec{
-			Volumes: []corev1.Volume{
-				{
-					Name: "etcd-data-directory",
-					VolumeSource: corev1.VolumeSource{
-						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-							ClaimName: pvc.Name,
-							// We definitely need to be able to write to it.
-							ReadOnly: false,
-						},
-					},
-				},
-			},
-			Containers: []corev1.Container{
-				{
-					Name:         "etcd-restore",
-					Image:        r.RestorePodImage,
-					Command:      nil,
-					Args:         nil,
-					VolumeMounts: nil,
-				},
-			},
-			// If the Pod fails we should *not* attempt to recover automatically. Leave it failed.
-			RestartPolicy: corev1.RestartPolicyNever,
-		},
-	}
-}
-
 func (r *EtcdRestoreReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
 	log := r.Log.WithValues("etcdrestore", req.NamespacedName)
