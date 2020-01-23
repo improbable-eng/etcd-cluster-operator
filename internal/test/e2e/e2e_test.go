@@ -179,36 +179,66 @@ func buildOperator(t *testing.T, ctx context.Context) (imageTar string, err erro
 }
 
 func installOperator(t *testing.T, kubectl *kubectlContext, kind *cluster.Context, imageTar string) {
-	t.Log("Installing cert-manager")
-	err := kubectl.Apply("--validate=false", "--filename=https://github.com/jetstack/cert-manager/releases/download/v0.11.0/cert-manager.yaml")
-	require.NoError(t, err)
+	var wg sync.WaitGroup
 
-	// Ensure CRDs exist in the cluster.
-	t.Log("Applying CRDs")
-	err = kubectl.Apply("--kustomize", filepath.Join(*fRepoRoot, "config", "crd"))
-	require.NoError(t, err)
-
-	imageFile, err := os.Open(imageTar)
-	require.NoError(t, err)
-	defer func() {
-		assert.NoError(t, imageFile.Close(), "failed to close operator image tar")
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		t.Log("Deleting test namespaces")
+		DeleteAllTestNamespaces(t, kubectl)
 	}()
-	// Load the built image into the Kind cluster.
-	t.Log("Loading image in to Kind cluster")
-	nodes, err := kind.ListInternalNodes()
-	require.NoError(t, err)
-	for _, node := range nodes {
-		err := node.LoadImageArchive(imageFile)
-		require.NoError(t, err)
-	}
 
-	t.Log("Waiting for cert-manager to be ready")
-	err = kubectl.Wait("--for=condition=Available", "--timeout=300s", "apiservice", "v1beta1.webhook.cert-manager.io")
-	require.NoError(t, err)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		t.Log("Deleting etcd-cluster-operator namespace")
+		err := kubectl.Delete("namespace", "eco-system", "--ignore-not-found")
+		require.NoError(t, err)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		t.Log("Installing cert-manager")
+		err := kubectl.Apply("--validate=false", "--filename=https://github.com/jetstack/cert-manager/releases/download/v0.11.0/cert-manager.yaml")
+		require.NoError(t, err)
+		t.Log("Waiting for cert-manager to be ready")
+		err = kubectl.Wait("--for=condition=Available", "--timeout=300s", "apiservice", "v1beta1.webhook.cert-manager.io")
+		require.NoError(t, err)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// Ensure CRDs exist in the cluster.
+		t.Log("Applying CRDs")
+		err := kubectl.Apply("--kustomize", filepath.Join(*fRepoRoot, "config", "crd"))
+		require.NoError(t, err)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		imageFile, err := os.Open(imageTar)
+		require.NoError(t, err)
+		defer func() {
+			assert.NoError(t, imageFile.Close(), "failed to close operator image tar")
+		}()
+		// Load the built image into the Kind cluster.
+		t.Log("Loading image in to Kind cluster")
+		nodes, err := kind.ListInternalNodes()
+		require.NoError(t, err)
+		for _, node := range nodes {
+			err := node.LoadImageArchive(imageFile)
+			require.NoError(t, err)
+		}
+	}()
+
+	wg.Wait()
 
 	// Deploy the operator.
 	t.Log("Applying operator")
-	err = kubectl.Apply("--kustomize", filepath.Join(*fRepoRoot, "config", "test"))
+	err := kubectl.Apply("--kustomize", filepath.Join(*fRepoRoot, "config", "test"))
 	require.NoError(t, err)
 
 	// Ensure the operator starts.
@@ -257,6 +287,7 @@ func setupKind(t *testing.T, ctx context.Context, stopped chan struct{}) *kubect
 			cancel()
 		}
 	}()
+
 	wg.Wait()
 	require.NoError(t, ctx.Err())
 	kubectl := &kubectlContext{
