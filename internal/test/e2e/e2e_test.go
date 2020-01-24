@@ -719,6 +719,8 @@ func scaleDownTests(t *testing.T, kubectl *kubectlContext) {
 	t.Log("The cluster can then be scaled back up")
 	err = kubectl.Scale("etcdcluster/my-cluster", expectedReplicasOriginal)
 	require.NoError(t, err)
+
+	t.Log("The cluster eventually reports the expected number of peers")
 	err = try.Eventually(
 		func() error {
 			out, err := kubectl.Get("etcdcluster", "my-cluster", "-o=jsonpath={.status.replicas}")
@@ -737,4 +739,16 @@ func scaleDownTests(t *testing.T, kubectl *kubectlContext) {
 		time.Minute*2, time.Second*10,
 	)
 	require.NoError(t, err)
+
+	t.Log("And new data can be written to the cluster")
+	out, err = eventuallyInCluster(
+		kubectl,
+		"set-etcd-value2",
+		time.Minute*2,
+		"quay.io/coreos/etcd:v3.2.27",
+		"etcdctl", "--insecure-discovery", "--discovery-srv=my-cluster",
+		"set", "--", "foo2", expectedValue+"2",
+	)
+	require.NoError(t, err, out)
+
 }
