@@ -364,9 +364,8 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 					if err == nil {
 						log.V(2).Info("Deleted PVC for peer")
 						return ctrl.Result{}, nil
-					} else {
-						return ctrl.Result{}, fmt.Errorf("failed to delete PVC for peer: %w", err)
 					}
+					return ctrl.Result{}, fmt.Errorf("failed to delete PVC for peer: %w", err)
 				} else {
 					log.V(2).Info("PVC for peer has already been marked for deletion")
 				}
