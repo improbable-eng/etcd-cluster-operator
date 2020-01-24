@@ -10,6 +10,7 @@ import (
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -333,8 +334,6 @@ func (o *PeerPVCDeleter) Execute(ctx context.Context) error {
 	var actualPvc corev1.PersistentVolumeClaim
 	err = o.client.Get(ctx, expectedPvcNamespacedName, &actualPvc)
 	switch {
-	case client.IgnoreNotFound(err) != nil:
-		return fmt.Errorf("failed to get PVC for deleted peer: %w", err)
 	case err == nil:
 		// PVC exists.
 		// Check whether it has already been deleted (probably by us).
@@ -348,11 +347,15 @@ func (o *PeerPVCDeleter) Execute(ctx context.Context) error {
 				return nil
 			}
 			return fmt.Errorf("failed to delete PVC for peer: %w", err)
-		} else {
-			o.log.V(2).Info("PVC for peer has already been marked for deletion")
 		}
-	case err != nil:
+		o.log.V(2).Info("PVC for peer has already been marked for deletion")
+
+	case apierrors.IsNotFound(err):
 		o.log.V(2).Info("PVC not found for peer. Already deleted or never created.")
+
+	case err != nil:
+		return fmt.Errorf("failed to get PVC for deleted peer: %w", err)
+
 	}
 
 	// If we reach this stage, the PVC has been deleted or didn't need
