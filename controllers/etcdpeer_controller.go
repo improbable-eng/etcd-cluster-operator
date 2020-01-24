@@ -338,6 +338,7 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
+	// Check if the peer has been marked for deletion
 	if !peer.ObjectMeta.DeletionTimestamp.IsZero() {
 		if hasPvcDeletionFinalizer(peer) {
 			log.V(2).Info("Deleting PVC for peer prior to deletion")
