@@ -314,10 +314,65 @@ func hasPvcDeletionFinalizer(peer etcdv1alpha1.EtcdPeer) bool {
 	return sets.NewString(peer.ObjectMeta.Finalizers...).Has(pvcCleanupFinalizer)
 }
 
+// PeerPVCDeleter deletes the PVC for an EtcdPeer and removes the PVC deletion
+// finalizer.
+type PeerPVCDeleter struct {
+	log    logr.Logger
+	client client.Client
+	peer   *etcdv1alpha1.EtcdPeer
+}
+
+// Execute performs the deletiong and finalizer removal
+func (o *PeerPVCDeleter) Execute(ctx context.Context) error {
+	o.log.V(2).Info("Deleting PVC for peer prior to deletion")
+	expectedPvc := pvcForPeer(o.peer)
+	expectedPvcNamespacedName, err := client.ObjectKeyFromObject(expectedPvc)
+	if err != nil {
+		return fmt.Errorf("unable to get ObjectKey from PVC: %s", err)
+	}
+	var actualPvc corev1.PersistentVolumeClaim
+	err = o.client.Get(ctx, expectedPvcNamespacedName, &actualPvc)
+	switch {
+	case client.IgnoreNotFound(err) != nil:
+		return fmt.Errorf("failed to get PVC for deleted peer: %w", err)
+	case err == nil:
+		// PVC exists.
+		// Check whether it has already been deleted (probably by us).
+		// It won't actually be deleted until the garbage collector
+		// deletes the Pod which is using it.
+		if actualPvc.ObjectMeta.DeletionTimestamp.IsZero() {
+			o.log.V(2).Info("Deleting PVC for peer")
+			err := o.client.Delete(ctx, expectedPvc)
+			if err == nil {
+				o.log.V(2).Info("Deleted PVC for peer")
+				return nil
+			}
+			return fmt.Errorf("failed to delete PVC for peer: %w", err)
+		} else {
+			o.log.V(2).Info("PVC for peer has already been marked for deletion")
+		}
+	case err != nil:
+		o.log.V(2).Info("PVC not found for peer. Already deleted or never created.")
+	}
+
+	// If we reach this stage, the PVC has been deleted or didn't need
+	// deleting.
+	// Remove the finalizer so that the EtcdPeer can be garbage
+	// collected along with its replicaset, pod...and with that the PVC
+	// will finally be deleted by the garbage collector.
+	o.log.V(2).Info("Removing PVC cleanup finalizer")
+	updated := o.peer.DeepCopy()
+	controllerutil.RemoveFinalizer(updated, pvcCleanupFinalizer)
+	if err := o.client.Patch(ctx, updated, client.MergeFrom(o.peer)); err != nil {
+		return fmt.Errorf("failed to remove PVC cleanup finalizer: %w", err)
+	}
+	o.log.V(2).Info("Removed PVC cleanup finalizer")
+	return nil
+}
+
 func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
 	log := r.Log.WithValues("peer", req.NamespacedName)
 
 	var peer etcdv1alpha1.EtcdPeer
@@ -341,50 +396,13 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// Check if the peer has been marked for deletion
 	if !peer.ObjectMeta.DeletionTimestamp.IsZero() {
 		if hasPvcDeletionFinalizer(peer) {
-			log.V(2).Info("Deleting PVC for peer prior to deletion")
-			expectedPvc := pvcForPeer(&peer)
-			expectedPvcNamespacedName, err := client.ObjectKeyFromObject(expectedPvc)
-			if err != nil {
-				log.Error(err, "unable to get ObjectKey frome PVC")
-				return ctrl.Result{}, nil
+			action := &PeerPVCDeleter{
+				log:    log,
+				client: r.Client,
+				peer:   &peer,
 			}
-			var actualPvc corev1.PersistentVolumeClaim
-			err = r.Get(ctx, expectedPvcNamespacedName, &actualPvc)
-			switch {
-			case client.IgnoreNotFound(err) != nil:
-				return ctrl.Result{}, fmt.Errorf("failed to get PVC for deleted peer: %w", err)
-			case err == nil:
-				// PVC exists.
-				// Check whether it has already been deleted (probably by us).
-				// It won't actually be deleted until the garbage collector
-				// deletes the Pod which is using it.
-				if actualPvc.ObjectMeta.DeletionTimestamp.IsZero() {
-					log.V(2).Info("Deleting PVC for peer")
-					err := r.Delete(ctx, expectedPvc)
-					if err == nil {
-						log.V(2).Info("Deleted PVC for peer")
-						return ctrl.Result{}, nil
-					}
-					return ctrl.Result{}, fmt.Errorf("failed to delete PVC for peer: %w", err)
-				} else {
-					log.V(2).Info("PVC for peer has already been marked for deletion")
-				}
-			case err != nil:
-				log.V(2).Info("PVC not found for peer. Already deleted or never created.")
-			}
-
-			// If we reach this stage, the PVC has been deleted or didn't need
-			// deleting.
-			// Remove the finalizer so that the EtcdPeer can be garbage
-			// collected along with its replicaset, pod...and with that the PVC
-			// will finally be deleted by the garbage collector.
-			log.V(2).Info("Removing PVC cleanup finalizer")
-			updated := peer.DeepCopy()
-			controllerutil.RemoveFinalizer(updated, pvcCleanupFinalizer)
-			if err := r.Patch(ctx, updated, client.MergeFrom(&peer)); err != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to remove PVC cleanup finalizer: %w", err)
-			}
-			log.V(2).Info("Removed PVC cleanup finalizer")
+			err := action.Execute(ctx)
+			return ctrl.Result{}, err
 		}
 		return ctrl.Result{}, nil
 	}
