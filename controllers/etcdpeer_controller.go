@@ -11,7 +11,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -19,7 +18,6 @@ import (
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -120,7 +118,7 @@ func goMaxProcs(cpuLimit resource.Quantity) *int64 {
 	return pointer.Int64Ptr(goMaxProcs)
 }
 
-func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, log logr.Logger) appsv1.ReplicaSet {
+func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, log logr.Logger) *appsv1.ReplicaSet {
 	var replicas int32 = 1
 
 	// We use the same labels for the replica set itself, the selector on
@@ -263,7 +261,7 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, log logr.Logger) appsv1.Replic
 		}
 	}
 
-	return replicaSet
+	return &replicaSet
 }
 
 func pvcForPeer(peer *etcdv1alpha1.EtcdPeer) *corev1.PersistentVolumeClaim {
@@ -283,94 +281,8 @@ func pvcForPeer(peer *etcdv1alpha1.EtcdPeer) *corev1.PersistentVolumeClaim {
 	}
 }
 
-func (r *EtcdPeerReconciler) maybeCreatePvc(ctx context.Context, peer *etcdv1alpha1.EtcdPeer) (created bool, err error) {
-	objectKey := client.ObjectKey{
-		Name:      peer.Name,
-		Namespace: peer.Namespace,
-	}
-	// Check for existing object
-	pvc := &corev1.PersistentVolumeClaim{}
-	err = r.Get(ctx, objectKey, pvc)
-	// Object exists
-	if err == nil {
-		return false, nil
-	}
-	// Error when fetching the object
-	if !apierrs.IsNotFound(err) {
-		return false, err
-	}
-	// Object does not exist
-	err = r.Create(ctx, pvcForPeer(peer))
-	// Maybe a stale cache.
-	if apierrs.IsAlreadyExists(err) {
-		return false, fmt.Errorf("stale cache error: object was not found in cache but creation failed with AlreadyExists error: %w", err)
-	}
-	if err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
 func hasPvcDeletionFinalizer(peer etcdv1alpha1.EtcdPeer) bool {
 	return sets.NewString(peer.ObjectMeta.Finalizers...).Has(pvcCleanupFinalizer)
-}
-
-// PeerPVCDeleter deletes the PVC for an EtcdPeer and removes the PVC deletion
-// finalizer.
-type PeerPVCDeleter struct {
-	log    logr.Logger
-	client client.Client
-	peer   *etcdv1alpha1.EtcdPeer
-}
-
-// Execute performs the deletiong and finalizer removal
-func (o *PeerPVCDeleter) Execute(ctx context.Context) error {
-	o.log.V(2).Info("Deleting PVC for peer prior to deletion")
-	expectedPvc := pvcForPeer(o.peer)
-	expectedPvcNamespacedName, err := client.ObjectKeyFromObject(expectedPvc)
-	if err != nil {
-		return fmt.Errorf("unable to get ObjectKey from PVC: %s", err)
-	}
-	var actualPvc corev1.PersistentVolumeClaim
-	err = o.client.Get(ctx, expectedPvcNamespacedName, &actualPvc)
-	switch {
-	case err == nil:
-		// PVC exists.
-		// Check whether it has already been deleted (probably by us).
-		// It won't actually be deleted until the garbage collector
-		// deletes the Pod which is using it.
-		if actualPvc.ObjectMeta.DeletionTimestamp.IsZero() {
-			o.log.V(2).Info("Deleting PVC for peer")
-			err := o.client.Delete(ctx, expectedPvc)
-			if err == nil {
-				o.log.V(2).Info("Deleted PVC for peer")
-				return nil
-			}
-			return fmt.Errorf("failed to delete PVC for peer: %w", err)
-		}
-		o.log.V(2).Info("PVC for peer has already been marked for deletion")
-
-	case apierrors.IsNotFound(err):
-		o.log.V(2).Info("PVC not found for peer. Already deleted or never created.")
-
-	case err != nil:
-		return fmt.Errorf("failed to get PVC for deleted peer: %w", err)
-
-	}
-
-	// If we reach this stage, the PVC has been deleted or didn't need
-	// deleting.
-	// Remove the finalizer so that the EtcdPeer can be garbage
-	// collected along with its replicaset, pod...and with that the PVC
-	// will finally be deleted by the garbage collector.
-	o.log.V(2).Info("Removing PVC cleanup finalizer")
-	updated := o.peer.DeepCopy()
-	controllerutil.RemoveFinalizer(updated, pvcCleanupFinalizer)
-	if err := o.client.Patch(ctx, updated, client.MergeFrom(o.peer)); err != nil {
-		return fmt.Errorf("failed to remove PVC cleanup finalizer: %w", err)
-	}
-	o.log.V(2).Info("Removed PVC cleanup finalizer")
-	return nil
 }
 
 func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
@@ -396,55 +308,48 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
-	// Check if the peer has been marked for deletion
-	if !peer.ObjectMeta.DeletionTimestamp.IsZero() {
-		if hasPvcDeletionFinalizer(peer) {
-			action := &PeerPVCDeleter{
-				log:    log,
-				client: r.Client,
-				peer:   &peer,
-			}
-			err := action.Execute(ctx)
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, nil
+	desiredPVC := pvcForPeer(&peer)
+	existingPVC := &corev1.PersistentVolumeClaim{}
+	err = r.Get(ctx, req.NamespacedName, existingPVC)
+	if apierrors.IsNotFound(err) {
+		existingPVC = nil
 	}
-
-	created, err := r.maybeCreatePvc(ctx, &peer)
-	if err != nil || created {
+	if client.IgnoreNotFound(err) != nil {
 		return ctrl.Result{}, err
 	}
 
-	var existingReplicaSet appsv1.ReplicaSet
-	err = r.Get(
-		ctx,
-		client.ObjectKey{
-			Namespace: peer.Namespace,
-			Name:      peer.Name,
-		},
-		&existingReplicaSet,
-	)
-
-	if apierrs.IsNotFound(err) {
-		replicaSet := defineReplicaSet(peer, log)
-		log.V(1).Info("Replica set does not exist, creating",
-			"replica-set", replicaSet.Name)
-		if err := r.Create(ctx, &replicaSet); err != nil {
-			log.Error(err, "unable to create ReplicaSet for EtcdPeer", "replica-set", replicaSet)
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, nil
+	desiredReplicaset := defineReplicaSet(peer, log)
+	existingReplicaSet := &appsv1.ReplicaSet{}
+	err = r.Get(ctx, req.NamespacedName, existingReplicaSet)
+	if apierrors.IsNotFound(err) {
+		existingReplicaSet = nil
 	}
-
-	// Check for some other error from the previous `r.Get`
-	if err != nil {
-		log.Error(err, "unable to query for replica sets")
+	if client.IgnoreNotFound(err) != nil {
 		return ctrl.Result{}, err
 	}
 
-	log.V(2).Info("Replica set already exists", "replica-set", existingReplicaSet.Name)
+	var action Action
+	switch {
+	case !peer.ObjectMeta.DeletionTimestamp.IsZero() && hasPvcDeletionFinalizer(peer):
+		// Peer deleted and requires PVC cleanup
+		action = &PeerPVCDeleter{log: log, client: r.Client, peer: &peer}
 
-	// TODO Additional logic here
+	case !peer.ObjectMeta.DeletionTimestamp.IsZero():
+		// Peer deleted, no PVC cleanup
+		action = &NoopAction{}
+
+	case existingPVC == nil:
+		// Create PVC
+		action = &CreateRuntimeObject{log: log, client: r.Client, obj: desiredPVC}
+
+	case existingReplicaSet == nil:
+		// Create Replicaset
+		action = &CreateRuntimeObject{log: log, client: r.Client, obj: desiredReplicaset}
+	}
+
+	if action != nil {
+		return ctrl.Result{}, action.Execute(ctx)
+	}
 
 	return ctrl.Result{}, nil
 }
