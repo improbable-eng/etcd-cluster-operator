@@ -62,6 +62,7 @@ type EtcdClusterStatus struct {
 	// (as we may have just created a peer resource that doesn't have a pod yet, or the pod could be restarting), and it
 	// doesn't mean the number of members the etcd cluster has live, as pods may not be ready yet or network problems
 	// may mean the cluster has lost a member.
+	// +optional
 	Replicas int32 `json:"replicas"`
 
 	// Members contains information about each member from the etcd cluster.
