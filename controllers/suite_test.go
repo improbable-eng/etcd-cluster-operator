@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 )
 
 type controllerSuite struct {
+	sync.RWMutex
 	ctx       context.Context
 	cfg       *rest.Config
 	k8sClient client.Client
@@ -75,7 +77,15 @@ func setupSuite(t *testing.T) (suite *controllerSuite, teardownFunc func()) {
 // can pass ourselves in as an implementation of an EtcdAPI at test assembly time, but a test can switch out it's
 // internal implementation in the middle of a test by setting `controllerSuite.etcd`
 func (s *controllerSuite) MembershipAPI(config etcdclient.Config) (etcdclient.MembersAPI, error) {
+	s.RLock()
+	defer s.RUnlock()
 	return s.etcd.MembershipAPI(config)
+}
+
+func (s *controllerSuite) setEtcd(api etcd.EtcdAPI) {
+	s.Lock()
+	defer s.Unlock()
+	s.etcd = api
 }
 
 func (s *controllerSuite) setupTest(t *testing.T) (teardownFunc func(), namespaceName string) {
@@ -125,16 +135,21 @@ func (s *controllerSuite) setupTest(t *testing.T) (teardownFunc func(), namespac
 	}
 	err = backupController.SetupWithManager(mgr)
 	require.NoError(t, err, "failed to setup EtcdBackupSchedule controller")
-
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		err := mgr.Start(stopCh)
 		require.NoError(t, err, "failed to start manager")
 	}()
 
 	return func() {
+		defer func() {
+			close(stopCh)
+			wg.Wait()
+		}()
 		err := s.k8sClient.Delete(s.ctx, namespace)
 		require.NoErrorf(t, err, "Failed to delete test namespace: %#v", namespace)
-		close(stopCh)
 	}, namespace.Name
 }
 

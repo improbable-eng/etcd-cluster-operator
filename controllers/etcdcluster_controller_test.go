@@ -2,9 +2,11 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
+	"sync"
 	"testing"
 	"time"
 
@@ -36,20 +38,44 @@ func (_ *AlwaysFailEtcdAPI) MembershipAPI(_ etcdclient.Config) (etcdclient.Membe
 // testing the interactions with the Etcd client API.
 // The `parent` field is a pointer so that a test and the controller-under-test see the
 // same shared Members list.
-// TODO(wallrj) Add locking if we ever want to have the test mutate the Members list.
 type StaticResponseMembersAPI struct {
+	sync.RWMutex
 	parent *StaticResponseEtcdAPI
 }
 
+// deepCopyEtcdClientMember makes a copy of the supplied Member
+func deepCopyEtcdClientMember(in etcdclient.Member) (out etcdclient.Member, err error) {
+	encoded, err := json.Marshal(in)
+	if err != nil {
+		return out, err
+	}
+	err = json.Unmarshal(encoded, &out)
+	return out, err
+}
+
 func (s *StaticResponseMembersAPI) List(ctx context.Context) ([]etcdclient.Member, error) {
-	return s.parent.Members, nil
+	s.RLock()
+	defer s.RUnlock()
+	out := make([]etcdclient.Member, len(s.parent.Members))
+	for i := 0; i < len(out); i++ {
+		new, err := deepCopyEtcdClientMember(s.parent.Members[i])
+		if err != nil {
+			return nil, err
+		}
+		out[i] = new
+	}
+	return out, nil
 }
 
 func (s *StaticResponseMembersAPI) Add(ctx context.Context, peerURL string) (*etcdclient.Member, error) {
+	s.Lock()
+	defer s.Unlock()
 	panic("implement me")
 }
 
 func (s *StaticResponseMembersAPI) Remove(ctx context.Context, mID string) error {
+	s.Lock()
+	defer s.Unlock()
 	for i := range s.parent.Members {
 		if s.parent.Members[i].ID == mID {
 			s.parent.Members = append(s.parent.Members[:i], s.parent.Members[i+1:]...)
@@ -60,10 +86,14 @@ func (s *StaticResponseMembersAPI) Remove(ctx context.Context, mID string) error
 }
 
 func (s *StaticResponseMembersAPI) Update(ctx context.Context, mID string, peerURLs []string) error {
+	s.Lock()
+	defer s.Unlock()
 	panic("implement me")
 }
 
 func (s *StaticResponseMembersAPI) Leader(ctx context.Context) (*etcdclient.Member, error) {
+	s.RLock()
+	defer s.RUnlock()
 	panic("implement me")
 }
 
@@ -341,7 +371,7 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 					ClientURLs: []string{clientURL.String()},
 				}
 			}
-			s.etcd = &StaticResponseEtcdAPI{Members: members}
+			s.setEtcd(&StaticResponseEtcdAPI{Members: members})
 
 			err = try.Eventually(func() error {
 				fetchedCluster := &etcdv1alpha1.EtcdCluster{}
