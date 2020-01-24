@@ -10,7 +10,6 @@ import (
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -118,7 +117,7 @@ func goMaxProcs(cpuLimit resource.Quantity) *int64 {
 	return pointer.Int64Ptr(goMaxProcs)
 }
 
-func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, log logr.Logger) *appsv1.ReplicaSet {
+func defineReplicaSet(peer *etcdv1alpha1.EtcdPeer, log logr.Logger) *appsv1.ReplicaSet {
 	var replicas int32 = 1
 
 	// We use the same labels for the replica set itself, the selector on
@@ -147,11 +146,11 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, log logr.Logger) *appsv1.Repli
 			},
 			{
 				Name:  etcdenvvar.InitialAdvertisePeerURLs,
-				Value: advertiseURL(peer, etcdPeerPort).String(),
+				Value: advertiseURL(*peer, etcdPeerPort).String(),
 			},
 			{
 				Name:  etcdenvvar.AdvertiseClientURLs,
-				Value: advertiseURL(peer, etcdClientPort).String(),
+				Value: advertiseURL(*peer, etcdClientPort).String(),
 			},
 			{
 				Name:  etcdenvvar.ListenPeerURLs,
@@ -207,7 +206,7 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, log logr.Logger) *appsv1.Repli
 			Annotations:     make(map[string]string),
 			Name:            peer.Name,
 			Namespace:       peer.Namespace,
-			OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(&peer, etcdv1alpha1.GroupVersion.WithKind("EtcdPeer"))},
+			OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(peer, etcdv1alpha1.GroupVersion.WithKind("EtcdPeer"))},
 		},
 		Spec: appsv1.ReplicaSetSpec{
 			// This will *always* be 1. Other peers are handled by other EtcdPeers.
@@ -281,8 +280,60 @@ func pvcForPeer(peer *etcdv1alpha1.EtcdPeer) *corev1.PersistentVolumeClaim {
 	}
 }
 
-func hasPvcDeletionFinalizer(peer etcdv1alpha1.EtcdPeer) bool {
+func hasPvcDeletionFinalizer(peer *etcdv1alpha1.EtcdPeer) bool {
 	return sets.NewString(peer.ObjectMeta.Finalizers...).Has(pvcCleanupFinalizer)
+}
+
+type State struct {
+	peer              *etcdv1alpha1.EtcdPeer
+	pvc               *corev1.PersistentVolumeClaim
+	desiredPVC        *corev1.PersistentVolumeClaim
+	replicaSet        *appsv1.ReplicaSet
+	desiredReplicaSet *appsv1.ReplicaSet
+}
+
+type StateCollector struct {
+	log    logr.Logger
+	client client.Client
+}
+
+func (o *StateCollector) GetState(ctx context.Context, req ctrl.Request) (*State, error) {
+	state := &State{}
+
+	var peer etcdv1alpha1.EtcdPeer
+	err := o.client.Get(ctx, req.NamespacedName, &peer)
+	if client.IgnoreNotFound(err) != nil {
+		return nil, err
+	}
+	if err == nil {
+		state.peer = &peer
+	}
+
+	var pvc corev1.PersistentVolumeClaim
+	err = o.client.Get(ctx, req.NamespacedName, &pvc)
+	if client.IgnoreNotFound(err) != nil {
+		return nil, err
+	}
+	if err == nil {
+		state.pvc = &pvc
+	}
+
+	var replicaSet appsv1.ReplicaSet
+	err = o.client.Get(ctx, req.NamespacedName, &replicaSet)
+	if client.IgnoreNotFound(err) != nil {
+		return nil, err
+	}
+	if err == nil {
+		state.replicaSet = &replicaSet
+	}
+
+	if state.peer != nil {
+		state.peer.Default()
+		state.desiredPVC = pvcForPeer(state.peer)
+		state.desiredReplicaSet = defineReplicaSet(state.peer, o.log)
+	}
+
+	return state, nil
 }
 
 func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
@@ -290,61 +341,40 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	defer cancel()
 	log := r.Log.WithValues("peer", req.NamespacedName)
 
-	var peer etcdv1alpha1.EtcdPeer
-	if err := r.Get(ctx, req.NamespacedName, &peer); err != nil {
-		log.Error(err, "unable to fetch EtcdPeer")
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+	sc := &StateCollector{log: log, client: r.Client}
+	state, err := sc.GetState(ctx, req)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("error while getting current state: %s", err)
 	}
 
-	log.V(2).Info("Found EtcdPeer resource")
-
-	// Apply defaults in case a defaulting webhook has not been deployed.
-	peer.Default()
+	if state.peer == nil {
+		log.Info("EtcdPeer not found")
+		return ctrl.Result{}, nil
+	}
 
 	// Validate in case a validating webhook has not been deployed
-	err := peer.ValidateCreate()
-	if err != nil {
+	if err := state.peer.ValidateCreate(); err != nil {
 		log.Error(err, "invalid EtcdPeer")
 		return ctrl.Result{}, nil
 	}
 
-	desiredPVC := pvcForPeer(&peer)
-	existingPVC := &corev1.PersistentVolumeClaim{}
-	err = r.Get(ctx, req.NamespacedName, existingPVC)
-	if apierrors.IsNotFound(err) {
-		existingPVC = nil
-	}
-	if client.IgnoreNotFound(err) != nil {
-		return ctrl.Result{}, err
-	}
-
-	desiredReplicaset := defineReplicaSet(peer, log)
-	existingReplicaSet := &appsv1.ReplicaSet{}
-	err = r.Get(ctx, req.NamespacedName, existingReplicaSet)
-	if apierrors.IsNotFound(err) {
-		existingReplicaSet = nil
-	}
-	if client.IgnoreNotFound(err) != nil {
-		return ctrl.Result{}, err
-	}
-
 	var action Action
 	switch {
-	case !peer.ObjectMeta.DeletionTimestamp.IsZero() && hasPvcDeletionFinalizer(peer):
+	case !state.peer.ObjectMeta.DeletionTimestamp.IsZero() && hasPvcDeletionFinalizer(state.peer):
 		// Peer deleted and requires PVC cleanup
-		action = &PeerPVCDeleter{log: log, client: r.Client, peer: &peer}
+		action = &PeerPVCDeleter{log: log, client: r.Client, peer: state.peer}
 
-	case !peer.ObjectMeta.DeletionTimestamp.IsZero():
+	case !state.peer.ObjectMeta.DeletionTimestamp.IsZero():
 		// Peer deleted, no PVC cleanup
 		action = &NoopAction{}
 
-	case existingPVC == nil:
+	case state.pvc == nil:
 		// Create PVC
-		action = &CreateRuntimeObject{log: log, client: r.Client, obj: desiredPVC}
+		action = &CreateRuntimeObject{log: log, client: r.Client, obj: state.desiredPVC}
 
-	case existingReplicaSet == nil:
+	case state.replicaSet == nil:
 		// Create Replicaset
-		action = &CreateRuntimeObject{log: log, client: r.Client, obj: desiredReplicaset}
+		action = &CreateRuntimeObject{log: log, client: r.Client, obj: state.desiredReplicaSet}
 	}
 
 	if action != nil {

@@ -417,7 +417,7 @@ func (r *EtcdClusterReconciler) reconcile(
 						log.V(2).Info("Peer is already marked for deletion", "peer", peer.Name)
 						continue
 					}
-					if !hasPvcDeletionFinalizer(peer) {
+					if !hasPvcDeletionFinalizer(&peer) {
 						updated := peer.DeepCopy()
 						controllerutil.AddFinalizer(updated, pvcCleanupFinalizer)
 						err := r.Patch(ctx, updated, client.MergeFrom(&peer))
