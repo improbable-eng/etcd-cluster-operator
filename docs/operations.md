@@ -250,7 +250,7 @@ during which the cluster will *not be able to process write requests*.
 The etcd process running in Pod "my-cluster-2" will exit with exit-code 0, and the Pod will be marked as "Complete".
 
 Next, the operator will remove the `EtcdPeer` resource for the removed `etcd` member.
-This will trigger the deletion of the `Replicaset` and the `Pod` and the `PersistentVolumeClaim` for "my-cluster-2".
+This will trigger the deletion of the `ReplicaSet` and the `Pod` and the `PersistentVolumeClaim` for "my-cluster-2".
 The `PersistentVolume` (and the data) for the removed `etcd` node *may* be deleted
 depending on the "Reclaim Policy" of the `StorageClass` associated with the `PersistentVolume`.
 
