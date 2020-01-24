@@ -10,13 +10,16 @@ import (
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -32,15 +35,16 @@ type EtcdPeerReconciler struct {
 }
 
 const (
-	etcdImage  = "quay.io/coreos/etcd:v3.2.28"
-	etcdScheme = "http"
-	peerLabel  = "etcd.improbable.io/peer-name"
+	etcdImage           = "quay.io/coreos/etcd:v3.2.28"
+	etcdScheme          = "http"
+	peerLabel           = "etcd.improbable.io/peer-name"
+	pvcCleanupFinalizer = "etcdpeer.etcd.improbable.io/pvc-cleanup"
 )
 
-// +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch
+// +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch;patch
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=apps,resources=replicasets,verbs=list;get;create;watch
-// +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=list;get;create;watch
+// +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=list;get;create;watch;delete
 
 func initialMemberURL(member etcdv1alpha1.InitialClusterMember) *url.URL {
 	return &url.URL{
@@ -307,10 +311,71 @@ func (r *EtcdPeerReconciler) maybeCreatePvc(ctx context.Context, peer *etcdv1alp
 	return true, nil
 }
 
+func hasPvcDeletionFinalizer(peer etcdv1alpha1.EtcdPeer) bool {
+	return sets.NewString(peer.ObjectMeta.Finalizers...).Has(pvcCleanupFinalizer)
+}
+
+// PeerPVCDeleter deletes the PVC for an EtcdPeer and removes the PVC deletion
+// finalizer.
+type PeerPVCDeleter struct {
+	log    logr.Logger
+	client client.Client
+	peer   *etcdv1alpha1.EtcdPeer
+}
+
+// Execute performs the deletiong and finalizer removal
+func (o *PeerPVCDeleter) Execute(ctx context.Context) error {
+	o.log.V(2).Info("Deleting PVC for peer prior to deletion")
+	expectedPvc := pvcForPeer(o.peer)
+	expectedPvcNamespacedName, err := client.ObjectKeyFromObject(expectedPvc)
+	if err != nil {
+		return fmt.Errorf("unable to get ObjectKey from PVC: %s", err)
+	}
+	var actualPvc corev1.PersistentVolumeClaim
+	err = o.client.Get(ctx, expectedPvcNamespacedName, &actualPvc)
+	switch {
+	case err == nil:
+		// PVC exists.
+		// Check whether it has already been deleted (probably by us).
+		// It won't actually be deleted until the garbage collector
+		// deletes the Pod which is using it.
+		if actualPvc.ObjectMeta.DeletionTimestamp.IsZero() {
+			o.log.V(2).Info("Deleting PVC for peer")
+			err := o.client.Delete(ctx, expectedPvc)
+			if err == nil {
+				o.log.V(2).Info("Deleted PVC for peer")
+				return nil
+			}
+			return fmt.Errorf("failed to delete PVC for peer: %w", err)
+		}
+		o.log.V(2).Info("PVC for peer has already been marked for deletion")
+
+	case apierrors.IsNotFound(err):
+		o.log.V(2).Info("PVC not found for peer. Already deleted or never created.")
+
+	case err != nil:
+		return fmt.Errorf("failed to get PVC for deleted peer: %w", err)
+
+	}
+
+	// If we reach this stage, the PVC has been deleted or didn't need
+	// deleting.
+	// Remove the finalizer so that the EtcdPeer can be garbage
+	// collected along with its replicaset, pod...and with that the PVC
+	// will finally be deleted by the garbage collector.
+	o.log.V(2).Info("Removing PVC cleanup finalizer")
+	updated := o.peer.DeepCopy()
+	controllerutil.RemoveFinalizer(updated, pvcCleanupFinalizer)
+	if err := o.client.Patch(ctx, updated, client.MergeFrom(o.peer)); err != nil {
+		return fmt.Errorf("failed to remove PVC cleanup finalizer: %w", err)
+	}
+	o.log.V(2).Info("Removed PVC cleanup finalizer")
+	return nil
+}
+
 func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
 	log := r.Log.WithValues("peer", req.NamespacedName)
 
 	var peer etcdv1alpha1.EtcdPeer
@@ -328,6 +393,20 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	err := peer.ValidateCreate()
 	if err != nil {
 		log.Error(err, "invalid EtcdPeer")
+		return ctrl.Result{}, nil
+	}
+
+	// Check if the peer has been marked for deletion
+	if !peer.ObjectMeta.DeletionTimestamp.IsZero() {
+		if hasPvcDeletionFinalizer(peer) {
+			action := &PeerPVCDeleter{
+				log:    log,
+				client: r.Client,
+				peer:   &peer,
+			}
+			err := action.Execute(ctx)
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, nil
 	}
 

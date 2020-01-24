@@ -249,20 +249,16 @@ during which the cluster will *not be able to process write requests*.
 
 The etcd process running in Pod "my-cluster-2" will exit with exit-code 0, and the Pod will be marked as "Complete".
 
-Next, the operator will remove the `EtcdPeer` resource for the removed `etcd` member. This will trigger the deletion of
-the `Replicaset` and the `Pod`  for "my-cluster-2", but **not** the `PersistentVolumeClaim` or the `PersistentVolume`,
-for the reasons described in "### Delete a Cluster" (above).
+Next, the operator will remove the `EtcdPeer` resource for the removed `etcd` member.
+This will trigger the deletion of the `ReplicaSet` and the `Pod` and the `PersistentVolumeClaim` for "my-cluster-2".
+The `PersistentVolume` (and the data) for the removed `etcd` node *may* be deleted
+depending on the "Reclaim Policy" of the `StorageClass` associated with the `PersistentVolume`.
 
 When all these operations are complete the `EtcdCluster.Status` will be updated to show the new number of replicas
 and the new list of `etcd` members.
 
 Additionally, the `etcd-cluster-operator` will generate an `Event` for each operation it successfully performs,
 which allows you to track the progress of the scale down operations.
-
-If you want to scale up an `EtcdCluster` which has previously been scaled down,
-you must first remove the `PersistentVolumeClaim` associated with any `EtcdPeer` that was removed during the scale down
-operations. Otherwise new `EtcdPeer` and `Pods` will be started with `/var/lib/etcd` data corresponding to an old etcd
-member ID, and the node will fail to join the cluster.
 
 ### Backup a cluster
 
@@ -285,7 +281,7 @@ Backups can be scheduled to be taken at given intervals:
 
 ```
 $ kubectl apply -f config/samples/etcd_v1alpha1_etcdbackupschedule.yaml
-```	
+```
 
 The resource specifies a crontab-style schedule defining how often the backup should be taken.
 It includes a spec similar to the  `EtcdBackup` resource to define how the backup should be taken, and where it should be placed.
@@ -307,7 +303,7 @@ during scaling operations due to cluster leader elections, and
 at times of high network latency between Etcd peers.
 This caused Etcd containers to be restarted, which made the situation even worse.
 
-If you disagree with this or if you find a valid use-case for Readiness Probes,
+If you disagree with this or if you find a valid use-case for Liveness Probes,
 please [create an issue](https://github.com/improbable-eng/etcd-cluster-operator/issues).
 
 ### Why aren't there Readiness Probes for the Etcd Pods?
@@ -324,4 +320,3 @@ because all the Endpoints for the service would be removed when the Readiness Pr
 
 If you disagree with this or if you find a valid use-case for Readiness Probes,
 please [create an issue](https://github.com/improbable-eng/etcd-cluster-operator/issues).
-

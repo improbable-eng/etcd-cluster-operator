@@ -21,6 +21,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/etcd"
@@ -412,6 +413,20 @@ func (r *EtcdClusterReconciler) reconcile(
 
 			for _, peer := range peers.Items {
 				if !memberNames.Has(peer.Name) {
+					if !peer.DeletionTimestamp.IsZero() {
+						log.V(2).Info("Peer is already marked for deletion", "peer", peer.Name)
+						continue
+					}
+					if !hasPvcDeletionFinalizer(peer) {
+						updated := peer.DeepCopy()
+						controllerutil.AddFinalizer(updated, pvcCleanupFinalizer)
+						err := r.Patch(ctx, updated, client.MergeFrom(&peer))
+						if err != nil {
+							return result, nil, fmt.Errorf("failed to add PVC cleanup finalizer: %w", err)
+						}
+						log.V(2).Info("Added PVC cleanup finalizer", "peer", peer.Name)
+						return result, nil, nil
+					}
 					err := r.Delete(ctx, &peer)
 					if err != nil {
 						return result, nil, fmt.Errorf("failed to remove peer: %w", err)
@@ -472,7 +487,7 @@ func peerNameForMember(member etcdclient.Member) (string, error) {
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdclusters,verbs=get;list;watch
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create
-// +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch;create;delete
+// +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch;create;delete;patch
 // +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 
 func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
