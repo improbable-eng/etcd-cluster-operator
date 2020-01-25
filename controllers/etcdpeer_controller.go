@@ -336,6 +336,38 @@ func (o *StateCollector) GetState(ctx context.Context, req ctrl.Request) (*State
 	return state, nil
 }
 
+func (r *EtcdPeerReconciler) nextAction(log logr.Logger, state *State) Action {
+	if state.peer == nil {
+		log.Info("EtcdPeer not found")
+		return nil
+	}
+
+	// Validate in case a validating webhook has not been deployed
+	if err := state.peer.ValidateCreate(); err != nil {
+		log.Error(err, "invalid EtcdPeer")
+		return nil
+	}
+
+	var action Action
+	switch {
+	case !state.peer.ObjectMeta.DeletionTimestamp.IsZero() && hasPvcDeletionFinalizer(state.peer):
+		// Peer deleted and requires PVC cleanup
+		action = &PeerPVCDeleter{log: log, client: r.Client, peer: state.peer}
+
+	case !state.peer.ObjectMeta.DeletionTimestamp.IsZero():
+		// Peer deleted, no PVC cleanup
+
+	case state.pvc == nil:
+		// Create PVC
+		action = &CreateRuntimeObject{log: log, client: r.Client, obj: state.desiredPVC}
+
+	case state.replicaSet == nil:
+		// Create Replicaset
+		action = &CreateRuntimeObject{log: log, client: r.Client, obj: state.desiredReplicaSet}
+	}
+	return action
+}
+
 func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -347,36 +379,7 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, fmt.Errorf("error while getting current state: %s", err)
 	}
 
-	if state.peer == nil {
-		log.Info("EtcdPeer not found")
-		return ctrl.Result{}, nil
-	}
-
-	// Validate in case a validating webhook has not been deployed
-	if err := state.peer.ValidateCreate(); err != nil {
-		log.Error(err, "invalid EtcdPeer")
-		return ctrl.Result{}, nil
-	}
-
-	var action Action
-	switch {
-	case !state.peer.ObjectMeta.DeletionTimestamp.IsZero() && hasPvcDeletionFinalizer(state.peer):
-		// Peer deleted and requires PVC cleanup
-		action = &PeerPVCDeleter{log: log, client: r.Client, peer: state.peer}
-
-	case !state.peer.ObjectMeta.DeletionTimestamp.IsZero():
-		// Peer deleted, no PVC cleanup
-		action = &NoopAction{}
-
-	case state.pvc == nil:
-		// Create PVC
-		action = &CreateRuntimeObject{log: log, client: r.Client, obj: state.desiredPVC}
-
-	case state.replicaSet == nil:
-		// Create Replicaset
-		action = &CreateRuntimeObject{log: log, client: r.Client, obj: state.desiredReplicaSet}
-	}
-
+	action := r.nextAction(log, state)
 	if action != nil {
 		return ctrl.Result{}, action.Execute(ctx)
 	}
