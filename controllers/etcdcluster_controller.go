@@ -50,27 +50,27 @@ func headlessServiceForCluster(cluster *etcdv1alpha1.EtcdCluster) *v1.Service {
 				*metav1.NewControllerRef(cluster, etcdv1alpha1.GroupVersion.WithKind("EtcdCluster")),
 			},
 			Labels: map[string]string{
-				appLabel:     appName,
-				clusterLabel: cluster.Name,
+				etcdv1alpha1.AppLabel:     etcdv1alpha1.AppName,
+				etcdv1alpha1.ClusterLabel: cluster.Name,
 			},
 		},
 		Spec: v1.ServiceSpec{
 			ClusterIP:                v1.ClusterIPNone,
 			PublishNotReadyAddresses: true,
 			Selector: map[string]string{
-				appLabel:     appName,
-				clusterLabel: cluster.Name,
+				etcdv1alpha1.AppLabel:     etcdv1alpha1.AppName,
+				etcdv1alpha1.ClusterLabel: cluster.Name,
 			},
 			Ports: []v1.ServicePort{
 				{
 					Name:     "etcd-client",
 					Protocol: "TCP",
-					Port:     etcdClientPort,
+					Port:     etcdv1alpha1.EtcdClientPort,
 				},
 				{
 					Name:     "etcd-peer",
 					Protocol: "TCP",
-					Port:     etcdPeerPort,
+					Port:     etcdv1alpha1.EtcdPeerPort,
 				},
 			},
 		},
@@ -154,8 +154,8 @@ func (r *EtcdClusterReconciler) createPeerForMember(ctx context.Context, cluster
 func (r *EtcdClusterReconciler) addNewMember(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, peers *etcdv1alpha1.EtcdPeerList) (*reconcilerevent.MemberAddedEvent, error) {
 	peerName := nextAvailablePeerName(cluster, peers.Items)
 	peerURL := &url.URL{
-		Scheme: etcdScheme,
-		Host:   fmt.Sprintf("%s:%d", expectedURLForPeer(cluster, peerName), etcdPeerPort),
+		Scheme: etcdv1alpha1.EtcdScheme,
+		Host:   fmt.Sprintf("%s:%d", expectedURLForPeer(cluster, peerName), etcdv1alpha1.EtcdPeerPort),
 	}
 	member, err := r.addEtcdMember(ctx, cluster, peerURL.String())
 	if err != nil {
@@ -419,7 +419,7 @@ func (r *EtcdClusterReconciler) reconcile(
 					}
 					if !hasPvcDeletionFinalizer(&peer) {
 						updated := peer.DeepCopy()
-						controllerutil.AddFinalizer(updated, pvcCleanupFinalizer)
+						controllerutil.AddFinalizer(updated, etcdv1alpha1.PVCCleanupFinalizer)
 						err := r.Patch(ctx, updated, client.MergeFrom(&peer))
 						if err != nil {
 							return result, nil, fmt.Errorf("failed to add PVC cleanup finalizer: %w", err)
@@ -597,10 +597,10 @@ func (r *EtcdClusterReconciler) getEtcdMembers(ctx context.Context, cluster *etc
 
 func etcdClientConfig(cluster *etcdv1alpha1.EtcdCluster) etcdclient.Config {
 	serviceURL := &url.URL{
-		Scheme: etcdScheme,
+		Scheme: etcdv1alpha1.EtcdScheme,
 		// We (the operator) are quite probably in a different namespace to the cluster, so we need to use a fully
 		// defined URL.
-		Host: fmt.Sprintf("%s.%s.svc:%d", cluster.Name, cluster.Namespace, etcdClientPort),
+		Host: fmt.Sprintf("%s.%s.svc:%d", cluster.Name, cluster.Namespace, etcdv1alpha1.EtcdClientPort),
 	}
 	return etcdclient.Config{
 		Endpoints:               []string{serviceURL.String()},
@@ -618,8 +618,8 @@ func peerForCluster(cluster *etcdv1alpha1.EtcdCluster, peerName string) *etcdv1a
 				*metav1.NewControllerRef(cluster, etcdv1alpha1.GroupVersion.WithKind("EtcdCluster")),
 			},
 			Labels: map[string]string{
-				appLabel:     appName,
-				clusterLabel: cluster.Name,
+				etcdv1alpha1.AppLabel:     etcdv1alpha1.AppName,
+				etcdv1alpha1.ClusterLabel: cluster.Name,
 			},
 		},
 		Spec: etcdv1alpha1.EtcdPeerSpec{

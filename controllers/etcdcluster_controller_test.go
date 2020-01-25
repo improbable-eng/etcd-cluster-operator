@@ -113,21 +113,21 @@ func fakeEtcdForEtcdCluster(etcdCluster etcdv1alpha1.EtcdCluster) *StaticRespons
 	for i := range members {
 		name := fmt.Sprintf("%s-%d", etcdCluster.Name, i)
 		peerURL := &url.URL{
-			Scheme: etcdScheme,
+			Scheme: etcdv1alpha1.EtcdScheme,
 			Host: fmt.Sprintf("%s.%s.%s.svc:%d",
 				name,
 				etcdCluster.Name,
 				etcdCluster.Namespace,
-				etcdPeerPort,
+				etcdv1alpha1.EtcdPeerPort,
 			),
 		}
 		clientURL := &url.URL{
-			Scheme: etcdScheme,
+			Scheme: etcdv1alpha1.EtcdScheme,
 			Host: fmt.Sprintf("%s.%s.%s.svc:%d",
 				name,
 				etcdCluster.Name,
 				etcdCluster.Namespace,
-				etcdClientPort,
+				etcdv1alpha1.EtcdClientPort,
 			),
 		}
 		members[i] = etcdclient.Member{
@@ -352,21 +352,21 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 			for i := range members {
 				name := fmt.Sprintf("%s-%d", etcdCluster.Name, i)
 				peerURL := &url.URL{
-					Scheme: etcdScheme,
+					Scheme: etcdv1alpha1.EtcdScheme,
 					Host: fmt.Sprintf("%s.%s.%s.svc:%d",
 						name,
 						etcdCluster.Name,
 						etcdCluster.Namespace,
-						etcdPeerPort,
+						etcdv1alpha1.EtcdPeerPort,
 					),
 				}
 				clientURL := &url.URL{
-					Scheme: etcdScheme,
+					Scheme: etcdv1alpha1.EtcdScheme,
 					Host: fmt.Sprintf("%s.%s.%s.svc:%d",
 						name,
 						etcdCluster.Name,
 						etcdCluster.Namespace,
-						etcdClientPort,
+						etcdv1alpha1.EtcdClientPort,
 					),
 				}
 				members[i] = etcdclient.Member{
@@ -519,8 +519,8 @@ func assertPeer(t *testing.T, cluster *etcdv1alpha1.EtcdCluster, peer *etcdv1alp
 	require.Contains(t, peer.Name, cluster.Name, "Peer name did not contain cluster's name")
 	require.Equal(t, cluster.Name, peer.Spec.ClusterName, "Cluster name not set on peer")
 
-	require.Equal(t, appName, peer.Labels[appLabel])
-	require.Equal(t, cluster.Name, peer.Labels[clusterLabel])
+	require.Equal(t, etcdv1alpha1.AppName, peer.Labels[etcdv1alpha1.AppLabel])
+	require.Equal(t, cluster.Name, peer.Labels[etcdv1alpha1.ClusterLabel])
 
 	assertOwnedByCluster(t, cluster, peer)
 

@@ -27,7 +27,7 @@ func (s *controllerSuite) testBackupScheduleController(t *testing.T) {
 		backups := &etcdv1alpha1.EtcdBackupList{}
 		err = try.Eventually(func() error {
 			return s.k8sClient.List(s.ctx, backups, &client.MatchingLabels{
-				scheduleLabel: backupSchedule.Name,
+				etcdv1alpha1.ScheduleLabel: backupSchedule.Name,
 			}, &client.ListOptions{
 				Namespace: namespace,
 			})

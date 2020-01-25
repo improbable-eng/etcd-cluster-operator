@@ -85,13 +85,13 @@ func (r *EtcdBackupScheduleReconciler) Reconcile(req ctrl.Request) (ctrl.Result,
 	// Add a finalizer if one does not exist.
 	finalizerIsSet := false
 	for _, f := range resource.ObjectMeta.Finalizers {
-		if f == scheduleCancelFinalizer {
+		if f == etcdv1alpha1.ScheduleCancelFinalizer {
 			finalizerIsSet = true
 			break
 		}
 	}
 	if !finalizerIsSet {
-		resource.ObjectMeta.Finalizers = append(resource.ObjectMeta.Finalizers, scheduleCancelFinalizer)
+		resource.ObjectMeta.Finalizers = append(resource.ObjectMeta.Finalizers, etcdv1alpha1.ScheduleCancelFinalizer)
 		if err := r.Update(ctx, resource); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -124,7 +124,7 @@ func (r *EtcdBackupScheduleReconciler) Reconcile(req ctrl.Request) (ctrl.Result,
 		// Remove the finalizer.
 		var newFinalizers []string
 		for _, f := range resource.ObjectMeta.Finalizers {
-			if f != scheduleCancelFinalizer {
+			if f != etcdv1alpha1.ScheduleCancelFinalizer {
 				newFinalizers = append(newFinalizers, f)
 			}
 		}
@@ -154,7 +154,7 @@ func (r *EtcdBackupScheduleReconciler) fire(resourceNamespacedName types.Namespa
 				*metav1.NewControllerRef(resource, etcdv1alpha1.GroupVersion.WithKind("EtcdBackupSchedule")),
 			},
 			Labels: map[string]string{
-				scheduleLabel: resource.ObjectMeta.Name,
+				etcdv1alpha1.ScheduleLabel: resource.ObjectMeta.Name,
 			},
 		},
 		Spec: resource.Spec.BackupTemplate,

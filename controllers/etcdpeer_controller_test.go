@@ -11,7 +11,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
@@ -69,8 +68,8 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 
 		expectations := map[string]interface{}{
 			`.spec.template.spec.volumes[?(@.name=="etcd-data")].persistentVolumeClaim.claimName`:              etcdPeer.Name,
-			`.spec.template.spec.containers[?(@.name=="etcd")].volumeMounts[?(@.name=="etcd-data")].mountPath`: etcdDataMountPath,
-			`.spec.template.spec.containers[?(@.name=="etcd")].env[?(@.name=="ETCD_DATA_DIR")].value`:          etcdDataMountPath,
+			`.spec.template.spec.containers[?(@.name=="etcd")].volumeMounts[?(@.name=="etcd-data")].mountPath`: etcdv1alpha1.EtcdDataMountPath,
+			`.spec.template.spec.containers[?(@.name=="etcd")].env[?(@.name=="ETCD_DATA_DIR")].value`:          etcdv1alpha1.EtcdDataMountPath,
 			`.spec.template.spec.containers[?(@.name=="etcd")].env[?(@.name=="GOMAXPROCS")].value`:             expectedGoMaxProcs,
 		}
 		test.AssertStructFields(t, expectations, replicaSet)
@@ -239,72 +238,4 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		require.NoError(t, client.IgnoreNotFound(err), "unexpected error")
 		assert.Error(t, err, "expected a NotFound error for deleted PVC")
 	})
-}
-
-func TestGoMaxProcs(t *testing.T) {
-	tests := map[string]struct {
-		limit    string
-		expected *int64
-	}{
-		"Negative": {
-			limit:    "-1",
-			expected: nil,
-		},
-		"Zero": {
-			limit:    "0",
-			expected: nil,
-		},
-		"JustAboveZero": {
-			limit:    "0.1",
-			expected: pointer.Int64Ptr(1),
-		},
-		"PointFive": {
-			limit:    "0.5",
-			expected: pointer.Int64Ptr(1),
-		},
-		"AlmostOne": {
-			limit:    "0.9",
-			expected: pointer.Int64Ptr(1),
-		},
-		"ExactlyOne": {
-			limit:    "1",
-			expected: pointer.Int64Ptr(1),
-		},
-		"JustAboveOne": {
-			limit:    "1.1",
-			expected: pointer.Int64Ptr(1),
-		},
-		"OnePointFive": {
-			limit:    "1.5",
-			expected: pointer.Int64Ptr(1),
-		},
-		"AlmostTwo": {
-			limit:    "1.9",
-			expected: pointer.Int64Ptr(1),
-		},
-		"ExactlyTwo": {
-			limit:    "2",
-			expected: pointer.Int64Ptr(2),
-		},
-		"TwoPointFive": {
-			limit:    "2.5",
-			expected: pointer.Int64Ptr(2),
-		},
-		"AlmostThree": {
-			limit:    "2.9",
-			expected: pointer.Int64Ptr(2),
-		},
-	}
-
-	for title, tc := range tests {
-		t.Run(title, func(t *testing.T) {
-			actual := goMaxProcs(resource.MustParse(tc.limit))
-			if tc.expected == nil {
-				assert.Nil(t, actual)
-			} else {
-				assert.Equal(t, *tc.expected, *actual)
-			}
-		})
-	}
-
 }
