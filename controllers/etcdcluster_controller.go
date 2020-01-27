@@ -40,17 +40,6 @@ type EtcdClusterReconciler struct {
 	Etcd     etcd.EtcdAPI
 }
 
-func (r *EtcdClusterReconciler) createBootstrapPeer(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, peers *etcdv1alpha1.EtcdPeerList) (*reconcilerevent.PeerCreatedEvent, error) {
-	peerName := nextAvailablePeerName(cluster, peers.Items)
-	peer := peerForCluster(cluster, peerName)
-	configurePeerBootstrap(peer, cluster)
-	err := r.Create(ctx, peer)
-	if err != nil {
-		return nil, err
-	}
-	return &reconcilerevent.PeerCreatedEvent{Object: cluster, PeerName: peer.Name}, nil
-}
-
 func (r *EtcdClusterReconciler) hasPeerForMember(peers *etcdv1alpha1.EtcdPeerList, member etcdclient.Member) (bool, error) {
 	expectedPeerName, err := peerNameForMember(member)
 	if err != nil {
@@ -188,56 +177,7 @@ func (r *EtcdClusterReconciler) reconcile(
 	// There are two big branches of behaviour: Either we (the operator) can contact the etcd cluster, or we can't. If
 	// the `members` pointer is nil that means we were unsuccessful in our attempts to connect. Otherwise it indicates
 	// a list of existing members.
-	if members == nil {
-		// We don't have communication with the cluster. This could be for a number of reasons, for example:
-		//
-		// * The cluster isn't up yet because we've not yet made the peers (during bootstrapping)
-		// * Pod rescheduling due to node failure or administrator action has made the cluster non-quorate
-		// * Network disruption inside the Kubernetes cluster has prevented us from connecting
-		//
-		// We treat the member list from etcd as a canonical list of what members should exist, so without it we're
-		// unable to reconcile what peers we should create. Most of the cases listed above will be solved by outside
-		// action. Either a network disruption will heal, or the scheduler will reschedule etcd pods. So no action is
-		// required.
-		//
-		// Bootstrapping is a notable exception. We have to create our peer resources so that the pods will be created
-		// in the first place. Which for us presents a 'chicken-and-egg' problem. Our solution is to take special
-		// action during a bootstrapping situation. We can't accurately detect that the cluster has actually just been
-		// bootstrapped in a reliable way (e.g., searching for the creation time on the cluster resource we're
-		// reconciling). So our 'best effort' is to see if our desired peers is less than our actual peers. If so, we
-		// just create new peers with bootstrap instructions.
-		//
-		// This may mean that we take a 'strange' action in some cases, such as a network disruption during a scale-up
-		// event where we may add peers without first adding them to the etcd internal membership list (like we would
-		// during normal operation). However, this situation will eventually heal:
-		//
-		// 1. We incorrectly create a blank peer
-		// 2. The network split heals
-		// 3. The cluster rejects the peer as it doesn't know about it
-		// 4. The operator reconciles, and removes the peer that the membership list doesn't see
-		// 5. We enter the normal scale-up behaviour, adding the peer to the membership list *first*.
-		//
-		// We are also careful to never *remove* a peer in this 'no contact' state. So while we may erroneously add
-		// peers in some edge cases, we will never remove a peer without first confirming the action is correct with
-		// the cluster.
-		if hasTooFewPeers(cluster, peers) {
-			// We have fewer peers than our replicas, so create a new peer. We do this one at a time, so only make
-			// *one* peer.
-			peerCreatedEvent, err := r.createBootstrapPeer(ctx, cluster, peers)
-			if err != nil {
-				return result, nil, fmt.Errorf("failed to create EtcdPeer %w", err)
-			}
-			log.V(1).Info(
-				"Insufficient peers for replicas and unable to contact etcd. Assumed we're bootstrapping created new peer. (If we're not we'll heal this later.)",
-				"current-peers", len(peers.Items),
-				"desired-peers", cluster.Spec.Replicas,
-				"peer", peerCreatedEvent.PeerName)
-			return result, peerCreatedEvent, nil
-		} else {
-			// We can't contact the cluster, and we don't *think* we need more peers. So it's unsafe to take any
-			// action.
-		}
-	} else {
+	if members != nil {
 		// In this branch we *do* have communication with the cluster, and have retrieved a list of members. We treat
 		// this list as canonical, and therefore reconciliation occurs in two cycles:
 		//
@@ -422,6 +362,54 @@ func (r *EtcdClusterReconciler) nextAction(log logr.Logger, state *cl.State) Act
 		// also encouraged to create their own services for their client access if that is more convenient.
 		action = &CreateRuntimeObject{log: log, client: r.Client, obj: state.DesiredService}
 		event = &reconcilerevent.ServiceCreatedEvent{Object: state.Cluster, ServiceName: state.DesiredService.Name}
+
+	case state.Members == nil && hasTooFewPeers(state.Cluster, state.Peers):
+		// We don't have communication with the cluster. This could be for a number of reasons, for example:
+		//
+		// * The cluster isn't up yet because we've not yet made the peers (during bootstrapping)
+		// * Pod rescheduling due to node failure or administrator action has made the cluster non-quorate
+		// * Network disruption inside the Kubernetes cluster has prevented us from connecting
+		//
+		// We treat the member list from etcd as a canonical list of what members should exist, so without it we're
+		// unable to reconcile what peers we should create. Most of the cases listed above will be solved by outside
+		// action. Either a network disruption will heal, or the scheduler will reschedule etcd pods. So no action is
+		// required.
+		//
+		// Bootstrapping is a notable exception. We have to create our peer resources so that the pods will be created
+		// in the first place. Which for us presents a 'chicken-and-egg' problem. Our solution is to take special
+		// action during a bootstrapping situation. We can't accurately detect that the cluster has actually just been
+		// bootstrapped in a reliable way (e.g., searching for the creation time on the cluster resource we're
+		// reconciling). So our 'best effort' is to see if our desired peers is less than our actual peers. If so, we
+		// just create new peers with bootstrap instructions.
+		//
+		// This may mean that we take a 'strange' action in some cases, such as a network disruption during a scale-up
+		// event where we may add peers without first adding them to the etcd internal membership list (like we would
+		// during normal operation). However, this situation will eventually heal:
+		//
+		// 1. We incorrectly create a blank peer
+		// 2. The network split heals
+		// 3. The cluster rejects the peer as it doesn't know about it
+		// 4. The operator reconciles, and removes the peer that the membership list doesn't see
+		// 5. We enter the normal scale-up behaviour, adding the peer to the membership list *first*.
+		//
+		// We are also careful to never *remove* a peer in this 'no contact' state. So while we may erroneously add
+		// peers in some edge cases, we will never remove a peer without first confirming the action is correct with
+		// the cluster.
+		peerName := nextAvailablePeerName(state.Cluster, state.Peers.Items)
+		peer := peerForCluster(state.Cluster, peerName)
+		configurePeerBootstrap(peer, state.Cluster)
+		action = &CreateRuntimeObject{log: log, client: r.Client, obj: peer}
+		event = &reconcilerevent.PeerCreatedEvent{Object: state.Cluster, PeerName: peer.Name}
+		log.V(1).Info(
+			"Insufficient peers for replicas and unable to contact etcd. Assumed we're bootstrapping created new peer. (If we're not we'll heal this later.)",
+			"current-peers", len(state.Peers.Items),
+			"desired-peers", state.Cluster.Spec.Replicas,
+			"peer", peer.Name,
+		)
+
+	case state.Members == nil:
+		// We can't contact the cluster, and we don't *think* we need more peers. So it's unsafe to take any
+		// action.
 	}
 
 	if event != nil {
