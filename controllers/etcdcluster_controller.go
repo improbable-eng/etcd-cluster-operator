@@ -12,7 +12,6 @@ import (
 	"github.com/go-logr/logr"
 	etcdclient "go.etcd.io/etcd/client"
 	v1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -39,76 +38,6 @@ type EtcdClusterReconciler struct {
 	Log      logr.Logger
 	Recorder record.EventRecorder
 	Etcd     etcd.EtcdAPI
-}
-
-func headlessServiceForCluster(cluster *etcdv1alpha1.EtcdCluster) *v1.Service {
-	name := serviceName(cluster)
-	return &v1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name.Name,
-			Namespace: name.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(cluster, etcdv1alpha1.GroupVersion.WithKind("EtcdCluster")),
-			},
-			Labels: map[string]string{
-				etcdv1alpha1.AppLabel:     etcdv1alpha1.AppName,
-				etcdv1alpha1.ClusterLabel: cluster.Name,
-			},
-		},
-		Spec: v1.ServiceSpec{
-			ClusterIP:                v1.ClusterIPNone,
-			PublishNotReadyAddresses: true,
-			Selector: map[string]string{
-				etcdv1alpha1.AppLabel:     etcdv1alpha1.AppName,
-				etcdv1alpha1.ClusterLabel: cluster.Name,
-			},
-			Ports: []v1.ServicePort{
-				{
-					Name:     "etcd-client",
-					Protocol: "TCP",
-					Port:     etcdv1alpha1.EtcdClientPort,
-				},
-				{
-					Name:     "etcd-peer",
-					Protocol: "TCP",
-					Port:     etcdv1alpha1.EtcdPeerPort,
-				},
-			},
-		},
-	}
-}
-
-func serviceName(cluster *etcdv1alpha1.EtcdCluster) types.NamespacedName {
-	return types.NamespacedName{
-		Name:      cluster.Name,
-		Namespace: cluster.Namespace,
-	}
-}
-
-// hasService determines if the Kubernetes Service exists. Error is returned if there is some problem communicating with
-// Kubernetes.
-func (r *EtcdClusterReconciler) hasService(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster) (bool, error) {
-	service := &v1.Service{}
-	err := r.Get(ctx, serviceName(cluster), service)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			// We got the expected error, which is that it's not found
-			return false, nil
-		}
-		// Unexpected error, some other problem?
-		return false, err
-	}
-	// We found it because we got no error
-	return true, nil
-}
-
-// createService makes the headless service in Kubernetes
-func (r *EtcdClusterReconciler) createService(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster) (*reconcilerevent.ServiceCreatedEvent, error) {
-	service := headlessServiceForCluster(cluster)
-	if err := r.Create(ctx, service); err != nil {
-		return nil, err
-	}
-	return &reconcilerevent.ServiceCreatedEvent{Object: cluster, ServiceName: service.Name}, nil
 }
 
 func (r *EtcdClusterReconciler) createBootstrapPeer(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, peers *etcdv1alpha1.EtcdPeerList) (*reconcilerevent.PeerCreatedEvent, error) {
@@ -255,24 +184,6 @@ func (r *EtcdClusterReconciler) reconcile(
 	// to the etcd membership API.
 	// TODO(#76) Implement custom watch on etcd membership API, and remove this `requeueAfter`
 	result := ctrl.Result{RequeueAfter: time.Second * 10}
-
-	// The first port of call is to verify that the service exists and create it if it does not.
-	//
-	// This service is headless, and is designed to provide the underlying etcd pods with a consistent network identity
-	// such that they can dial each other. It *can* be used for client access to etcd if a user desires, but users are
-	// also encouraged to create their own services for their client access if that is more convenient.
-	serviceExists, err := r.hasService(ctx, cluster)
-	if err != nil {
-		return result, nil, fmt.Errorf("unable to fetch service from Kubernetes API: %w", err)
-	}
-	if !serviceExists {
-		serviceCreatedEvent, err := r.createService(ctx, cluster)
-		if err != nil {
-			return result, nil, fmt.Errorf("unable to create service: %w", err)
-		}
-		log.V(1).Info("Created Service", "service", serviceCreatedEvent.ServiceName)
-		return result, serviceCreatedEvent, nil
-	}
 
 	// There are two big branches of behaviour: Either we (the operator) can contact the etcd cluster, or we can't. If
 	// the `members` pointer is nil that means we were unsuccessful in our attempts to connect. Otherwise it indicates
@@ -485,6 +396,45 @@ func peerNameForMember(member etcdclient.Member) (string, error) {
 	}
 }
 
+func (r *EtcdClusterReconciler) nextAction(log logr.Logger, state *cl.State) Action {
+	if state.Cluster == nil {
+		log.Info("EtcdCluster not found")
+		return nil
+	}
+
+	// Validate in case a validating webhook has not been deployed
+	err := state.Cluster.ValidateCreate()
+	if err != nil {
+		log.Error(err, "Invalid EtcdCluster")
+		return nil
+	}
+
+	var (
+		action Action
+		event  reconcilerevent.ReconcilerEvent
+	)
+	switch {
+	case state.Service == nil:
+		// The first port of call is to verify that the service exists and create it if it does not.
+		//
+		// This service is headless, and is designed to provide the underlying etcd pods with a consistent network identity
+		// such that they can dial each other. It *can* be used for client access to etcd if a user desires, but users are
+		// also encouraged to create their own services for their client access if that is more convenient.
+		action = &CreateRuntimeObject{log: log, client: r.Client, obj: state.DesiredService}
+		event = &reconcilerevent.ServiceCreatedEvent{Object: state.Cluster, ServiceName: state.DesiredService.Name}
+	}
+
+	if event != nil {
+		action = &EventWrapper{
+			recorder: r.Recorder,
+			event:    event,
+			wrapped:  action,
+		}
+	}
+
+	return action
+}
+
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdclusters,verbs=get;list;watch
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create
@@ -502,15 +452,12 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		return ctrl.Result{}, fmt.Errorf("error while getting current state: %s", err)
 	}
 
-	if state.Cluster == nil {
-		log.Info("EtcdCluster not found")
-		return ctrl.Result{}, nil
-	}
-
-	// Validate in case a validating webhook has not been deployed
-	err = state.Cluster.ValidateCreate()
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("invalid EtcdCluster resource: %w", err)
+	// Always requeue after ten seconds, as we don't watch on the membership list. So we don't auto-detect changes made
+	// to the etcd membership API.
+	// TODO(#76) Implement custom watch on etcd membership API, and remove this `requeueAfter`
+	action := r.nextAction(log, state)
+	if action != nil {
+		return ctrl.Result{RequeueAfter: time.Second * 10}, action.Execute(ctx)
 	}
 
 	// Perform a reconcile, getting back the desired result, any utilerrors, and a clusterEvent. This is an internal concept

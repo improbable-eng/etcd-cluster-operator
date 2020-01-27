@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-logr/logr"
 	etcdclient "go.etcd.io/etcd/client"
+	v1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -14,9 +15,11 @@ import (
 )
 
 type State struct {
-	Cluster *etcdv1alpha1.EtcdCluster
-	Members []etcdclient.Member
-	Peers   *etcdv1alpha1.EtcdPeerList
+	Cluster        *etcdv1alpha1.EtcdCluster
+	Members        []etcdclient.Member
+	Peers          *etcdv1alpha1.EtcdPeerList
+	DesiredService *v1.Service
+	Service        *v1.Service
 }
 
 func GetState(log logr.Logger, c client.Client, etcdapi etcd.EtcdAPI, ctx context.Context, req ctrl.Request) (*State, error) {
@@ -24,16 +27,33 @@ func GetState(log logr.Logger, c client.Client, etcdapi etcd.EtcdAPI, ctx contex
 
 	var cluster etcdv1alpha1.EtcdCluster
 	err := c.Get(ctx, req.NamespacedName, &cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	state.Cluster = &cluster
+	state.Cluster.Default()
+
+	// List peers
+	var peers etcdv1alpha1.EtcdPeerList
+	err = c.List(ctx, &peers, client.InNamespace(cluster.Namespace), client.MatchingFields{"spec.clusterName": cluster.Name})
+	if err != nil {
+		return nil, fmt.Errorf("unable to list peers: %s", err)
+	}
+	if err == nil {
+		state.Peers = &peers
+	}
+
+	var service v1.Service
+	err = c.Get(ctx, serviceName(&cluster), &service)
 	if client.IgnoreNotFound(err) != nil {
 		return nil, err
 	}
 	if err == nil {
-		state.Cluster = &cluster
+		state.Service = &service
 	}
 
-	if state.Cluster != nil {
-		state.Cluster.Default()
-	}
+	state.DesiredService = headlessServiceForCluster(&cluster)
 
 	etcdclient, err := etcdapi.MembershipAPI(EtcdClientConfig(&cluster))
 	if err == nil {
@@ -45,16 +65,6 @@ func GetState(log logr.Logger, c client.Client, etcdapi etcd.EtcdAPI, ctx contex
 		}
 	} else {
 		log.Error(err, "unable to connect to etcd")
-	}
-
-	// List peers
-	var peers etcdv1alpha1.EtcdPeerList
-	err = c.List(ctx, &peers, client.InNamespace(cluster.Namespace), client.MatchingFields{"spec.clusterName": cluster.Name})
-	if err != nil {
-		return nil, fmt.Errorf("unable to list peers: %s", err)
-	}
-	if err == nil {
-		state.Peers = &peers
 	}
 
 	return state, nil
