@@ -354,6 +354,9 @@ func (r *EtcdClusterReconciler) nextAction(log logr.Logger, state *cl.State) Act
 		event  reconcilerevent.ReconcilerEvent
 	)
 	switch {
+	case !state.Cluster.DeletionTimestamp.IsZero():
+		// Cluster is being deleted. Do nothing.
+
 	case state.Service == nil:
 		// The first port of call is to verify that the service exists and create it if it does not.
 		//
