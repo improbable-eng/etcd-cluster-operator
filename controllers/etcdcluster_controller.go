@@ -70,19 +70,6 @@ func (r *EtcdClusterReconciler) createPeerForMember(ctx context.Context, cluster
 	return &reconcilerevent.PeerCreatedEvent{Object: cluster, PeerName: peer.Name}, nil
 }
 
-func (r *EtcdClusterReconciler) addNewMember(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, peers *etcdv1alpha1.EtcdPeerList) (*reconcilerevent.MemberAddedEvent, error) {
-	peerName := nextAvailablePeerName(cluster, peers.Items)
-	peerURL := &url.URL{
-		Scheme: etcdv1alpha1.EtcdScheme,
-		Host:   fmt.Sprintf("%s:%d", expectedURLForPeer(cluster, peerName), etcdv1alpha1.EtcdPeerPort),
-	}
-	member, err := r.addEtcdMember(ctx, cluster, peerURL.String())
-	if err != nil {
-		return nil, err
-	}
-	return &reconcilerevent.MemberAddedEvent{Object: cluster, Member: member, Name: peerName}, nil
-}
-
 // MembersByName provides a sort.Sort interface for etcdClient.Member.Name
 type MembersByName []etcdclient.Member
 
@@ -178,17 +165,6 @@ func (r *EtcdClusterReconciler) reconcile(
 	// the `members` pointer is nil that means we were unsuccessful in our attempts to connect. Otherwise it indicates
 	// a list of existing members.
 	if members != nil {
-		// In this branch we *do* have communication with the cluster, and have retrieved a list of members. We treat
-		// this list as canonical, and therefore reconciliation occurs in two cycles:
-		//
-		// 1. We reconcile the membership list to match our expected number of replicas (`spec.replicas`), adding
-		//    members one at a time until reaching the correct number.
-		// 2. We reconcile the number of peer resources to match the membership list.
-		//
-		// This 'two-tier' process may seem odd, but is designed to mirror etcd's operations guide for adding and
-		// removing members. During a scale-up, etcd itself expects that new peers will be announced to it *first* using
-		// the membership API, and then the etcd process started on the new machine. During a scale down the same is
-		// true, where the membership API should be told that a member is to be removed before it is shut down.
 		log.V(2).Info("Cluster communication established")
 
 		// We reconcile the peer resources against the membership list before changing the membership list. This is the
@@ -223,18 +199,7 @@ func (r *EtcdClusterReconciler) reconcile(
 			// replicas. There are three cases, we have enough members, too few, or too many. The order we check these
 			// cases in is irrelevant as only one can possibly be true.
 			if hasTooFewMembers(cluster, members) {
-				// There are too few members for the expected number of replicas. Add a new member.
-				memberAddedEvent, err := r.addNewMember(ctx, cluster, peers)
-				if err != nil {
-					return result, nil, fmt.Errorf("failed to add new member: %w", err)
-				}
 
-				log.V(1).Info("Too few members for expected replica count, adding new member.",
-					"expected-replicas", *cluster.Spec.Replicas,
-					"actual-members", len(members),
-					"peer-name", memberAddedEvent.Name,
-					"peer-url", memberAddedEvent.Member.PeerURLs[0])
-				return result, memberAddedEvent, nil
 			} else if hasTooManyMembers(cluster, members) {
 				// There are too many members for the expected number of replicas.
 				// Remove the member with the highest ordinal.
@@ -413,6 +378,38 @@ func (r *EtcdClusterReconciler) nextAction(log logr.Logger, state *cl.State) Act
 	case state.Members == nil:
 		// We can't contact the cluster, and we don't *think* we need more peers. So it's unsafe to take any
 		// action.
+		// In all the following cases, we *do* have communication with the cluster, and have retrieved a list of members. We treat
+		// this list as canonical, and therefore reconciliation occurs in two cycles:
+		//
+		// 1. We reconcile the membership list to match our expected number of replicas (`spec.replicas`), adding
+		//    members one at a time until reaching the correct number.
+		// 2. We reconcile the number of peer resources to match the membership list.
+		//
+		// This 'two-tier' process may seem odd, but is designed to mirror etcd's operations guide for adding and
+		// removing members. During a scale-up, etcd itself expects that new peers will be announced to it *first* using
+		// the membership API, and then the etcd process started on the new machine. During a scale down the same is
+		// true, where the membership API should be told that a member is to be removed before it is shut down.
+
+	case !isAllMembersStable(state.Members):
+		// The cluster is not stable. Do not perform any more actions.
+
+	case hasTooFewMembers(state.Cluster, state.Members):
+		// There are too few members for the expected number of replicas. Add a new member.
+		peerName := nextAvailablePeerName(state.Cluster, state.Peers.Items)
+		peerURL := &url.URL{
+			Scheme: etcdv1alpha1.EtcdScheme,
+			Host:   fmt.Sprintf("%s:%d", expectedURLForPeer(state.Cluster, peerName), etcdv1alpha1.EtcdPeerPort),
+		}
+		action = &AddEtcdMember{log: log, config: cl.EtcdClientConfig(state.Cluster), etcd: r.Etcd, url: peerURL}
+		event = &reconcilerevent.MemberAddedEvent{Object: state.Cluster, Name: peerName}
+		log.V(1).Info("Too few members for expected replica count, adding new member.",
+			"expected-replicas", *state.Cluster.Spec.Replicas,
+			"actual-members", len(state.Members),
+			"peer-name", peerName,
+			"peer-url", peerURL)
+
+	case hasTooManyMembers(state.Cluster, state.Members):
+		//
 	}
 
 	if event != nil {
@@ -472,20 +469,6 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	}
 
 	return result, utilerrors.NewAggregate([]error{reconcileErr, updateStatusErr})
-}
-
-func (r *EtcdClusterReconciler) addEtcdMember(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, peerURL string) (*etcdclient.Member, error) {
-	c, err := r.Etcd.MembershipAPI(cl.EtcdClientConfig(cluster))
-	if err != nil {
-		return nil, fmt.Errorf("unable to connect to etcd: %w", err)
-	}
-
-	members, err := c.Add(ctx, peerURL)
-	if err != nil {
-		return nil, fmt.Errorf("unable to add member to etcd cluster: %w", err)
-	}
-
-	return members, nil
 }
 
 // removeEtcdMember performs a runtime reconfiguration of the Etcd cluster to

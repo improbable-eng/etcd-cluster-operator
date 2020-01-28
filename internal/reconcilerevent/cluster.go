@@ -50,7 +50,6 @@ func (s *PeerRemovedEvent) Record(recorder record.EventRecorder) {
 
 type MemberAddedEvent struct {
 	Object runtime.Object
-	Member *etcdclient.Member
 	Name   string
 }
 
