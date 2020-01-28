@@ -41,34 +41,32 @@ type EtcdClusterReconciler struct {
 	Etcd     etcd.EtcdAPI
 }
 
-func (r *EtcdClusterReconciler) hasPeerForMember(peers *etcdv1alpha1.EtcdPeerList, member etcdclient.Member) (bool, error) {
-	expectedPeerName, err := peerNameForMember(member)
-	if err != nil {
-		return false, err
-	}
+func hasPeerForMember(peers *etcdv1alpha1.EtcdPeerList, member etcdclient.Member) bool {
 	for _, peer := range peers.Items {
-		if expectedPeerName == peer.Name {
-			return true, nil
+		if member.Name == peer.Name {
+			return true
 		}
 	}
-	return false, nil
+	return false
 }
 
-func (r *EtcdClusterReconciler) createPeerForMember(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, members []etcdclient.Member, member etcdclient.Member) (*reconcilerevent.PeerCreatedEvent, error) {
+func firstMemberWithoutPeer(peers *etcdv1alpha1.EtcdPeerList, members []etcdclient.Member) *etcdclient.Member {
+	// Add EtcdPeer resources for members that do not have one.
+	for _, member := range members {
+		if !hasPeerForMember(peers, member) {
+			// We have found a member without a peer. We should add an EtcdPeer resource for this member
+			return &member
+		}
+	}
+	return nil
+}
+
+func peerForMember(cluster *etcdv1alpha1.EtcdCluster, members []etcdclient.Member, member *etcdclient.Member) *etcdv1alpha1.EtcdPeer {
 	// Use this instead of member.Name. If we've just added the peer for this member then the member might not
 	// have that field set, so instead figure it out from the peerURL.
-	expectedPeerName, err := peerNameForMember(member)
-	if err != nil {
-		return nil, err
-	}
-	peer := peerForCluster(cluster, expectedPeerName)
+	peer := peerForCluster(cluster, member.Name)
 	configureJoinExistingCluster(peer, cluster, members)
-
-	err = r.Create(ctx, peer)
-	if err != nil {
-		return nil, err
-	}
-	return &reconcilerevent.PeerCreatedEvent{Object: cluster, PeerName: peer.Name}, nil
+	return peer
 }
 
 // MembersByName provides a sort.Sort interface for etcdClient.Member.Name
@@ -131,25 +129,6 @@ func (r *EtcdClusterReconciler) reconcile(
 		// opposite way around to what we just said. But is important. It means that if you perform a scale-up to five
 		// from three, we'll add the fourth node to the membership list, then add the peer for the fourth node *before*
 		// we consider adding the fifth node to the membership list.
-
-		// Add EtcdPeer resources for members that do not have one.
-		for _, member := range members {
-			hasPeer, err := r.hasPeerForMember(peers, member)
-			if err != nil {
-				return result, nil, err
-			}
-			if !hasPeer {
-				// We have found a member without a peer. We should add an EtcdPeer resource for this member
-				peerCreatedEvent, err := r.createPeerForMember(ctx, cluster, members, member)
-				if err != nil {
-					return result, nil, fmt.Errorf("failed to create EtcdPeer %w", err)
-				}
-				log.V(1).Info(
-					"Found member in etcd's API that has no EtcdPeer resource representation, added one.",
-					"member-name", peerCreatedEvent.PeerName)
-				return result, peerCreatedEvent, nil
-			}
-		}
 
 		// If we've reached this point we're sure that the EtcdPeer resources in the cluster match the contents of the
 		// membership API. The next step is checking to see if we want to mutate the membership API of etcd to scale up
@@ -345,6 +324,18 @@ func (r *EtcdClusterReconciler) nextAction(log logr.Logger, state *cl.State) Act
 			"actual-members", len(state.Members),
 			"peer-name", peerName,
 			"peer-url", peerURL)
+
+	case hasTooFewPeers(state.Cluster, state.Peers):
+		member := firstMemberWithoutPeer(state.Peers, state.Members)
+		if member == nil {
+			break
+		}
+		peer := peerForMember(state.Cluster, state.Members, member)
+		action = &CreateRuntimeObject{log: log, client: r.Client, obj: peer}
+		event = &reconcilerevent.PeerCreatedEvent{Object: state.Cluster, PeerName: peer.Name}
+		log.V(1).Info(
+			"Found member in etcd's API that has no EtcdPeer resource representation, added one.",
+			"peer-name", peer.Name)
 
 	case hasTooManyMembers(state.Cluster, state.Members):
 		member := memberToRemove(state.Members)
