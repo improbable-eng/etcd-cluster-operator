@@ -55,6 +55,27 @@ func (o *AddEtcdMember) Execute(ctx context.Context) error {
 	return nil
 }
 
+type RemoveEtcdMember struct {
+	log    logr.Logger
+	config etcdclient.Config
+	etcd   etcd.EtcdAPI
+	mID    string
+}
+
+func (o *RemoveEtcdMember) Execute(ctx context.Context) error {
+	o.log.Info("Removing member", "member-id", o.mID)
+	c, err := o.etcd.MembershipAPI(o.config)
+	if err != nil {
+		return fmt.Errorf("unable to connect to etcd: %s", err)
+	}
+
+	err = c.Remove(ctx, o.mID)
+	if err != nil {
+		return fmt.Errorf("unable to remove member of etcd cluster: %s", err)
+	}
+	return nil
+}
+
 type EventWrapper struct {
 	recorder record.EventRecorder
 	event    reconcilerevent.ReconcilerEvent

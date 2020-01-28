@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -15,7 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -77,56 +78,15 @@ func (a MembersByName) Len() int           { return len(a) }
 func (a MembersByName) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a MembersByName) Less(i, j int) bool { return a[i].Name < a[j].Name }
 
-// removeMember selects the Etcd node which has a name with the largest ordinal,
-// then performs a runtime reconfiguration to remove that member from the Etcd
-// cluster, and generates an Event to record that action.
+// memberToRemove selects the Etcd node which has a name with the largest ordinal,
 // TODO(wallrj) Consider removing a non-leader member to avoid disruptive
 // leader elections while scaling down.
 // See https://github.com/improbable-eng/etcd-cluster-operator/issues/97
-func (r *EtcdClusterReconciler) removeMember(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, members []etcdclient.Member) (*reconcilerevent.MemberRemovedEvent, error) {
+func memberToRemove(members []etcdclient.Member) etcdclient.Member {
 	sortedMembers := append(members[:0:0], members...)
 	sort.Sort(sort.Reverse(MembersByName(sortedMembers)))
 	member := sortedMembers[0]
-	err := r.removeEtcdMember(ctx, cluster, member.ID)
-	if err != nil {
-		return nil, err
-	}
-	return &reconcilerevent.MemberRemovedEvent{Object: cluster, Member: &member, Name: member.Name}, nil
-}
-
-// updateStatus updates the EtcdCluster resource's status to be the current value of the cluster.
-func (r *EtcdClusterReconciler) updateStatus(ctx context.Context,
-	cluster *etcdv1alpha1.EtcdCluster,
-	members []etcdclient.Member,
-	peers *etcdv1alpha1.EtcdPeerList,
-	reconcilerEvent reconcilerevent.ReconcilerEvent) error {
-
-	updated := cluster.DeepCopy()
-
-	if members != nil {
-		updated.Status.Members = make([]etcdv1alpha1.EtcdMember, len(members))
-		for i, member := range members {
-			updated.Status.Members[i] = etcdv1alpha1.EtcdMember{
-				Name: member.Name,
-				ID:   member.ID,
-			}
-		}
-	} else {
-		if updated.Status.Members == nil {
-			updated.Status.Members = make([]etcdv1alpha1.EtcdMember, 0)
-		} else {
-			// In this case we don't have up-to date members for whatever reason, which could be a temporary disruption
-			// such as a network issue. But we also know the status on the resource already has a member list. So just
-			// leave that (stale) data where it is and don't change it.
-		}
-	}
-	updated.Status.Replicas = int32(len(peers.Items))
-
-	if err := r.Client.Status().Patch(ctx, updated, client.MergeFrom(cluster)); err != nil {
-		return err
-	}
-
-	return nil
+	return member
 }
 
 // reconcile (little r) does the 'dirty work' of deciding if we wish to perform an action upon the Kubernetes cluster to
@@ -195,32 +155,6 @@ func (r *EtcdClusterReconciler) reconcile(
 		// membership API. The next step is checking to see if we want to mutate the membership API of etcd to scale up
 		// or down. However we don't want to do this unless the cluster has stabilised from a previous member addition.
 		if isAllMembersStable(members) {
-			// It's finally time to see if we need to mutate the membership API to bring it in-line with our expected
-			// replicas. There are three cases, we have enough members, too few, or too many. The order we check these
-			// cases in is irrelevant as only one can possibly be true.
-			if hasTooFewMembers(cluster, members) {
-
-			} else if hasTooManyMembers(cluster, members) {
-				// There are too many members for the expected number of replicas.
-				// Remove the member with the highest ordinal.
-				memberRemovedEvent, err := r.removeMember(ctx, cluster, members)
-				if err != nil {
-					return result, nil, fmt.Errorf("failed to remove member: %w", err)
-				}
-
-				log.V(1).Info("Too many members for expected replica count, removing member.",
-					"expected-replicas", *cluster.Spec.Replicas,
-					"actual-members", len(members),
-					"peer-name", memberRemovedEvent.Name,
-					"peer-url", memberRemovedEvent.Member.PeerURLs[0])
-
-				return result, memberRemovedEvent, nil
-			} else {
-				// Exactly the correct number of members. Make no change, all is well with the world.
-				log.V(2).Info("Expected number of replicas aligned with actual number.",
-					"expected-replicas", *cluster.Spec.Replicas,
-					"actual-members", len(members))
-			}
 
 			// Remove EtcdPeer resources which do not have members.
 			memberNames := sets.NewString()
@@ -393,6 +327,10 @@ func (r *EtcdClusterReconciler) nextAction(log logr.Logger, state *cl.State) Act
 	case !isAllMembersStable(state.Members):
 		// The cluster is not stable. Do not perform any more actions.
 
+		// It's finally time to see if we need to mutate the membership API to bring it in-line with our expected
+		// replicas. There are three cases, we have enough members, too few, or too many. The order we check these
+		// cases in is irrelevant as only one can possibly be true.
+
 	case hasTooFewMembers(state.Cluster, state.Members):
 		// There are too few members for the expected number of replicas. Add a new member.
 		peerName := nextAvailablePeerName(state.Cluster, state.Peers.Items)
@@ -409,7 +347,14 @@ func (r *EtcdClusterReconciler) nextAction(log logr.Logger, state *cl.State) Act
 			"peer-url", peerURL)
 
 	case hasTooManyMembers(state.Cluster, state.Members):
-		//
+		member := memberToRemove(state.Members)
+		action = &RemoveEtcdMember{log: log, config: cl.EtcdClientConfig(state.Cluster), etcd: r.Etcd, mID: member.ID}
+		event = &reconcilerevent.MemberRemovedEvent{Object: state.Cluster, Member: &member, Name: member.Name}
+		log.V(1).Info("Too many members for expected replica count, removing member.",
+			"expected-replicas", *state.Cluster.Spec.Replicas,
+			"actual-members", len(state.Members),
+			"member-name", member.Name,
+			"member-id", member.ID)
 	}
 
 	if event != nil {
@@ -429,7 +374,7 @@ func (r *EtcdClusterReconciler) nextAction(log logr.Logger, state *cl.State) Act
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch;create;delete;patch
 // +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 
-func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -439,6 +384,20 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("error while getting current state: %s", err)
 	}
+
+	defer func() {
+		// Always attempt to patch the status after each reconciliation.
+		log.Info("Patching status")
+		original := state.Cluster
+		updated := cl.ClusterWithUpdatedStatus(original, state)
+		if reflect.DeepEqual(original.Status, updated.Status) {
+			return
+		}
+		patch := client.MergeFrom(original)
+		if err := r.Client.Status().Patch(ctx, updated, patch); err != nil {
+			reterr = kerrors.NewAggregate([]error{reterr, fmt.Errorf("error while patching EtcdCluster.Status: %s ", err)})
+		}
+	}()
 
 	// Always requeue after ten seconds, as we don't watch on the membership list. So we don't auto-detect changes made
 	// to the etcd membership API.
@@ -451,39 +410,13 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	// Perform a reconcile, getting back the desired result, any utilerrors, and a clusterEvent. This is an internal concept
 	// and is not the same as the Kubernetes event, although it is used to make one later.
 	result, clusterEvent, reconcileErr := r.reconcile(ctx, state.Members, state.Peers, state.Cluster)
-	if reconcileErr != nil {
-		log.Error(reconcileErr, "Failed to reconcile")
-	}
-
-	// The update status takes in the cluster definition, and the member list from etcd as of *before we ran reconcile*.
-	// We also get the event, which may contain rich information about what we did (such as the new member name on a
-	// MemberAdded event).
-	updateStatusErr := r.updateStatus(ctx, state.Cluster, state.Members, state.Peers, clusterEvent)
-	if updateStatusErr != nil {
-		log.Error(updateStatusErr, "Failed to update status")
-	}
 
 	// Finally, the event is used to generate a Kubernetes event by calling `Record` and passing in the recorder.
 	if clusterEvent != nil {
 		clusterEvent.Record(r.Recorder)
 	}
 
-	return result, utilerrors.NewAggregate([]error{reconcileErr, updateStatusErr})
-}
-
-// removeEtcdMember performs a runtime reconfiguration of the Etcd cluster to
-// remove a member from the cluster.
-func (r *EtcdClusterReconciler) removeEtcdMember(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, memberID string) error {
-	c, err := r.Etcd.MembershipAPI(cl.EtcdClientConfig(cluster))
-	if err != nil {
-		return fmt.Errorf("unable to connect to etcd: %w", err)
-	}
-	err = c.Remove(ctx, memberID)
-	if err != nil {
-		return fmt.Errorf("unable to remove member from etcd cluster: %w", err)
-	}
-
-	return nil
+	return result, reconcileErr
 }
 
 func peerForCluster(cluster *etcdv1alpha1.EtcdCluster, peerName string) *etcdv1alpha1.EtcdPeer {

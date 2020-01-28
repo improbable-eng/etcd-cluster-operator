@@ -69,3 +69,16 @@ func GetState(log logr.Logger, c client.Client, etcdapi etcd.EtcdAPI, ctx contex
 
 	return state, nil
 }
+
+func ClusterWithUpdatedStatus(original *etcdv1alpha1.EtcdCluster, state *State) *etcdv1alpha1.EtcdCluster {
+	updated := original.DeepCopy()
+	updated.Status.Replicas = int32(len(state.Peers.Items))
+	updated.Status.Members = make([]etcdv1alpha1.EtcdMember, len(state.Members))
+	for i, member := range state.Members {
+		updated.Status.Members[i] = etcdv1alpha1.EtcdMember{
+			Name: member.Name,
+			ID:   member.ID,
+		}
+	}
+	return updated
+}
