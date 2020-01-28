@@ -39,34 +39,6 @@ type EtcdClusterReconciler struct {
 	Etcd     etcd.EtcdAPI
 }
 
-func hasPeerForMember(peers *etcdv1alpha1.EtcdPeerList, member etcdclient.Member) bool {
-	for _, peer := range peers.Items {
-		if member.Name == peer.Name {
-			return true
-		}
-	}
-	return false
-}
-
-func firstMemberWithoutPeer(peers *etcdv1alpha1.EtcdPeerList, members []etcdclient.Member) *etcdclient.Member {
-	// Add EtcdPeer resources for members that do not have one.
-	for _, member := range members {
-		if !hasPeerForMember(peers, member) {
-			// We have found a member without a peer. We should add an EtcdPeer resource for this member
-			return &member
-		}
-	}
-	return nil
-}
-
-func peerForMember(cluster *etcdv1alpha1.EtcdCluster, members []etcdclient.Member, member *etcdclient.Member) *etcdv1alpha1.EtcdPeer {
-	// Use this instead of member.Name. If we've just added the peer for this member then the member might not
-	// have that field set, so instead figure it out from the peerURL.
-	peer := peerForCluster(cluster, member.Name)
-	configureJoinExistingCluster(peer, cluster, members)
-	return peer
-}
-
 // MembersByName provides a sort.Sort interface for etcdClient.Member.Name
 type MembersByName []etcdclient.Member
 
@@ -233,6 +205,18 @@ func (r *EtcdClusterReconciler) nextAction(log logr.Logger, state *cl.State) Act
 		// the membership API, and then the etcd process started on the new machine. During a scale down the same is
 		// true, where the membership API should be told that a member is to be removed before it is shut down.
 
+	case !isAllMembersStable(state.Members) && hasTooFewPeers(state.Cluster, state.Peers):
+		peer, err := firstMissingMemberPeer(state)
+		if err != nil {
+			log.Error(err, "Error while computing missing member peer")
+			break
+		}
+		action = &CreateRuntimeObject{log: log, client: r.Client, obj: peer}
+		event = &reconcilerevent.PeerCreatedEvent{Object: state.Cluster, PeerName: peer.Name}
+		log.V(1).Info(
+			"Found member in etcd's API that has no EtcdPeer resource representation, added one.",
+			"peer-name", peer.Name)
+
 	case !isAllMembersStable(state.Members):
 		// The cluster is not stable. Do not perform any more actions.
 
@@ -243,10 +227,7 @@ func (r *EtcdClusterReconciler) nextAction(log logr.Logger, state *cl.State) Act
 	case hasTooFewMembers(state.Cluster, state.Members):
 		// There are too few members for the expected number of replicas. Add a new member.
 		peerName := nextAvailablePeerName(state.Cluster, state.Peers.Items)
-		peerURL := &url.URL{
-			Scheme: etcdv1alpha1.EtcdScheme,
-			Host:   fmt.Sprintf("%s:%d", expectedURLForPeer(state.Cluster, peerName), etcdv1alpha1.EtcdPeerPort),
-		}
+		peerURL := expectedURLForPeer(state.Cluster, peerName)
 		action = &AddEtcdMember{log: log, config: cl.EtcdClientConfig(state.Cluster), etcd: r.Etcd, url: peerURL}
 		event = &reconcilerevent.MemberAddedEvent{Object: state.Cluster, Name: peerName}
 		log.V(1).Info("Too few members for expected replica count, adding new member.",
@@ -254,18 +235,6 @@ func (r *EtcdClusterReconciler) nextAction(log logr.Logger, state *cl.State) Act
 			"actual-members", len(state.Members),
 			"peer-name", peerName,
 			"peer-url", peerURL)
-
-	case hasTooFewPeers(state.Cluster, state.Peers):
-		member := firstMemberWithoutPeer(state.Peers, state.Members)
-		if member == nil {
-			break
-		}
-		peer := peerForMember(state.Cluster, state.Members, member)
-		action = &CreateRuntimeObject{log: log, client: r.Client, obj: peer}
-		event = &reconcilerevent.PeerCreatedEvent{Object: state.Cluster, PeerName: peer.Name}
-		log.V(1).Info(
-			"Found member in etcd's API that has no EtcdPeer resource representation, added one.",
-			"peer-name", peer.Name)
 
 	case hasTooManyMembers(state.Cluster, state.Members):
 		member := memberToRemove(state.Members)
@@ -283,10 +252,7 @@ func (r *EtcdClusterReconciler) nextAction(log logr.Logger, state *cl.State) Act
 			break
 		}
 		action = &RemoveEtcdPeer{log: log, client: r.Client, peer: peer}
-		event = &reconcilerevent.PeerRemovedEvent{
-			Object:   state.Cluster,
-			PeerName: peer.Name,
-		}
+		event = &reconcilerevent.PeerRemovedEvent{Object: state.Cluster, PeerName: peer.Name}
 	}
 
 	if event != nil {
@@ -316,7 +282,9 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rete
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("error while getting current state: %s", err)
 	}
-
+	if state == nil {
+		return ctrl.Result{}, nil
+	}
 	defer func() {
 		// Always attempt to patch the status after each reconciliation.
 		log.Info("Patching status")
@@ -397,7 +365,7 @@ func initialClusterMembers(cluster *etcdv1alpha1.EtcdCluster) []etcdv1alpha1.Ini
 	for i := range members {
 		members[i] = etcdv1alpha1.InitialClusterMember{
 			Name: names[i],
-			Host: expectedURLForPeer(cluster, names[i]),
+			Host: expectedURLForPeer(cluster, names[i]).Hostname(),
 		}
 	}
 	return members
@@ -418,7 +386,7 @@ func initialClusterMembersFromMemberList(cluster *etcdv1alpha1.EtcdCluster, memb
 			// member in the membership list that has never joined the cluster that is the only thing we'll see. But
 			// using that is actually painful as it's often strangely escaped. We bypass that issue by regenerating our
 			// expected url from the name.
-			Host: expectedURLForPeer(cluster, name),
+			Host: expectedURLForPeer(cluster, name).Hostname(),
 		}
 	}
 	return initialMembers
@@ -451,12 +419,56 @@ func expectedPeerNamesForCluster(cluster *etcdv1alpha1.EtcdCluster) (names []str
 // expectedURLForPeer returns the Kubernetes-internal DNS name that the given peer can be contacted on, from any
 // namespace. This does not include a port or scheme, so can be used as either a "peer" URL using the peer port or the
 // client URL using the client port.
-func expectedURLForPeer(cluster *etcdv1alpha1.EtcdCluster, peerName string) string {
-	return fmt.Sprintf("%s.%s.%s.svc",
-		peerName,
-		cluster.Name,
-		cluster.Namespace,
-	)
+func expectedURLForPeer(cluster *etcdv1alpha1.EtcdCluster, peerName string) *url.URL {
+	return &url.URL{
+		Scheme: etcdv1alpha1.EtcdScheme,
+		Host:   fmt.Sprintf("%s.%s.%s.svc:%d", peerName, cluster.Name, cluster.Namespace, etcdv1alpha1.EtcdPeerPort),
+	}
+}
+
+func firstMissingMemberPeer(state *cl.State) (*etcdv1alpha1.EtcdPeer, error) {
+	peerUrls := make([]string, len(state.Peers.Items))
+	for i, peer := range state.Peers.Items {
+		peerUrls[i] = expectedURLForPeer(state.Cluster, peer.Name).String()
+	}
+	peerUrlsSet := sets.NewString(peerUrls...)
+
+	memberUrls := make([]string, len(state.Members))
+	for i, member := range state.Members {
+		memberURL, err := url.Parse(member.PeerURLs[0])
+		if err != nil {
+			return nil, err
+		}
+		memberUrls[i] = memberURL.String()
+
+		if peerUrlsSet.Has(memberURL.String()) {
+			continue
+		}
+		var (
+			peerName         string
+			clusterName      string
+			clusterNamespace string
+		)
+		hostname := memberURL.Hostname()
+		labels := strings.SplitN(hostname, ".", 4)
+		if len(labels) != 4 {
+			return nil, fmt.Errorf("expected 4 labels in the member hostname: %s", hostname)
+		}
+		if labels[3] != "svc" {
+			return nil, fmt.Errorf("expected member hostname to end with .svc: %s", hostname)
+		}
+		peerName, clusterName, clusterNamespace = labels[0], labels[1], labels[2]
+		if clusterName != state.Cluster.Name {
+			return nil, fmt.Errorf("expected second hostname label %s to be %s: %s", clusterName, state.Cluster.Name, hostname)
+		}
+		if clusterNamespace != state.Cluster.Namespace {
+			return nil, fmt.Errorf("expected third hostname label %s to be %s: %s", clusterNamespace, state.Cluster.Namespace, hostname)
+		}
+		peer := peerForCluster(state.Cluster, peerName)
+		configureJoinExistingCluster(peer, state.Cluster, state.Members)
+		return peer, nil
+	}
+	return nil, fmt.Errorf("unable to find member without a peer. memberUrls: %v, peerUrls: %v", memberUrls, peerUrls)
 }
 
 func (r *EtcdClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {

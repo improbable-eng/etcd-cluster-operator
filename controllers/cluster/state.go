@@ -27,8 +27,11 @@ func GetState(log logr.Logger, c client.Client, etcdapi etcd.EtcdAPI, ctx contex
 
 	var cluster etcdv1alpha1.EtcdCluster
 	err := c.Get(ctx, req.NamespacedName, &cluster)
-	if err != nil {
+	if client.IgnoreNotFound(err) != nil {
 		return nil, err
+	}
+	if err != nil {
+		return nil, nil
 	}
 
 	state.Cluster = &cluster
