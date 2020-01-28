@@ -15,13 +15,11 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
 	cl "github.com/improbable-eng/etcd-cluster-operator/controllers/cluster"
@@ -87,95 +85,27 @@ func memberToRemove(members []etcdclient.Member) etcdclient.Member {
 	return member
 }
 
-// reconcile (little r) does the 'dirty work' of deciding if we wish to perform an action upon the Kubernetes cluster to
-// match our desired state. We will always perform exactly one or zero actions. The intent is that when multiple actions
-// are required we will do only one, then requeue this function to perform the next one. This helps to keep the code
-// simple, as every 'go around' only performs a single change.
-//
-// We strictly use the term "member" to refer to an item in the etcd membership list, and "peer" to refer to an
-// EtcdPeer resource created by us that ultimately creates a pod running the etcd binary.
-//
-// In order to allow other parts of this operator to know what we've done, we return a `reconcilerevent.ReconcilerEvent`
-// that should describe to the rest of this codebase what we have done.
-func (r *EtcdClusterReconciler) reconcile(
-	ctx context.Context,
-	members []etcdclient.Member,
-	peers *etcdv1alpha1.EtcdPeerList,
-	cluster *etcdv1alpha1.EtcdCluster,
-) (
-	ctrl.Result,
-	reconcilerevent.ReconcilerEvent,
-	error,
-) {
-	// Use a logger enriched with information about the cluster we'er reconciling. Note we generally do not log on
-	// errors as we pass the error up to the manager anyway.
-	log := r.Log.WithValues("cluster", types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      cluster.Name,
-	})
+func peerToRemove(peers *etcdv1alpha1.EtcdPeerList, members []etcdclient.Member) *etcdv1alpha1.EtcdPeer {
+	// Remove EtcdPeer resources which do not have members.
+	memberNames := sets.NewString()
+	for _, member := range members {
+		memberNames.Insert(member.Name)
+	}
 
-	// Always requeue after ten seconds, as we don't watch on the membership list. So we don't auto-detect changes made
-	// to the etcd membership API.
-	// TODO(#76) Implement custom watch on etcd membership API, and remove this `requeueAfter`
-	result := ctrl.Result{RequeueAfter: time.Second * 10}
-
-	// There are two big branches of behaviour: Either we (the operator) can contact the etcd cluster, or we can't. If
-	// the `members` pointer is nil that means we were unsuccessful in our attempts to connect. Otherwise it indicates
-	// a list of existing members.
-	if members != nil {
-		log.V(2).Info("Cluster communication established")
-
-		// We reconcile the peer resources against the membership list before changing the membership list. This is the
-		// opposite way around to what we just said. But is important. It means that if you perform a scale-up to five
-		// from three, we'll add the fourth node to the membership list, then add the peer for the fourth node *before*
-		// we consider adding the fifth node to the membership list.
-
-		// If we've reached this point we're sure that the EtcdPeer resources in the cluster match the contents of the
-		// membership API. The next step is checking to see if we want to mutate the membership API of etcd to scale up
-		// or down. However we don't want to do this unless the cluster has stabilised from a previous member addition.
-		if isAllMembersStable(members) {
-
-			// Remove EtcdPeer resources which do not have members.
-			memberNames := sets.NewString()
-			for _, member := range members {
-				memberNames.Insert(member.Name)
-			}
-
-			for _, peer := range peers.Items {
-				if !memberNames.Has(peer.Name) {
-					if !peer.DeletionTimestamp.IsZero() {
-						log.V(2).Info("Peer is already marked for deletion", "peer", peer.Name)
-						continue
-					}
-					if !hasPvcDeletionFinalizer(&peer) {
-						updated := peer.DeepCopy()
-						controllerutil.AddFinalizer(updated, etcdv1alpha1.PVCCleanupFinalizer)
-						err := r.Patch(ctx, updated, client.MergeFrom(&peer))
-						if err != nil {
-							return result, nil, fmt.Errorf("failed to add PVC cleanup finalizer: %w", err)
-						}
-						log.V(2).Info("Added PVC cleanup finalizer", "peer", peer.Name)
-						return result, nil, nil
-					}
-					err := r.Delete(ctx, &peer)
-					if err != nil {
-						return result, nil, fmt.Errorf("failed to remove peer: %w", err)
-					}
-					peerRemovedEvent := &reconcilerevent.PeerRemovedEvent{
-						Object:   &peer,
-						PeerName: peer.Name,
-					}
-					return result, peerRemovedEvent, nil
-				}
-			}
+	for _, peer := range peers.Items {
+		if !memberNames.Has(peer.Name) {
+			return &peer
 		}
 	}
-	// This is the fall-through 'all is right with the world' case.
-	return result, nil, nil
+	return nil
 }
 
 func hasTooFewPeers(cluster *etcdv1alpha1.EtcdCluster, peers *etcdv1alpha1.EtcdPeerList) bool {
 	return cluster.Spec.Replicas != nil && int32(len(peers.Items)) < *cluster.Spec.Replicas
+}
+
+func hasTooManyPeers(cluster *etcdv1alpha1.EtcdCluster, peers *etcdv1alpha1.EtcdPeerList) bool {
+	return cluster.Spec.Replicas != nil && int32(len(peers.Items)) > *cluster.Spec.Replicas
 }
 
 func hasTooFewMembers(cluster *etcdv1alpha1.EtcdCluster, members []etcdclient.Member) bool {
@@ -346,6 +276,17 @@ func (r *EtcdClusterReconciler) nextAction(log logr.Logger, state *cl.State) Act
 			"actual-members", len(state.Members),
 			"member-name", member.Name,
 			"member-id", member.ID)
+
+	case hasTooManyPeers(state.Cluster, state.Peers):
+		peer := peerToRemove(state.Peers, state.Members)
+		if peer == nil {
+			break
+		}
+		action = &RemoveEtcdPeer{log: log, client: r.Client, peer: peer}
+		event = &reconcilerevent.PeerRemovedEvent{
+			Object:   state.Cluster,
+			PeerName: peer.Name,
+		}
 	}
 
 	if event != nil {
@@ -393,21 +334,12 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rete
 	// Always requeue after ten seconds, as we don't watch on the membership list. So we don't auto-detect changes made
 	// to the etcd membership API.
 	// TODO(#76) Implement custom watch on etcd membership API, and remove this `requeueAfter`
+	result := ctrl.Result{RequeueAfter: time.Second * 10}
 	action := r.nextAction(log, state)
 	if action != nil {
-		return ctrl.Result{RequeueAfter: time.Second * 10}, action.Execute(ctx)
+		return result, action.Execute(ctx)
 	}
-
-	// Perform a reconcile, getting back the desired result, any utilerrors, and a clusterEvent. This is an internal concept
-	// and is not the same as the Kubernetes event, although it is used to make one later.
-	result, clusterEvent, reconcileErr := r.reconcile(ctx, state.Members, state.Peers, state.Cluster)
-
-	// Finally, the event is used to generate a Kubernetes event by calling `Record` and passing in the recorder.
-	if clusterEvent != nil {
-		clusterEvent.Record(r.Recorder)
-	}
-
-	return result, reconcileErr
+	return result, nil
 }
 
 func peerForCluster(cluster *etcdv1alpha1.EtcdCluster, peerName string) *etcdv1alpha1.EtcdPeer {

@@ -11,7 +11,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
+	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/etcd"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/reconcilerevent"
 )
@@ -91,5 +93,33 @@ func (o *EventWrapper) Execute(ctx context.Context) error {
 		return err
 	}
 	o.event.Record(o.recorder)
+	return nil
+}
+
+type RemoveEtcdPeer struct {
+	log    logr.Logger
+	client client.Client
+	peer   *etcdv1alpha1.EtcdPeer
+}
+
+func (o *RemoveEtcdPeer) Execute(ctx context.Context) error {
+	if !o.peer.DeletionTimestamp.IsZero() {
+		o.log.V(2).Info("Peer is already marked for deletion", "peer", o.peer.Name)
+		return nil
+	}
+	if !hasPvcDeletionFinalizer(o.peer) {
+		updated := o.peer.DeepCopy()
+		controllerutil.AddFinalizer(updated, etcdv1alpha1.PVCCleanupFinalizer)
+		err := o.client.Patch(ctx, updated, client.MergeFrom(o.peer))
+		if err != nil {
+			return fmt.Errorf("failed to add PVC cleanup finalizer: %s", err)
+		}
+		o.log.V(2).Info("Added PVC cleanup finalizer", "peer", o.peer.Name)
+		return nil
+	}
+	err := o.client.Delete(ctx, o.peer)
+	if err != nil {
+		return fmt.Errorf("failed to remove peer: %s", err)
+	}
 	return nil
 }
