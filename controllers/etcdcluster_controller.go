@@ -647,6 +647,7 @@ func peerForCluster(cluster *etcdv1alpha1.EtcdCluster, peerName string) *etcdv1a
 		},
 		Spec: etcdv1alpha1.EtcdPeerSpec{
 			ClusterName: cluster.Name,
+			Version:     cluster.Spec.Version,
 			Storage:     cluster.Spec.Storage.DeepCopy(),
 		},
 	}

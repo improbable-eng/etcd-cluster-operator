@@ -57,6 +57,10 @@ type EtcdPeerSpec struct {
 	// +kubebuilder:validation:MaxLength:=64
 	ClusterName string `json:"clusterName"`
 
+	// Version determines the version of Etcd that will be used for this peer.
+	// +kubebuilder:validation:Required
+	Version string `json:"version"`
+
 	// Bootstrap is the bootstrap configuration to pass down into the etcd
 	// pods. As per the etcd documentation, etcd will ignore bootstrap
 	// instructions if it already knows where it's peers are.

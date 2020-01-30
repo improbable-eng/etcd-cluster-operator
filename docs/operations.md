@@ -26,6 +26,20 @@ replicas will degrade write performance](https://etcd.io/docs/v3.4.0/faq/#what-i
 This can be `1` for a testing environment, but for durability it is suggested that this is at least `3`. In most
 situations `5` is the highest sensible setting, although neither etcd nor this operator impose a limit.
 
+### Version
+
+The `spec.version` field determines the version of Etcd that will be used for the cluster.
+This is a required field.
+
+The version value must be a valid [Semantic Version](https://semver.org/)
+and must correspond to a tag of an [Official Etcd Docker Image](https://quay.io/repository/coreos/etcd.
+
+NOTE: Use of Docker images from other repositories is not yet supported.
+But you can load the official Docker images into a local Docker image cache if necessary.
+
+The `etcd-cluster-operator` will use the supplied `version` value to compute a Docker image name
+which is then used by the Pods for each Etcd peer.
+
 ### Storage
 
 The `spec.storage` field determines the storage options that will be used on the etcd pods. This configuration is highly

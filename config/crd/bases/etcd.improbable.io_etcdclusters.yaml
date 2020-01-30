@@ -823,8 +823,13 @@ spec:
                       type: string
                   type: object
               type: object
+            version:
+              description: Version determines the version of Etcd that will be used
+                for this cluster.
+              type: string
           required:
           - replicas
+          - version
           type: object
         status:
           description: EtcdClusterStatus defines the observed state of EtcdCluster
