@@ -80,8 +80,8 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		etcdPeer := exampleEtcdPeer(namespace)
 		const cpuLimit = "2.2"
 		const expectedGoMaxProcs = "2"
-		const expectedEtcdVersion = "9.9.9"
-		const expectedEtcdImage = "quay.io/coreos/etcd:v9.9.9"
+		const expectedEtcdVersion = "3.99.999"
+		const expectedEtcdImage = "quay.io/coreos/etcd:v3.99.999"
 
 		etcdPeer.Spec.Version = expectedEtcdVersion
 		etcdPeer.Spec.PodTemplate.Resources.Limits[corev1.ResourceCPU] = resource.MustParse(cpuLimit)

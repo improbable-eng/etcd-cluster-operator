@@ -158,7 +158,11 @@ func fakeEtcdForEtcdCluster(etcdCluster etcdv1alpha1.EtcdCluster) *StaticRespons
 			ClientURLs: []string{clientURL.String()},
 		}
 	}
-	return &StaticResponseEtcdAPI{Members: members}
+	return &StaticResponseEtcdAPI{
+		Members:        members,
+		ClusterVersion: etcdCluster.Spec.Version,
+		ServerVersion:  etcdCluster.Spec.Version,
+	}
 }
 
 func (s *controllerSuite) testClusterController(t *testing.T) {
@@ -655,6 +659,94 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 			require.NoError(t, err)
 		})
 	})
+
+	t.Run("VersionUpgrade", func(t *testing.T) {
+		etcdAPI := &WrapperEtcdAPI{wrapped: &AlwaysFailEtcdAPI{}}
+
+		teardownFunc, namespace := s.setupTest(t, etcdAPI)
+		defer teardownFunc()
+
+		const expectedReplicas = 3
+		const originalVersion = "3.0.0"
+		const newVersion = "3.0.1"
+
+		t.Log("Given a 3-node cluster at version:", originalVersion)
+
+		etcdCluster := test.ExampleEtcdCluster(namespace)
+		etcdCluster.Spec.Replicas = pointer.Int32Ptr(expectedReplicas)
+		etcdCluster.Spec.Version = originalVersion
+
+		err := s.k8sClient.Create(s.ctx, etcdCluster)
+		require.NoError(t, err, "failed to create EtcdCluster resource")
+
+		etcdCluster.Default()
+
+		etcdClusterKey, err := client.ObjectKeyFromObject(etcdCluster)
+		require.NoError(t, err)
+
+		err = try.Eventually(func() error {
+			var fetchedCluster etcdv1alpha1.EtcdCluster
+			err := s.k8sClient.Get(s.ctx, etcdClusterKey, &fetchedCluster)
+			require.NoError(t, err)
+
+			if fetchedCluster.Status.Replicas != expectedReplicas {
+				return fmt.Errorf("wrong number of peers")
+			}
+			return nil
+		}, time.Second*5, time.Second)
+		require.NoError(t, err)
+
+		staticAPI := fakeEtcdForEtcdCluster(*etcdCluster)
+		etcdAPI.Wrap(staticAPI)
+
+		err = try.Eventually(func() error {
+			var fetchedCluster etcdv1alpha1.EtcdCluster
+			err := s.k8sClient.Get(s.ctx, etcdClusterKey, &fetchedCluster)
+			require.NoError(t, err)
+
+			defer func() {
+				err := s.triggerReconcile(&fetchedCluster)
+				require.NoError(t, err)
+			}()
+
+			if len(fetchedCluster.Status.Members) != expectedReplicas {
+				return fmt.Errorf("wrong number of members")
+			}
+			return nil
+		}, time.Second*5, time.Second)
+		require.NoError(t, err)
+
+		t.Log("Changing EtcdCluster.Spec.Version to a newer version", newVersion)
+		updated := etcdCluster.DeepCopy()
+		updated.Spec.Version = newVersion
+		err = s.k8sClient.Patch(s.ctx, updated, client.MergeFrom(etcdCluster))
+		require.NoError(t, err)
+
+		t.Log("Causes Peers to be recreated in reverse name order")
+		staticAPI.ServerVersion = newVersion
+
+		t.Log("Causes all the EtcdPeers to be updated to that new version", newVersion)
+		err = try.Eventually(func() error {
+			var peers etcdv1alpha1.EtcdPeerList
+			err := s.k8sClient.List(s.ctx, &peers, client.InNamespace(namespace))
+			require.NoError(t, err)
+			for _, peer := range peers.Items {
+				if peer.Spec.Version != newVersion {
+					return fmt.Errorf("peer %q had unexpected version %q", peer.Name, peer.Spec.Version)
+				}
+			}
+			return nil
+		}, time.Second*5, time.Second)
+		require.NoError(t, err)
+
+		// t.Run("ReportsExpectedVersion", func(t *testing.T) {
+		//	expectedVersion := semver.Must(semver.NewVersion("3.2.0"))
+		//	staticAPI := fakeEtcdForEtcdCluster(*etcdCluster)
+		//	staticAPI.ClusterVersion = expectedVersion.String()
+		//	etcdAPI.Wrap(staticAPI)
+
+		// })
+	})
 }
 
 func assertOwnedByCluster(t *testing.T, etcdCluster *etcdv1alpha1.EtcdCluster, obj metav1.Object) {
@@ -688,8 +780,9 @@ func expectedStatusForCluster(c etcdv1alpha1.EtcdCluster) etcdv1alpha1.EtcdClust
 		}
 	}
 	return etcdv1alpha1.EtcdClusterStatus{
-		Replicas: *c.Spec.Replicas,
-		Members:  members,
+		Replicas:       *c.Spec.Replicas,
+		Members:        members,
+		ClusterVersion: c.Spec.Version,
 	}
 }
 

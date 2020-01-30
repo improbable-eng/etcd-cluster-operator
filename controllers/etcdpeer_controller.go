@@ -381,25 +381,8 @@ func (o *PeerPVCDeleter) Execute(ctx context.Context) error {
 	return nil
 }
 
-func (r *EtcdPeerReconciler) updateStatusVersion(ctx context.Context, log logr.Logger, peer *etcdv1alpha1.EtcdPeer) {
-	peer.Status.ServerVersion = ""
-	etcdConfig := etcdclient.Config{
-		Endpoints:               []string{advertiseURL(*peer, etcdPeerPort).String()},
-		Transport:               etcdclient.DefaultTransport,
-		HeaderTimeoutPerRequest: time.Second * 1,
-	}
-	etcdAPI, err := r.Etcd.New(etcdConfig)
-	if err != nil {
-		log.Error(err, "Failed to connect to ETCD")
-		return
-	}
-	etcdVersion, err := etcdAPI.GetVersion(ctx)
-	if err != nil {
-		log.Error(err, "Failed to get Etcd version")
-		return
-	}
-	log.Info("found version", "server", etcdVersion.Server)
-	peer.Status.ServerVersion = etcdVersion.Server
+func (r *EtcdPeerReconciler) updateStatus(peer *etcdv1alpha1.EtcdPeer, serverVersion string) {
+	peer.Status.ServerVersion = serverVersion
 }
 
 func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr error) {
@@ -407,15 +390,12 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr 
 	defer cancel()
 	log := r.Log.WithValues("peer", req.NamespacedName)
 
-	// Always requeue after ten seconds, as we don't watch on the membership list. So we don't auto-detect changes made
-	// to the etcd membership API.
-	// TODO(#76) Implement custom watch on etcd membership API, and remove this `requeueAfter`
-	result := ctrl.Result{RequeueAfter: time.Second * 10}
-
 	var peer etcdv1alpha1.EtcdPeer
 	if err := r.Get(ctx, req.NamespacedName, &peer); err != nil {
-		log.Error(err, "unable to fetch EtcdPeer")
-		return result, client.IgnoreNotFound(err)
+		// NotFound errors occur when the EtcdPeer has been deleted but a PVC is
+		// left behind.
+		// Ignore these and do not requeue in this case.
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	log.V(2).Info("Found EtcdPeer resource")
@@ -427,26 +407,47 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr 
 	err := peer.ValidateCreate()
 	if err != nil {
 		log.Error(err, "invalid EtcdPeer")
-		return result, nil
+		return ctrl.Result{}, nil
 	}
 
 	original := peer.DeepCopy()
 
+	// Always attempt to patch the status after each reconciliation.
 	defer func() {
 		if reflect.DeepEqual(original.Status, peer.Status) {
 			return
 		}
-		patch := client.MergeFrom(original)
-		pBytes, _ := patch.Data(&peer)
-
-		log.Info("patching status", "bytes", string(pBytes))
-		// Always attempt to patch the status after each reconciliation.
-		if err := r.Client.Status().Patch(ctx, &peer, patch); err != nil {
+		if err := r.Client.Status().Patch(ctx, &peer, client.MergeFrom(original)); err != nil {
 			reterr = kerrors.NewAggregate([]error{reterr, fmt.Errorf("error while patching EtcdPeer.Status: %s ", err)})
 		}
 	}()
 
-	r.updateStatusVersion(ctx, log, &peer)
+	// Attempt to dial the etcd cluster, recording the cluster response if we can
+	var (
+		serverVersion string
+	)
+	etcdConfig := etcdclient.Config{
+		Endpoints:               []string{advertiseURL(peer, etcdPeerPort).String()},
+		Transport:               etcdclient.DefaultTransport,
+		HeaderTimeoutPerRequest: time.Second * 1,
+	}
+
+	if c, err := r.Etcd.New(etcdConfig); err != nil {
+		log.V(2).Info("Unable to connect to etcd", "error", err)
+	} else {
+		if version, err := c.GetVersion(ctx); err != nil {
+			log.V(2).Info("Unable to get Etcd version", "error", err)
+		} else {
+			serverVersion = version.Server
+		}
+	}
+
+	r.updateStatus(&peer, serverVersion)
+
+	// Always requeue after ten seconds, as we don't watch on the membership list. So we don't auto-detect changes made
+	// to the etcd membership API.
+	// TODO(#76) Implement custom watch on etcd membership API, and remove this `requeueAfter`
+	result := ctrl.Result{RequeueAfter: time.Second * 10}
 
 	// Check if the peer has been marked for deletion
 	if !peer.ObjectMeta.DeletionTimestamp.IsZero() {
@@ -457,9 +458,9 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr 
 				peer:   &peer,
 			}
 			err := action.Execute(ctx)
-			return ctrl.Result{}, err
+			return result, err
 		}
-		return ctrl.Result{}, nil
+		return result, nil
 	}
 
 	created, err := r.maybeCreatePvc(ctx, &peer)
@@ -495,8 +496,6 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr 
 	}
 
 	log.V(2).Info("Replica set already exists", "replica-set", existingReplicaSet.Name)
-
-	// TODO Additional logic here
 
 	return result, nil
 }

@@ -27,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/pointer"
 	kindv1alpha3 "sigs.k8s.io/kind/pkg/apis/config/v1alpha3"
 	"sigs.k8s.io/kind/pkg/cluster"
@@ -420,10 +421,10 @@ func TestE2E(t *testing.T) {
 		t.Run("Version", func(t *testing.T) {
 			t.Parallel()
 			rl := corev1.ResourceList{
-				// 1-node cluster
+				// 3-node cluster
 				// set and get jobs
-				corev1.ResourceCPU:    resource.MustParse("300m"),
-				corev1.ResourceMemory: resource.MustParse("250Mi"),
+				corev1.ResourceCPU:    resource.MustParse("700m"),
+				corev1.ResourceMemory: resource.MustParse("650Mi"),
 			}
 			kubectl := kubectl.WithT(t)
 			ns, cleanup := NamespaceForTest(t, kubectl, rl)
@@ -789,10 +790,13 @@ func scaleDownTests(t *testing.T, kubectl *kubectlContext) {
 }
 
 func versionTests(t *testing.T, kubectl *kubectlContext) {
-	t.Log("Given a 1-node cluster.")
-	const expectedReplicas = 1
+	t.Log("Given a 3-node cluster.")
+	const originalVersion = "3.2.27"
+	const newVersion = "3.2.28"
+	const expectedReplicas = 3
 	cluster1 := test.ExampleEtcdCluster(*kubectl.defaultNamespace)
 	cluster1.Spec.Replicas = pointer.Int32Ptr(expectedReplicas)
+	cluster1.Spec.Version = originalVersion
 	err := kubectl.ApplyObject(cluster1)
 	require.NoError(t, err)
 
@@ -834,7 +838,7 @@ func versionTests(t *testing.T, kubectl *kubectlContext) {
 	require.NoError(t, err)
 
 	t.Log("The EtcdPeer.Status should contain the Etcd server version")
-	expectedServerVersion := semver.Must(semver.NewVersion("3.2.28"))
+	expectedServerVersion := semver.Must(semver.NewVersion(originalVersion))
 	err = try.Eventually(
 		func() error {
 			out, err := kubectl.Get("etcdpeer", "cluster1-0", "-o=jsonpath={.status.serverVersion}")
@@ -856,4 +860,30 @@ func versionTests(t *testing.T, kubectl *kubectlContext) {
 		time.Minute*2, time.Second*10,
 	)
 	require.NoError(t, err)
+
+	t.Log("If the version is incremented")
+	cluster1.Spec.Version = newVersion
+	err = kubectl.ApplyObject(cluster1)
+	require.NoError(t, err)
+
+	t.Log("The EtcdPeer.Status should contain the new Etcd server version")
+	expectedServerVersions := sets.NewString(newVersion)
+	err = try.Eventually(
+		func() error {
+			out, err := kubectl.Get("etcdpeer", "-o=jsonpath={.items[*].status.serverVersion}")
+			if err != nil {
+				return err
+			}
+			versions := strings.Split(strings.TrimSpace(out), " ")
+			serverVersions := sets.NewString(versions...)
+
+			if !serverVersions.Equal(expectedServerVersions) {
+				return fmt.Errorf("Unexpected versions for peers: %v", serverVersions.List())
+			}
+			return nil
+		},
+		time.Minute*2, time.Second*10,
+	)
+	require.NoError(t, err)
+
 }

@@ -17,7 +17,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -190,44 +190,31 @@ func (r *EtcdClusterReconciler) removeMember(ctx context.Context, cluster *etcdv
 }
 
 // updateStatus updates the EtcdCluster resource's status to be the current value of the cluster.
-func (r *EtcdClusterReconciler) updateStatus(ctx context.Context,
-	log logr.Logger,
+func (r *EtcdClusterReconciler) updateStatus(
 	cluster *etcdv1alpha1.EtcdCluster,
 	members *[]etcdclient.Member,
 	peers *etcdv1alpha1.EtcdPeerList,
-	reconcilerEvent reconcilerevent.ReconcilerEvent) error {
-
-	updated := cluster.DeepCopy()
-
-	// Get Etcd version
-	r.updateStatusClusterVersion(ctx, log, updated)
+	clusterVersion string) {
 
 	if members != nil {
-		updated.Status.Members = make([]etcdv1alpha1.EtcdMember, len(*members))
+		cluster.Status.Members = make([]etcdv1alpha1.EtcdMember, len(*members))
 		for i, member := range *members {
-			updated.Status.Members[i] = etcdv1alpha1.EtcdMember{
+			cluster.Status.Members[i] = etcdv1alpha1.EtcdMember{
 				Name: member.Name,
 				ID:   member.ID,
 			}
 		}
 	} else {
-		if updated.Status.Members == nil {
-			updated.Status.Members = make([]etcdv1alpha1.EtcdMember, 0)
+		if cluster.Status.Members == nil {
+			cluster.Status.Members = make([]etcdv1alpha1.EtcdMember, 0)
 		} else {
 			// In this case we don't have up-to date members for whatever reason, which could be a temporary disruption
 			// such as a network issue. But we also know the status on the resource already has a member list. So just
 			// leave that (stale) data where it is and don't change it.
 		}
 	}
-	updated.Status.Replicas = int32(len(peers.Items))
-	if reflect.DeepEqual(updated.Status, cluster.Status) {
-		return nil
-	}
-	if err := r.Client.Status().Patch(ctx, updated, client.MergeFrom(cluster)); err != nil {
-		return err
-	}
-
-	return nil
+	cluster.Status.Replicas = int32(len(peers.Items))
+	cluster.Status.ClusterVersion = clusterVersion
 }
 
 // reconcile (little r) does the 'dirty work' of deciding if we wish to perform an action upon the Kubernetes cluster to
@@ -377,40 +364,6 @@ func (r *EtcdClusterReconciler) reconcile(
 			// It's finally time to see if we need to mutate the membership API to bring it in-line with our expected
 			// replicas. There are three cases, we have enough members, too few, or too many. The order we check these
 			// cases in is irrelevant as only one can possibly be true.
-			if hasTooFewMembers(cluster, *members) {
-				// There are too few members for the expected number of replicas. Add a new member.
-				memberAddedEvent, err := r.addNewMember(ctx, cluster, peers)
-				if err != nil {
-					return result, nil, fmt.Errorf("failed to add new member: %w", err)
-				}
-
-				log.V(1).Info("Too few members for expected replica count, adding new member.",
-					"expected-replicas", *cluster.Spec.Replicas,
-					"actual-members", len(*members),
-					"peer-name", memberAddedEvent.Name,
-					"peer-url", memberAddedEvent.Member.PeerURLs[0])
-				return result, memberAddedEvent, nil
-			} else if hasTooManyMembers(cluster, *members) {
-				// There are too many members for the expected number of replicas.
-				// Remove the member with the highest ordinal.
-				memberRemovedEvent, err := r.removeMember(ctx, cluster, *members)
-				if err != nil {
-					return result, nil, fmt.Errorf("failed to remove member: %w", err)
-				}
-
-				log.V(1).Info("Too many members for expected replica count, removing member.",
-					"expected-replicas", *cluster.Spec.Replicas,
-					"actual-members", len(*members),
-					"peer-name", memberRemovedEvent.Name,
-					"peer-url", memberRemovedEvent.Member.PeerURLs[0])
-
-				return result, memberRemovedEvent, nil
-			} else {
-				// Exactly the correct number of members. Make no change, all is well with the world.
-				log.V(2).Info("Expected number of replicas aligned with actual number.",
-					"expected-replicas", *cluster.Spec.Replicas,
-					"actual-members", len(*members))
-			}
 
 			// Remove EtcdPeer resources which do not have members.
 			memberNames := sets.NewString()
@@ -445,10 +398,87 @@ func (r *EtcdClusterReconciler) reconcile(
 					return result, peerRemovedEvent, nil
 				}
 			}
+
+			if peer := nextOutdatedPeer(cluster, peers); peer != nil {
+				if peer.Spec.Version == cluster.Spec.Version {
+					log.Info("Waiting for EtcdPeer to report expected server version", "etcdpeer-name", peer.Name)
+					return result, nil, nil
+				}
+				if !peer.DeletionTimestamp.IsZero() {
+					log.Info("Waiting for EtcdPeer be deleted", "etcdpeer-name", peer.Name)
+					return result, nil, nil
+				}
+				log.Info("Deleting EtcdPeer", "etcdpeer-name", peer.Name)
+				err := r.Client.Delete(ctx, peer)
+				if err != nil {
+					return result, nil, fmt.Errorf("failed to delete peer: %s", err)
+				}
+				peerRemovedEvent := &reconcilerevent.PeerRemovedEvent{
+					Object:   peer,
+					PeerName: peer.Name,
+				}
+				return result, peerRemovedEvent, nil
+			}
+
+			if hasTooFewMembers(cluster, *members) {
+				// There are too few members for the expected number of replicas. Add a new member.
+				memberAddedEvent, err := r.addNewMember(ctx, cluster, peers)
+				if err != nil {
+					return result, nil, fmt.Errorf("failed to add new member: %w", err)
+				}
+
+				log.V(1).Info("Too few members for expected replica count, adding new member.",
+					"expected-replicas", *cluster.Spec.Replicas,
+					"actual-members", len(*members),
+					"peer-name", memberAddedEvent.Name,
+					"peer-url", memberAddedEvent.Member.PeerURLs[0])
+				return result, memberAddedEvent, nil
+			} else if hasTooManyMembers(cluster, *members) {
+				// There are too many members for the expected number of replicas.
+				// Remove the member with the highest ordinal.
+				memberRemovedEvent, err := r.removeMember(ctx, cluster, *members)
+				if err != nil {
+					return result, nil, fmt.Errorf("failed to remove member: %w", err)
+				}
+
+				log.V(1).Info("Too many members for expected replica count, removing member.",
+					"expected-replicas", *cluster.Spec.Replicas,
+					"actual-members", len(*members),
+					"peer-name", memberRemovedEvent.Name,
+					"peer-url", memberRemovedEvent.Member.PeerURLs[0])
+
+				return result, memberRemovedEvent, nil
+			} else {
+				// Exactly the correct number of members. Make no change, all is well with the world.
+				log.V(2).Info("Expected number of replicas aligned with actual number.",
+					"expected-replicas", *cluster.Spec.Replicas,
+					"actual-members", len(*members))
+			}
 		}
 	}
 	// This is the fall-through 'all is right with the world' case.
 	return result, nil, nil
+}
+
+func nextOutdatedPeer(cluster *etcdv1alpha1.EtcdCluster, peers *etcdv1alpha1.EtcdPeerList) *etcdv1alpha1.EtcdPeer {
+	peerNames := make([]string, len(peers.Items))
+	peersByName := map[string]etcdv1alpha1.EtcdPeer{}
+	for i, peer := range peers.Items {
+		name := peer.Name
+		peerNames[i] = name
+		peersByName[name] = peers.Items[i]
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(peerNames)))
+	for _, peerName := range peerNames {
+		peer, found := peersByName[peerName]
+		if !found {
+			continue
+		}
+		if peer.Status.ServerVersion != cluster.Spec.Version {
+			return peer.DeepCopy()
+		}
+	}
+	return nil
 }
 
 func hasTooFewPeers(cluster *etcdv1alpha1.EtcdCluster, peers *etcdv1alpha1.EtcdPeerList) bool {
@@ -497,32 +527,15 @@ func peerNameForMember(member etcdclient.Member) (string, error) {
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch;create;delete;patch
 // +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 
-func (r *EtcdClusterReconciler) updateStatusClusterVersion(ctx context.Context, log logr.Logger, cluster *etcdv1alpha1.EtcdCluster) {
-	cluster.Status.ClusterVersion = ""
-
-	etcdAPI, err := r.Etcd.New(etcdClientConfig(cluster))
-	if err != nil {
-		log.Error(err, "Failed to connect to ETCD")
-		return
-	}
-	etcdVersion, err := etcdAPI.GetVersion(ctx)
-	if err != nil {
-		log.Error(err, "Failed to get Etcd version")
-		return
-	}
-	cluster.Status.ClusterVersion = etcdVersion.Cluster
-}
-
-func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	log := r.Log.WithValues("cluster", req.NamespacedName)
 
-	cluster := &etcdv1alpha1.EtcdCluster{}
-	if err := r.Get(ctx, req.NamespacedName, cluster); err != nil {
+	var cluster etcdv1alpha1.EtcdCluster
+	if err := r.Get(ctx, req.NamespacedName, &cluster); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
-		// special 'exit early' case.
 	}
 
 	// Apply defaults in case a defaulting webhook has not been deployed.
@@ -531,48 +544,66 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	// Validate in case a validating webhook has not been deployed
 	err := cluster.ValidateCreate()
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("invalid EtcdCluster resource: %w", err)
+		log.Error(err, "invalid EtcdCluster")
+		return ctrl.Result{}, nil
 	}
 
+	original := cluster.DeepCopy()
+
+	// Always attempt to patch the status after each reconciliation.
+	defer func() {
+		if reflect.DeepEqual(original.Status, cluster.Status) {
+			return
+		}
+		if err := r.Client.Status().Patch(ctx, &cluster, client.MergeFrom(original)); err != nil {
+			reterr = kerrors.NewAggregate([]error{reterr, fmt.Errorf("error while patching EtcdCluster.Status: %s ", err)})
+		}
+	}()
+
 	// Attempt to dial the etcd cluster, recording the cluster response if we can
-	members := &[]etcdclient.Member{}
-	if memberSlice, err := r.getEtcdMembers(ctx, cluster); err != nil {
-		log.V(2).Info("Unable to contact etcd cluster", "error", err)
-		members = nil
+	var (
+		members        *[]etcdclient.Member
+		clusterVersion string
+	)
+	if c, err := r.Etcd.New(etcdClientConfig(&cluster)); err != nil {
+		log.V(2).Info("Unable to connect to etcd", "error", err)
 	} else {
-		members = &memberSlice
+		if memberSlice, err := c.List(ctx); err != nil {
+			log.V(2).Info("Unable to list etcd cluster members", "error", err)
+		} else {
+			members = &memberSlice
+		}
+		if version, err := c.GetVersion(ctx); err != nil {
+			log.V(2).Info("Unable to get cluster version", "error", err)
+		} else {
+			clusterVersion = version.Cluster
+		}
 	}
 
 	// List peers
-	peers := &etcdv1alpha1.EtcdPeerList{}
+	var peers etcdv1alpha1.EtcdPeerList
 	if err := r.List(ctx,
-		peers,
+		&peers,
 		client.InNamespace(cluster.Namespace),
 		client.MatchingFields{clusterNameSpecField: cluster.Name}); err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to list peers: %w", err)
 	}
 
+	// The update status takes in the cluster definition, and the member list from etcd as of *before we ran reconcile*.
+	r.updateStatus(&cluster, members, &peers, clusterVersion)
+
 	// Perform a reconcile, getting back the desired result, any utilerrors, and a clusterEvent. This is an internal concept
 	// and is not the same as the Kubernetes event, although it is used to make one later.
-	result, clusterEvent, reconcileErr := r.reconcile(ctx, members, peers, cluster)
-	if reconcileErr != nil {
-		log.Error(reconcileErr, "Failed to reconcile")
+	result, clusterEvent, err := r.reconcile(ctx, members, &peers, &cluster)
+	if err != nil {
+		err = fmt.Errorf("Failed to reconcile: %s", err)
 	}
-
-	// The update status takes in the cluster definition, and the member list from etcd as of *before we ran reconcile*.
-	// We also get the event, which may contain rich information about what we did (such as the new member name on a
-	// MemberAdded event).
-	updateStatusErr := r.updateStatus(ctx, log, cluster, members, peers, clusterEvent)
-	if updateStatusErr != nil {
-		log.Error(updateStatusErr, "Failed to update status")
-	}
-
 	// Finally, the event is used to generate a Kubernetes event by calling `Record` and passing in the recorder.
 	if clusterEvent != nil {
 		clusterEvent.Record(r.Recorder)
 	}
 
-	return result, utilerrors.NewAggregate([]error{reconcileErr, updateStatusErr})
+	return result, err
 }
 
 func (r *EtcdClusterReconciler) addEtcdMember(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, peerURL string) (*etcdclient.Member, error) {
@@ -602,20 +633,6 @@ func (r *EtcdClusterReconciler) removeEtcdMember(ctx context.Context, cluster *e
 	}
 
 	return nil
-}
-
-func (r *EtcdClusterReconciler) getEtcdMembers(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster) ([]etcdclient.Member, error) {
-	c, err := r.Etcd.New(etcdClientConfig(cluster))
-	if err != nil {
-		return nil, fmt.Errorf("unable to connect to etcd: %w", err)
-	}
-
-	members, err := c.List(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unable to list members of etcd cluster: %w", err)
-	}
-
-	return members, nil
 }
 
 func etcdClientConfig(cluster *etcdv1alpha1.EtcdCluster) etcdclient.Config {
