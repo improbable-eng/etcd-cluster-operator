@@ -613,3 +613,13 @@ func hasIdenticalListItemNames(expected, actual metav1.ListInterface) error {
 	}
 	return nil
 }
+
+func TestPeerForCluster(t *testing.T) {
+	cluster := test.ExampleEtcdCluster("ns1")
+	peer := peerForCluster(cluster, "peer-1")
+
+	expectations := map[string]interface{}{
+		`.spec.version`: cluster.Spec.Version,
+	}
+	test.AssertStructFields(t, expectations, peer)
+}

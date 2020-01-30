@@ -35,7 +35,7 @@ type EtcdPeerReconciler struct {
 }
 
 const (
-	etcdImage           = "quay.io/coreos/etcd:v3.2.28"
+	etcdRepository      = "quay.io/coreos/etcd"
 	etcdScheme          = "http"
 	peerLabel           = "etcd.improbable.io/peer-name"
 	pvcCleanupFinalizer = "etcdpeer.etcd.improbable.io/pvc-cleanup"
@@ -133,7 +133,7 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, log logr.Logger) appsv1.Replic
 
 	etcdContainer := corev1.Container{
 		Name:  appName,
-		Image: etcdImage,
+		Image: fmt.Sprintf("%s:v%s", etcdRepository, peer.Spec.Version),
 		Env: []corev1.EnvVar{
 			{
 				Name:  etcdenvvar.InitialCluster,

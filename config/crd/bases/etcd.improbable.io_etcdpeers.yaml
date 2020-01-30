@@ -253,8 +253,13 @@ spec:
                       type: string
                   type: object
               type: object
+            version:
+              description: Version determines the version of Etcd that will be used
+                for this peer.
+              type: string
           required:
           - clusterName
+          - version
           type: object
         status:
           description: EtcdPeerStatus defines the observed state of EtcdPeer

@@ -42,7 +42,12 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		etcdPeer := exampleEtcdPeer(namespace)
 		const cpuLimit = "2.2"
 		const expectedGoMaxProcs = "2"
+		const expectedEtcdVersion = "9.9.9"
+		const expectedEtcdImage = "quay.io/coreos/etcd:v9.9.9"
+
+		etcdPeer.Spec.Version = expectedEtcdVersion
 		etcdPeer.Spec.PodTemplate.Resources.Limits[corev1.ResourceCPU] = resource.MustParse(cpuLimit)
+
 		err := s.k8sClient.Create(s.ctx, etcdPeer)
 		require.NoError(t, err, "failed to create EtcdPeer resource")
 
@@ -72,6 +77,7 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 			`.spec.template.spec.containers[?(@.name=="etcd")].volumeMounts[?(@.name=="etcd-data")].mountPath`: etcdDataMountPath,
 			`.spec.template.spec.containers[?(@.name=="etcd")].env[?(@.name=="ETCD_DATA_DIR")].value`:          etcdDataMountPath,
 			`.spec.template.spec.containers[?(@.name=="etcd")].env[?(@.name=="GOMAXPROCS")].value`:             expectedGoMaxProcs,
+			`.spec.template.spec.containers[?(@.name=="etcd")].image`:                                          expectedEtcdImage,
 		}
 		test.AssertStructFields(t, expectations, replicaSet)
 
@@ -307,4 +313,15 @@ func TestGoMaxProcs(t *testing.T) {
 		})
 	}
 
+}
+
+func TestDefineReplicaset(t *testing.T) {
+	logger := test.TestLogger{T: t}
+	peer := test.ExampleEtcdPeer("ns1")
+	replicaSet := defineReplicaSet(*peer, logger)
+
+	expectations := map[string]interface{}{
+		`.spec.template.spec.containers[?(@.name=="etcd")].image`: etcdRepository + ":v" + peer.Spec.Version,
+	}
+	test.AssertStructFields(t, expectations, replicaSet)
 }
