@@ -261,7 +261,7 @@ func NamespaceForTest(t *testing.T, kubectl *kubectlContext, rl corev1.ResourceL
 }
 
 func DeleteAllTestNamespaces(t *testing.T, kubectl *kubectlContext) {
-	t.Log("Deleting existing namespaces")
+	t.Log("Deleting existing test namespaces")
 	err := kubectl.Delete("namespace", "--selector", testNameLabelKey, "--wait")
 	require.NoError(t, err)
 }
