@@ -63,6 +63,8 @@ deploy:
 	cd config/manager && kustomize edit set image controller=${IMG}
 	kustomize build config/default | kubectl apply -f -
 
+protobuf:
+	protoc -I=api/proxy --go_out=plugins=grpc:api/proxy api/proxy/*.proto
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
