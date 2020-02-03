@@ -1,17 +1,35 @@
 package main
 
 import (
-	"github.com/spf13/viper"
+	"context"
+	"fmt"
 	"log"
+	"net"
 	"strings"
+
+	"github.com/spf13/viper"
+	"google.golang.org/grpc"
+
+	pb "github.com/improbable-eng/etcd-cluster-operator/api/proxy"
 )
+
+type proxyServer struct {
+	pb.UnimplementedProxyServer
+}
+
+func (ps *proxyServer) Backup(ctx context.Context, request *pb.BackupRequest) (*pb.BackupReply, error) {
+	return nil, nil
+}
+
+func (ps *proxyServer) Restore(ctx context.Context, request *pb.RestoreRequest) (*pb.RestoreReply, error) {
+	return nil, nil
+}
 
 func main() {
 	log.Printf("etcd-cluster-controller upload/download Proxy service")
 
 	// Setup defaults for expected configuration keys
-	viper.SetDefault("google-credential-location", "/var/credentials/google.json")
-	viper.SetDefault("api-port", "8080")
+	viper.SetDefault("api-port", 8080)
 
 	// Allow configuration to be passed via environment variables
 	viper.SetEnvKeyReplacer(strings.NewReplacer("_", "-"))
@@ -28,5 +46,19 @@ func main() {
 		} else {
 			log.Fatal(err, "Error reading configuration file")
 		}
+	}
+
+	// Launch gRPC server
+	grpcAddress := fmt.Sprintf(":%d", viper.GetInt("api-port"))
+	log.Printf("Using %q as listen address for proxy server", grpcAddress)
+	listener, err := net.Listen("tcp", grpcAddress)
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+
+	srv := grpc.NewServer()
+	pb.RegisterProxyServer(srv, &proxyServer{})
+	if err := srv.Serve(listener); err != nil {
+		log.Fatalf("failed to serve: %v", err)
 	}
 }
