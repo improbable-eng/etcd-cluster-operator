@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+package proxy;
+
+service Proxy {
+    rpc Backup (BackupRequest) returns (BackupReply) {}
+    rpc Restore (RestoreRequest) returns (RestoreReply) {}
+}
+
+message BackupRequest {
+    string cluster_identifier = 1;
+    google.protobuf.Timestamp backup_timestamp = 2;
+    bytes backup = 3;
+}
+
+message BackupReply {
+    string backup_url = 1;
+}
+
+message RestoreRequest {
+    string cluster_identifier = 1;
+    string backup_url = 2;
+}
+
+message RestoreReply {
+    bytes backup = 1;
+}
