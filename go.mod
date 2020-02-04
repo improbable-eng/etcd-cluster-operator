@@ -4,6 +4,8 @@ go 1.13
 
 // Pin k8s.io/* dependencies to kubernetes-1.16.0 to match controller-runtime v0.4.0
 replace (
+	// This must match the version below
+	go.etcd.io/etcd => go.etcd.io/etcd v0.0.0-20191023171146-3cf2f69b5738
 	k8s.io/api => k8s.io/api v0.0.0-20190918155943-95b840bb6a1f
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.0.0-20190918161926-8f644eb6e783
 	k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20190913080033-27d36303b655
@@ -20,9 +22,10 @@ require (
 	github.com/google/gofuzz v1.0.0
 	github.com/robfig/cron/v3 v3.0.0
 	github.com/stretchr/testify v1.4.0
-	go.etcd.io/etcd v3.3.17+incompatible
+	// Pin spesific etcd version via tag. See https://github.com/etcd-io/etcd/pull/11477
+	go.etcd.io/etcd v0.0.0-20191023171146-3cf2f69b5738
 	go.opencensus.io v0.22.1 // indirect
-	go.uber.org/zap v1.9.1
+	go.uber.org/zap v1.10.0
 	google.golang.org/api v0.13.0 // indirect
 	k8s.io/api v0.0.0-20190918195907-bd6ac527cfd2
 	k8s.io/apimachinery v0.0.0-20190913080033-27d36303b655
