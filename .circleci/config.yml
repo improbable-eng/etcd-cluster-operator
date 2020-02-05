@@ -5,7 +5,7 @@ version: 2
 jobs:
   verify:
     machine:
-      - image: circleci/golang:1.13.1
+      image: circleci/golang:1.13.1
     steps:
       - checkout
       - run:
