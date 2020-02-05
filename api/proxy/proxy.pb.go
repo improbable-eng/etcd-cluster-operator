@@ -25,101 +25,101 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
-type BackupRequest struct {
+type UploadRequest struct {
 	ClusterIdentifier    string               `protobuf:"bytes,1,opt,name=cluster_identifier,json=clusterIdentifier,proto3" json:"cluster_identifier,omitempty"`
-	BackupTimestamp      *timestamp.Timestamp `protobuf:"bytes,2,opt,name=backup_timestamp,json=backupTimestamp,proto3" json:"backup_timestamp,omitempty"`
+	BackupMadeAt         *timestamp.Timestamp `protobuf:"bytes,2,opt,name=backup_made_at,json=backupMadeAt,proto3" json:"backup_made_at,omitempty"`
 	Backup               []byte               `protobuf:"bytes,3,opt,name=backup,proto3" json:"backup,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
 	XXX_unrecognized     []byte               `json:"-"`
 	XXX_sizecache        int32                `json:"-"`
 }
 
-func (m *BackupRequest) Reset()         { *m = BackupRequest{} }
-func (m *BackupRequest) String() string { return proto.CompactTextString(m) }
-func (*BackupRequest) ProtoMessage()    {}
-func (*BackupRequest) Descriptor() ([]byte, []int) {
+func (m *UploadRequest) Reset()         { *m = UploadRequest{} }
+func (m *UploadRequest) String() string { return proto.CompactTextString(m) }
+func (*UploadRequest) ProtoMessage()    {}
+func (*UploadRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_700b50b08ed8dbaf, []int{0}
 }
 
-func (m *BackupRequest) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_BackupRequest.Unmarshal(m, b)
+func (m *UploadRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_UploadRequest.Unmarshal(m, b)
 }
-func (m *BackupRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_BackupRequest.Marshal(b, m, deterministic)
+func (m *UploadRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_UploadRequest.Marshal(b, m, deterministic)
 }
-func (m *BackupRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_BackupRequest.Merge(m, src)
+func (m *UploadRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_UploadRequest.Merge(m, src)
 }
-func (m *BackupRequest) XXX_Size() int {
-	return xxx_messageInfo_BackupRequest.Size(m)
+func (m *UploadRequest) XXX_Size() int {
+	return xxx_messageInfo_UploadRequest.Size(m)
 }
-func (m *BackupRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_BackupRequest.DiscardUnknown(m)
+func (m *UploadRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_UploadRequest.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_BackupRequest proto.InternalMessageInfo
+var xxx_messageInfo_UploadRequest proto.InternalMessageInfo
 
-func (m *BackupRequest) GetClusterIdentifier() string {
+func (m *UploadRequest) GetClusterIdentifier() string {
 	if m != nil {
 		return m.ClusterIdentifier
 	}
 	return ""
 }
 
-func (m *BackupRequest) GetBackupTimestamp() *timestamp.Timestamp {
+func (m *UploadRequest) GetBackupMadeAt() *timestamp.Timestamp {
 	if m != nil {
-		return m.BackupTimestamp
+		return m.BackupMadeAt
 	}
 	return nil
 }
 
-func (m *BackupRequest) GetBackup() []byte {
+func (m *UploadRequest) GetBackup() []byte {
 	if m != nil {
 		return m.Backup
 	}
 	return nil
 }
 
-type BackupReply struct {
+type UploadReply struct {
 	BackupUrl            string   `protobuf:"bytes,1,opt,name=backup_url,json=backupUrl,proto3" json:"backup_url,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *BackupReply) Reset()         { *m = BackupReply{} }
-func (m *BackupReply) String() string { return proto.CompactTextString(m) }
-func (*BackupReply) ProtoMessage()    {}
-func (*BackupReply) Descriptor() ([]byte, []int) {
+func (m *UploadReply) Reset()         { *m = UploadReply{} }
+func (m *UploadReply) String() string { return proto.CompactTextString(m) }
+func (*UploadReply) ProtoMessage()    {}
+func (*UploadReply) Descriptor() ([]byte, []int) {
 	return fileDescriptor_700b50b08ed8dbaf, []int{1}
 }
 
-func (m *BackupReply) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_BackupReply.Unmarshal(m, b)
+func (m *UploadReply) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_UploadReply.Unmarshal(m, b)
 }
-func (m *BackupReply) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_BackupReply.Marshal(b, m, deterministic)
+func (m *UploadReply) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_UploadReply.Marshal(b, m, deterministic)
 }
-func (m *BackupReply) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_BackupReply.Merge(m, src)
+func (m *UploadReply) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_UploadReply.Merge(m, src)
 }
-func (m *BackupReply) XXX_Size() int {
-	return xxx_messageInfo_BackupReply.Size(m)
+func (m *UploadReply) XXX_Size() int {
+	return xxx_messageInfo_UploadReply.Size(m)
 }
-func (m *BackupReply) XXX_DiscardUnknown() {
-	xxx_messageInfo_BackupReply.DiscardUnknown(m)
+func (m *UploadReply) XXX_DiscardUnknown() {
+	xxx_messageInfo_UploadReply.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_BackupReply proto.InternalMessageInfo
+var xxx_messageInfo_UploadReply proto.InternalMessageInfo
 
-func (m *BackupReply) GetBackupUrl() string {
+func (m *UploadReply) GetBackupUrl() string {
 	if m != nil {
 		return m.BackupUrl
 	}
 	return ""
 }
 
-type RestoreRequest struct {
+type DownloadRequest struct {
 	ClusterIdentifier    string   `protobuf:"bytes,1,opt,name=cluster_identifier,json=clusterIdentifier,proto3" json:"cluster_identifier,omitempty"`
 	BackupUrl            string   `protobuf:"bytes,2,opt,name=backup_url,json=backupUrl,proto3" json:"backup_url,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -127,78 +127,78 @@ type RestoreRequest struct {
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *RestoreRequest) Reset()         { *m = RestoreRequest{} }
-func (m *RestoreRequest) String() string { return proto.CompactTextString(m) }
-func (*RestoreRequest) ProtoMessage()    {}
-func (*RestoreRequest) Descriptor() ([]byte, []int) {
+func (m *DownloadRequest) Reset()         { *m = DownloadRequest{} }
+func (m *DownloadRequest) String() string { return proto.CompactTextString(m) }
+func (*DownloadRequest) ProtoMessage()    {}
+func (*DownloadRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_700b50b08ed8dbaf, []int{2}
 }
 
-func (m *RestoreRequest) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_RestoreRequest.Unmarshal(m, b)
+func (m *DownloadRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_DownloadRequest.Unmarshal(m, b)
 }
-func (m *RestoreRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_RestoreRequest.Marshal(b, m, deterministic)
+func (m *DownloadRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_DownloadRequest.Marshal(b, m, deterministic)
 }
-func (m *RestoreRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_RestoreRequest.Merge(m, src)
+func (m *DownloadRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DownloadRequest.Merge(m, src)
 }
-func (m *RestoreRequest) XXX_Size() int {
-	return xxx_messageInfo_RestoreRequest.Size(m)
+func (m *DownloadRequest) XXX_Size() int {
+	return xxx_messageInfo_DownloadRequest.Size(m)
 }
-func (m *RestoreRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_RestoreRequest.DiscardUnknown(m)
+func (m *DownloadRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_DownloadRequest.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_RestoreRequest proto.InternalMessageInfo
+var xxx_messageInfo_DownloadRequest proto.InternalMessageInfo
 
-func (m *RestoreRequest) GetClusterIdentifier() string {
+func (m *DownloadRequest) GetClusterIdentifier() string {
 	if m != nil {
 		return m.ClusterIdentifier
 	}
 	return ""
 }
 
-func (m *RestoreRequest) GetBackupUrl() string {
+func (m *DownloadRequest) GetBackupUrl() string {
 	if m != nil {
 		return m.BackupUrl
 	}
 	return ""
 }
 
-type RestoreReply struct {
+type DownloadReply struct {
 	Backup               []byte   `protobuf:"bytes,1,opt,name=backup,proto3" json:"backup,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *RestoreReply) Reset()         { *m = RestoreReply{} }
-func (m *RestoreReply) String() string { return proto.CompactTextString(m) }
-func (*RestoreReply) ProtoMessage()    {}
-func (*RestoreReply) Descriptor() ([]byte, []int) {
+func (m *DownloadReply) Reset()         { *m = DownloadReply{} }
+func (m *DownloadReply) String() string { return proto.CompactTextString(m) }
+func (*DownloadReply) ProtoMessage()    {}
+func (*DownloadReply) Descriptor() ([]byte, []int) {
 	return fileDescriptor_700b50b08ed8dbaf, []int{3}
 }
 
-func (m *RestoreReply) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_RestoreReply.Unmarshal(m, b)
+func (m *DownloadReply) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_DownloadReply.Unmarshal(m, b)
 }
-func (m *RestoreReply) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_RestoreReply.Marshal(b, m, deterministic)
+func (m *DownloadReply) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_DownloadReply.Marshal(b, m, deterministic)
 }
-func (m *RestoreReply) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_RestoreReply.Merge(m, src)
+func (m *DownloadReply) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DownloadReply.Merge(m, src)
 }
-func (m *RestoreReply) XXX_Size() int {
-	return xxx_messageInfo_RestoreReply.Size(m)
+func (m *DownloadReply) XXX_Size() int {
+	return xxx_messageInfo_DownloadReply.Size(m)
 }
-func (m *RestoreReply) XXX_DiscardUnknown() {
-	xxx_messageInfo_RestoreReply.DiscardUnknown(m)
+func (m *DownloadReply) XXX_DiscardUnknown() {
+	xxx_messageInfo_DownloadReply.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_RestoreReply proto.InternalMessageInfo
+var xxx_messageInfo_DownloadReply proto.InternalMessageInfo
 
-func (m *RestoreReply) GetBackup() []byte {
+func (m *DownloadReply) GetBackup() []byte {
 	if m != nil {
 		return m.Backup
 	}
@@ -206,34 +206,34 @@ func (m *RestoreReply) GetBackup() []byte {
 }
 
 func init() {
-	proto.RegisterType((*BackupRequest)(nil), "proxy.BackupRequest")
-	proto.RegisterType((*BackupReply)(nil), "proxy.BackupReply")
-	proto.RegisterType((*RestoreRequest)(nil), "proxy.RestoreRequest")
-	proto.RegisterType((*RestoreReply)(nil), "proxy.RestoreReply")
+	proto.RegisterType((*UploadRequest)(nil), "proxy.UploadRequest")
+	proto.RegisterType((*UploadReply)(nil), "proxy.UploadReply")
+	proto.RegisterType((*DownloadRequest)(nil), "proxy.DownloadRequest")
+	proto.RegisterType((*DownloadReply)(nil), "proxy.DownloadReply")
 }
 
 func init() { proto.RegisterFile("proxy.proto", fileDescriptor_700b50b08ed8dbaf) }
 
 var fileDescriptor_700b50b08ed8dbaf = []byte{
-	// 279 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x91, 0x4f, 0x4b, 0xc4, 0x30,
-	0x10, 0xc5, 0xcd, 0xca, 0x56, 0x76, 0xba, 0xfe, 0x1b, 0xff, 0x50, 0x0a, 0x62, 0xe9, 0x41, 0x7a,
-	0xd0, 0x2e, 0xac, 0x82, 0x77, 0xc1, 0x83, 0x37, 0x09, 0x7a, 0x75, 0xd9, 0xae, 0xd9, 0xa5, 0x98,
-	0x35, 0x31, 0x4d, 0xc4, 0x7e, 0x18, 0xbf, 0xab, 0x6c, 0x92, 0x56, 0xdb, 0xa3, 0xc7, 0xbc, 0x99,
-	0x79, 0xef, 0x37, 0x13, 0x08, 0xa5, 0x12, 0x5f, 0x75, 0x2e, 0x95, 0xd0, 0x02, 0x87, 0xf6, 0x11,
-	0x9f, 0xaf, 0x84, 0x58, 0x71, 0x36, 0xb1, 0x62, 0x61, 0x96, 0x13, 0x5d, 0xae, 0x59, 0xa5, 0xe7,
-	0x6b, 0xe9, 0xfa, 0xd2, 0x6f, 0x02, 0xbb, 0x77, 0xf3, 0xc5, 0x9b, 0x91, 0x94, 0x7d, 0x18, 0x56,
-	0x69, 0xbc, 0x02, 0x5c, 0x70, 0x53, 0x69, 0xa6, 0x66, 0xe5, 0x2b, 0x7b, 0xd7, 0xe5, 0xb2, 0x64,
-	0x2a, 0x22, 0x09, 0xc9, 0x46, 0xf4, 0xd0, 0x57, 0x1e, 0xda, 0x02, 0xde, 0xc3, 0x41, 0x61, 0xe7,
-	0x67, 0xad, 0x75, 0x34, 0x48, 0x48, 0x16, 0x4e, 0xe3, 0xdc, 0x85, 0xe7, 0x4d, 0x78, 0xfe, 0xd4,
-	0x74, 0xd0, 0x7d, 0x37, 0xd3, 0x0a, 0x78, 0x0a, 0x81, 0x93, 0xa2, 0xed, 0x84, 0x64, 0x63, 0xea,
-	0x5f, 0xe9, 0x25, 0x84, 0x0d, 0x9e, 0xe4, 0x35, 0x9e, 0x01, 0xf8, 0x34, 0xa3, 0xb8, 0x87, 0x1a,
-	0x39, 0xe5, 0x59, 0xf1, 0xf4, 0x05, 0xf6, 0x28, 0xab, 0xb4, 0x50, 0xec, 0x9f, 0xdb, 0x74, 0xfd,
-	0x07, 0x7d, 0xff, 0x0b, 0x18, 0xb7, 0xfe, 0x1b, 0x9c, 0x5f, 0x6a, 0xf2, 0x97, 0x7a, 0xfa, 0x09,
-	0xc3, 0xc7, 0xcd, 0xfd, 0xf1, 0x06, 0x02, 0x87, 0x8f, 0xc7, 0xb9, 0xfb, 0x9e, 0xce, 0xb1, 0x63,
-	0xec, 0xa9, 0x92, 0xd7, 0xe9, 0x16, 0xde, 0xc2, 0x8e, 0x8f, 0xc1, 0x13, 0xdf, 0xd0, 0x5d, 0x2b,
-	0x3e, 0xea, 0xcb, 0x76, 0xb0, 0x08, 0xec, 0xa9, 0xaf, 0x7f, 0x02, 0x00, 0x00, 0xff, 0xff, 0xac,
-	0x4c, 0xbf, 0x4b, 0x0b, 0x02, 0x00, 0x00,
+	// 287 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xa4, 0x91, 0x41, 0x4b, 0xfb, 0x40,
+	0x10, 0xc5, 0xff, 0xdb, 0x3f, 0x0d, 0x76, 0xd2, 0x2a, 0x0e, 0xa5, 0x84, 0x80, 0x18, 0x72, 0x31,
+	0x07, 0x4d, 0xa1, 0x7a, 0xf2, 0xa4, 0xe0, 0xc5, 0x83, 0x20, 0xc1, 0x9e, 0xc3, 0xa6, 0xd9, 0x96,
+	0xe0, 0xa6, 0xbb, 0x6e, 0x36, 0x68, 0xbe, 0x89, 0x1f, 0x57, 0x9a, 0xdd, 0x58, 0x1b, 0x8f, 0x1e,
+	0xe7, 0xed, 0x0c, 0xbf, 0xf7, 0xde, 0x82, 0x2b, 0x95, 0xf8, 0x68, 0x62, 0xa9, 0x84, 0x16, 0x38,
+	0x6c, 0x07, 0xff, 0x7c, 0x23, 0xc4, 0x86, 0xb3, 0x79, 0x2b, 0x66, 0xf5, 0x7a, 0xae, 0x8b, 0x92,
+	0x55, 0x9a, 0x96, 0xd2, 0xec, 0x85, 0x9f, 0x04, 0x26, 0x4b, 0xc9, 0x05, 0xcd, 0x13, 0xf6, 0x56,
+	0xb3, 0x4a, 0xe3, 0x15, 0xe0, 0x8a, 0xd7, 0x95, 0x66, 0x2a, 0x2d, 0x72, 0xb6, 0xd5, 0xc5, 0xba,
+	0x60, 0xca, 0x23, 0x01, 0x89, 0x46, 0xc9, 0xa9, 0x7d, 0x79, 0xfc, 0x7e, 0xc0, 0x3b, 0x38, 0xce,
+	0xe8, 0xea, 0xb5, 0x96, 0x69, 0x49, 0x73, 0x96, 0x52, 0xed, 0x0d, 0x02, 0x12, 0xb9, 0x0b, 0x3f,
+	0x36, 0xe8, 0xb8, 0x43, 0xc7, 0x2f, 0x1d, 0x3a, 0x19, 0x9b, 0x8b, 0x27, 0x9a, 0xb3, 0x7b, 0x8d,
+	0x33, 0x70, 0xcc, 0xec, 0xfd, 0x0f, 0x48, 0x34, 0x4e, 0xec, 0x14, 0x5e, 0x82, 0xdb, 0x39, 0x93,
+	0xbc, 0xc1, 0x33, 0x00, 0x0b, 0xaa, 0x15, 0xb7, 0x7e, 0x46, 0x46, 0x59, 0x2a, 0x1e, 0xa6, 0x70,
+	0xf2, 0x20, 0xde, 0xb7, 0x7f, 0x48, 0x72, 0x08, 0x18, 0xf4, 0x01, 0x17, 0x30, 0xd9, 0x03, 0x76,
+	0x86, 0xf6, 0xbe, 0xc9, 0x4f, 0xdf, 0x8b, 0x06, 0x86, 0xcf, 0xbb, 0xf2, 0xf1, 0x06, 0x1c, 0x13,
+	0x00, 0xa7, 0xb1, 0xf9, 0x9b, 0x83, 0xa6, 0x7d, 0xec, 0xa9, 0x92, 0x37, 0xe1, 0x3f, 0xbc, 0x85,
+	0xa3, 0x8e, 0x83, 0x33, 0xbb, 0xd1, 0x4b, 0xe6, 0x4f, 0x7f, 0xe9, 0xed, 0x6d, 0xe6, 0xb4, 0x65,
+	0x5f, 0x7f, 0x05, 0x00, 0x00, 0xff, 0xff, 0x4d, 0x0c, 0x55, 0x22, 0x0b, 0x02, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -248,8 +248,8 @@ const _ = grpc.SupportPackageIsVersion4
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type ProxyClient interface {
-	Backup(ctx context.Context, in *BackupRequest, opts ...grpc.CallOption) (*BackupReply, error)
-	Restore(ctx context.Context, in *RestoreRequest, opts ...grpc.CallOption) (*RestoreReply, error)
+	Upload(ctx context.Context, in *UploadRequest, opts ...grpc.CallOption) (*UploadReply, error)
+	Download(ctx context.Context, in *DownloadRequest, opts ...grpc.CallOption) (*DownloadReply, error)
 }
 
 type proxyClient struct {
@@ -260,18 +260,18 @@ func NewProxyClient(cc *grpc.ClientConn) ProxyClient {
 	return &proxyClient{cc}
 }
 
-func (c *proxyClient) Backup(ctx context.Context, in *BackupRequest, opts ...grpc.CallOption) (*BackupReply, error) {
-	out := new(BackupReply)
-	err := c.cc.Invoke(ctx, "/proxy.Proxy/Backup", in, out, opts...)
+func (c *proxyClient) Upload(ctx context.Context, in *UploadRequest, opts ...grpc.CallOption) (*UploadReply, error) {
+	out := new(UploadReply)
+	err := c.cc.Invoke(ctx, "/proxy.Proxy/Upload", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *proxyClient) Restore(ctx context.Context, in *RestoreRequest, opts ...grpc.CallOption) (*RestoreReply, error) {
-	out := new(RestoreReply)
-	err := c.cc.Invoke(ctx, "/proxy.Proxy/Restore", in, out, opts...)
+func (c *proxyClient) Download(ctx context.Context, in *DownloadRequest, opts ...grpc.CallOption) (*DownloadReply, error) {
+	out := new(DownloadReply)
+	err := c.cc.Invoke(ctx, "/proxy.Proxy/Download", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -280,57 +280,57 @@ func (c *proxyClient) Restore(ctx context.Context, in *RestoreRequest, opts ...g
 
 // ProxyServer is the server API for Proxy service.
 type ProxyServer interface {
-	Backup(context.Context, *BackupRequest) (*BackupReply, error)
-	Restore(context.Context, *RestoreRequest) (*RestoreReply, error)
+	Upload(context.Context, *UploadRequest) (*UploadReply, error)
+	Download(context.Context, *DownloadRequest) (*DownloadReply, error)
 }
 
 // UnimplementedProxyServer can be embedded to have forward compatible implementations.
 type UnimplementedProxyServer struct {
 }
 
-func (*UnimplementedProxyServer) Backup(ctx context.Context, req *BackupRequest) (*BackupReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Backup not implemented")
+func (*UnimplementedProxyServer) Upload(ctx context.Context, req *UploadRequest) (*UploadReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Upload not implemented")
 }
-func (*UnimplementedProxyServer) Restore(ctx context.Context, req *RestoreRequest) (*RestoreReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Restore not implemented")
+func (*UnimplementedProxyServer) Download(ctx context.Context, req *DownloadRequest) (*DownloadReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Download not implemented")
 }
 
 func RegisterProxyServer(s *grpc.Server, srv ProxyServer) {
 	s.RegisterService(&_Proxy_serviceDesc, srv)
 }
 
-func _Proxy_Backup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(BackupRequest)
+func _Proxy_Upload_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UploadRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProxyServer).Backup(ctx, in)
+		return srv.(ProxyServer).Upload(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/proxy.Proxy/Backup",
+		FullMethod: "/proxy.Proxy/Upload",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProxyServer).Backup(ctx, req.(*BackupRequest))
+		return srv.(ProxyServer).Upload(ctx, req.(*UploadRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Proxy_Restore_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RestoreRequest)
+func _Proxy_Download_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DownloadRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ProxyServer).Restore(ctx, in)
+		return srv.(ProxyServer).Download(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/proxy.Proxy/Restore",
+		FullMethod: "/proxy.Proxy/Download",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProxyServer).Restore(ctx, req.(*RestoreRequest))
+		return srv.(ProxyServer).Download(ctx, req.(*DownloadRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -340,12 +340,12 @@ var _Proxy_serviceDesc = grpc.ServiceDesc{
 	HandlerType: (*ProxyServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Backup",
-			Handler:    _Proxy_Backup_Handler,
+			MethodName: "Upload",
+			Handler:    _Proxy_Upload_Handler,
 		},
 		{
-			MethodName: "Restore",
-			Handler:    _Proxy_Restore_Handler,
+			MethodName: "Download",
+			Handler:    _Proxy_Download_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

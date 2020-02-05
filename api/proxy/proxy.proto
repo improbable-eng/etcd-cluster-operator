@@ -5,25 +5,25 @@ import "google/protobuf/timestamp.proto";
 package proxy;
 
 service Proxy {
-    rpc Backup (BackupRequest) returns (BackupReply) {}
-    rpc Restore (RestoreRequest) returns (RestoreReply) {}
+    rpc Upload (UploadRequest) returns (UploadReply) {}
+    rpc Download (DownloadRequest) returns (DownloadReply) {}
 }
 
-message BackupRequest {
+message UploadRequest {
     string cluster_identifier = 1;
-    google.protobuf.Timestamp backup_timestamp = 2;
+    google.protobuf.Timestamp backup_made_at = 2;
     bytes backup = 3;
 }
 
-message BackupReply {
+message UploadReply {
     string backup_url = 1;
 }
 
-message RestoreRequest {
+message DownloadRequest {
     string cluster_identifier = 1;
     string backup_url = 2;
 }
 
-message RestoreReply {
+message DownloadReply {
     bytes backup = 1;
 }
