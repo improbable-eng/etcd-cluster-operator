@@ -67,10 +67,12 @@ protoc-docker:
 	docker build - -t protoc < hack/grpc-protoc.Dockerfile
 
 protobuf: protoc-docker
+	pwd
+	ls
 	docker run -v `pwd`:/eco -w /eco protoc:latest -I=api/proxy --go_out=plugins=grpc:api/proxy api/proxy/proxy.proto
 
 verify-protobuf:
-	./hack/verify.sh make -s protobuf
+	./hack/verify.sh make protobuf
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
