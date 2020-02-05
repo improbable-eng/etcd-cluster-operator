@@ -68,7 +68,7 @@ protoc-docker:
 
 protobuf: protoc-docker
 	pwd
-	ls
+	ls api/proxy
 	docker run -v `pwd`:/eco -w /eco protoc:latest -I=api/proxy --go_out=plugins=grpc:api/proxy api/proxy/proxy.proto
 
 verify-protobuf:
