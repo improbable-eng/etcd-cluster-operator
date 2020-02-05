@@ -4,10 +4,9 @@
 version: 2
 jobs:
   verify:
-    docker:
+    machine:
       - image: circleci/golang:1.13.1
     steps:
-      - setup_remote_docker
       - checkout
       - run:
          name: Static checks
