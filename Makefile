@@ -31,7 +31,7 @@ bin/kubebuilder:
 	hack/download-kubebuilder-local.sh
 
 # Run all static checks
-verify: verify-gomod verify-manifests verify-generate verify-fmt vet
+verify: verify-gomod verify-manifests verify-generate verify-protobuf verify-fmt vet
 
 # Run unit tests
 test: bin/kubebuilder
@@ -68,6 +68,9 @@ protoc-docker:
 
 protobuf: protoc-docker
 	docker run -v `pwd`:/eco -w /eco protoc:latest -I=api/proxy --go_out=plugins=grpc:api/proxy api/proxy/proxy.proto
+
+verify-protobuf:
+	./hack/verify.sh make -s protobuf
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
