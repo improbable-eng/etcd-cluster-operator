@@ -21,6 +21,7 @@ require (
 	github.com/google/go-cmp v0.3.0
 	github.com/google/gofuzz v1.0.0
 	github.com/robfig/cron/v3 v3.0.0
+	github.com/spf13/pflag v1.0.3
 	github.com/spf13/viper v1.3.2
 	github.com/stretchr/testify v1.4.0
 	// Pin spesific etcd version via tag. See https://github.com/etcd-io/etcd/pull/11477
