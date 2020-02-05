@@ -31,7 +31,7 @@ message UploadReply {
 
 message DownloadRequest {
     // This is the URL of the backup to download.
-    string backup_url = 2;
+    string backup_url = 1;
 }
 
 message DownloadReply {
