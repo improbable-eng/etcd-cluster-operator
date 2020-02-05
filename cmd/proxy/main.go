@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"net"
@@ -15,14 +14,6 @@ import (
 
 type proxyServer struct {
 	pb.UnimplementedProxyServer
-}
-
-func (ps *proxyServer) Backup(ctx context.Context, request *pb.BackupRequest) (*pb.BackupReply, error) {
-	return nil, nil
-}
-
-func (ps *proxyServer) Restore(ctx context.Context, request *pb.RestoreRequest) (*pb.RestoreReply, error) {
-	return nil, nil
 }
 
 func main() {
