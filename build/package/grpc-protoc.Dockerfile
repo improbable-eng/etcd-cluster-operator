@@ -5,7 +5,7 @@
 FROM golang:1.13.1 as go-plugin-builder
 
 RUN go get -d -u github.com/golang/protobuf/protoc-gen-go
-RUN git -C "$(go env GOPATH)"/src/github.com/golang/protobuf checkout v1.2.0
+RUN git -C "$(go env GOPATH)"/src/github.com/golang/protobuf checkout v1.3.2
 RUN go install github.com/golang/protobuf/protoc-gen-go
 
 FROM ubuntu:18.04
