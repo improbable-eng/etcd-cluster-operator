@@ -1,5 +1,18 @@
 # Development guide
 
+## Generated code
+
+This repository makes use of a lot of generated code. In particular Protobuf files under `api/proxy` and Kubebuilder
+itself. In order to avoid changes caused by different versions of these generators, this repository contains ways to
+use specific pinned versions via the `Makefile`.
+
+For consistency, it is recommended that a developer uses these instead of the tools on their local machine to generate
+code:
+
+- `make protobuf` To update Protobuf and gRPC generated Go code.
+- `make manifests` To update the YAML manifests from Kubebuilder.
+- `make generate` To update the Kubebuilder generated Go code.
+
 ## Testing
 
 Testing is done using "vanilla" golang testing frameworks, with
