@@ -18,3 +18,15 @@ spec:
       limits:
         cpu: 200m
         memory: 200Mi
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: etcd.improbable.io/cluster-name
+                    operator: In
+                    values:
+                      - my-cluster
+              topologyKey: kubernetes.io/hostname
