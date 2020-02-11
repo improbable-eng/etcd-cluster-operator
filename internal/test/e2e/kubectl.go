@@ -24,7 +24,7 @@ import (
 const (
 	testNameLabelKey = "e2e.etcd.improbable.io/test-name"
 	// The etcd image containing etcdctl
-	etcdctlImage = "quay.io/coreos/etcd:v3.2.28"
+	etcdctlImage = "quay.io/coreos/etcd:v3.3.18"
 	// charSet defines the alphanumeric set for random string generation
 	charSet = "0123456789abcdefghijklmnopqrstuvwxyz"
 )
@@ -354,6 +354,6 @@ func etcdctlInCluster(kubectl *kubectlContext, deadline time.Duration, clusterNa
 		"etcdctl-"+randomString(8),
 		deadline,
 		etcdctlImage,
-		append([]string{"etcdctl", "--insecure-discovery", "--discovery-srv", clusterName}, command...)...,
+		append([]string{"/usr/bin/env", "ETCDCTL_API=3", "etcdctl", "--insecure-discovery", "--discovery-srv", clusterName}, command...)...,
 	)
 }

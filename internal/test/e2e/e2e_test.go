@@ -427,7 +427,7 @@ func backupTests(t *testing.T, kubectl *kubectlContext) {
 		kubectl,
 		time.Minute*2,
 		"e2e-backup-cluster",
-		"set", "--", "foo", "bar",
+		"put", "--", "foo", "bar",
 	)
 	require.NoError(t, err, out)
 
@@ -628,7 +628,7 @@ func persistenceTests(t *testing.T, kubectl *kubectlContext) {
 		kubectl,
 		time.Minute*2,
 		"cluster1",
-		"set", "--", "foo", expectedValue,
+		"put", "--", "foo", expectedValue,
 	)
 	require.NoError(t, err, out)
 
@@ -662,7 +662,7 @@ func persistenceTests(t *testing.T, kubectl *kubectlContext) {
 		kubectl,
 		time.Minute*2,
 		"cluster1",
-		"get", "--quorum", "--", "foo",
+		"get", "--print-value-only", "--", "foo",
 	)
 	require.NoError(t, err, out)
 	assert.Equal(t, expectedValue+"\n", out)
@@ -701,7 +701,7 @@ func scaleDownTests(t *testing.T, kubectl *kubectlContext) {
 		kubectl,
 		time.Minute*2,
 		"my-cluster",
-		"set", "--", "foo", expectedValue,
+		"put", "--", "foo", expectedValue,
 	)
 	require.NoError(t, err, out)
 
@@ -732,7 +732,7 @@ func scaleDownTests(t *testing.T, kubectl *kubectlContext) {
 		kubectl,
 		time.Minute*2,
 		"my-cluster",
-		"get", "--quorum", "--", "foo",
+		"get", "--print-value-only", "--", "foo",
 	)
 	require.NoError(t, err, out)
 	assert.Equal(t, expectedValue+"\n", out)
@@ -766,7 +766,7 @@ func scaleDownTests(t *testing.T, kubectl *kubectlContext) {
 		kubectl,
 		time.Minute*2,
 		"my-cluster",
-		"set", "--", "foo2", expectedValue+"2",
+		"put", "--", "foo2", expectedValue+"2",
 	)
 	require.NoError(t, err, out)
 
