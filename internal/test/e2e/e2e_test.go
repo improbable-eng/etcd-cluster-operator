@@ -423,12 +423,10 @@ func backupTests(t *testing.T, kubectl *kubectlContext) {
 	require.NoError(t, err)
 
 	t.Log("Containing data.")
-	out, err := eventuallyInCluster(
+	out, err := etcdctlInCluster(
 		kubectl,
-		"set-etcd-value",
 		time.Minute*2,
-		"quay.io/coreos/etcd:v3.2.27",
-		"etcdctl", "--insecure-discovery", "--discovery-srv=e2e-backup-cluster",
+		"e2e-backup-cluster",
 		"set", "--", "foo", "bar",
 	)
 	require.NoError(t, err, out)
@@ -626,12 +624,10 @@ func persistenceTests(t *testing.T, kubectl *kubectlContext) {
 	t.Log("Containing data.")
 	expectedValue := "foobarbaz"
 
-	out, err := eventuallyInCluster(
+	out, err := etcdctlInCluster(
 		kubectl,
-		"set-etcd-value",
 		time.Minute*2,
-		"quay.io/coreos/etcd:v3.2.27",
-		"etcdctl", "--insecure-discovery", "--discovery-srv=cluster1",
+		"cluster1",
 		"set", "--", "foo", expectedValue,
 	)
 	require.NoError(t, err, out)
@@ -662,12 +658,10 @@ func persistenceTests(t *testing.T, kubectl *kubectlContext) {
 	require.NoError(t, err)
 
 	t.Log("And the data is still available.")
-	out, err = eventuallyInCluster(
+	out, err = etcdctlInCluster(
 		kubectl,
-		"get-etcd-value",
 		time.Minute*2,
-		"quay.io/coreos/etcd:v3.2.27",
-		"etcdctl", "--insecure-discovery", "--discovery-srv=cluster1",
+		"cluster1",
 		"get", "--quorum", "--", "foo",
 	)
 	require.NoError(t, err, out)
@@ -703,12 +697,10 @@ func scaleDownTests(t *testing.T, kubectl *kubectlContext) {
 	t.Log("Which contains data")
 	const expectedValue = "foobarbaz"
 
-	out, err := eventuallyInCluster(
+	out, err := etcdctlInCluster(
 		kubectl,
-		"set-etcd-value",
 		time.Minute*2,
-		"quay.io/coreos/etcd:v3.2.27",
-		"etcdctl", "--insecure-discovery", "--discovery-srv=my-cluster",
+		"my-cluster",
 		"set", "--", "foo", expectedValue,
 	)
 	require.NoError(t, err, out)
@@ -736,12 +728,10 @@ func scaleDownTests(t *testing.T, kubectl *kubectlContext) {
 	require.NoError(t, err)
 
 	t.Log("And the data is still available.")
-	out, err = eventuallyInCluster(
+	out, err = etcdctlInCluster(
 		kubectl,
-		"get-etcd-value",
 		time.Minute*2,
-		"quay.io/coreos/etcd:v3.2.27",
-		"etcdctl", "--insecure-discovery", "--discovery-srv=my-cluster",
+		"my-cluster",
 		"get", "--quorum", "--", "foo",
 	)
 	require.NoError(t, err, out)
@@ -772,12 +762,10 @@ func scaleDownTests(t *testing.T, kubectl *kubectlContext) {
 	require.NoError(t, err)
 
 	t.Log("And new data can be written to the cluster")
-	out, err = eventuallyInCluster(
+	out, err = etcdctlInCluster(
 		kubectl,
-		"set-etcd-value2",
 		time.Minute*2,
-		"quay.io/coreos/etcd:v3.2.27",
-		"etcdctl", "--insecure-discovery", "--discovery-srv=my-cluster",
+		"my-cluster",
 		"set", "--", "foo2", expectedValue+"2",
 	)
 	require.NoError(t, err, out)
