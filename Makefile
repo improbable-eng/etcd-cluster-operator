@@ -105,12 +105,12 @@ verify-go-get-patch:
 	./hack/verify.sh make -s go-get-patch
 
 # Build the docker image. This should be used for release versions, and builds the image on top of distroless.
-docker-build: test
-	docker build . --target release -t ${IMG}
+docker-build:
+	docker build . --target release --build-arg VERSION=$(VERSION) -t ${IMG}
 
 # Build the docker image with debug tools installed.
-docker-build-debug: test
-	docker build . --target debug -t ${IMG}
+docker-build-debug:
+	docker build . --target debug --build-arg VERSION=$(VERSION) -t ${IMG}
 
 # Push the docker image
 docker-push:
