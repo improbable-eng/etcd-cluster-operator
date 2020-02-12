@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/coreos/go-semver/semver"
 	"github.com/google/go-cmp/cmp"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -11,12 +12,34 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
+func validateSemanticVersion(version string, path *field.Path) (allErrs field.ErrorList) {
+	v, err := semver.NewVersion(version)
+	if err != nil {
+		allErrs = append(
+			allErrs,
+			field.Invalid(path, version, err.Error()),
+		)
+		return
+	}
+	if v.Major != etcdSupportedVersionMajor {
+		allErrs = append(
+			allErrs,
+			field.Invalid(path, version, "only Etcd version 3 is supported"),
+		)
+	}
+	return
+}
+
 var _ webhook.Validator = &EtcdCluster{}
 
 // ValidateCreate validates that all required fields are present and valid.
 func (o *EtcdCluster) ValidateCreate() error {
 	path := field.NewPath("spec")
 	var allErrs field.ErrorList
+	allErrs = append(
+		allErrs,
+		validateSemanticVersion(o.Spec.Version, path.Child("version"))...,
+	)
 	allErrs = append(
 		allErrs,
 		o.Spec.Storage.validate(path.Child("storage"))...)
@@ -43,11 +66,17 @@ func (o *EtcdCluster) ValidateUpdate(old runtime.Object) error {
 
 	// Overwrite the fields which are allowed to change
 	oldO.Spec.Replicas = o.Spec.Replicas
+	oldO.Spec.Version = o.Spec.Version
 
 	if diff := cmp.Diff(oldO.Spec, o.Spec); diff != "" {
 		return fmt.Errorf("Unsupported changes: (- current, + new) %s", diff)
 	}
-	return nil
+
+	err := o.ValidateCreate()
+	if err != nil {
+		err = fmt.Errorf("Unsupported changes: %s", err)
+	}
+	return err
 }
 
 var _ webhook.Validator = &EtcdPeer{}
@@ -56,7 +85,10 @@ var _ webhook.Validator = &EtcdPeer{}
 func (o *EtcdPeer) ValidateCreate() error {
 	path := field.NewPath("spec")
 	var allErrs field.ErrorList
-
+	allErrs = append(
+		allErrs,
+		validateSemanticVersion(o.Spec.Version, path.Child("version"))...,
+	)
 	allErrs = append(
 		allErrs,
 		o.Spec.Storage.validate(path.Child("storage"))...,

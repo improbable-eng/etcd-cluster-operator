@@ -3,6 +3,7 @@ package v1alpha1_test
 import (
 	"testing"
 
+	"github.com/coreos/go-semver/semver"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/api/resource"
 
@@ -15,6 +16,22 @@ func TestEtcdCluster_ValidateCreate(t *testing.T) {
 		o := test.ExampleEtcdCluster("ns1")
 		err := o.ValidateCreate()
 		if !assert.NoError(t, err) {
+			t.Log(err)
+		}
+	})
+	t.Run("VersionInvalid", func(t *testing.T) {
+		o := test.ExampleEtcdCluster("ns1")
+		o.Spec.Version = "foo"
+		err := o.ValidateCreate()
+		if assert.Error(t, err) {
+			t.Log(err)
+		}
+	})
+	t.Run("VersionUnsupported", func(t *testing.T) {
+		o := test.ExampleEtcdCluster("ns1")
+		o.Spec.Version = "4.0.0"
+		err := o.ValidateCreate()
+		if assert.Error(t, err) {
 			t.Log(err)
 		}
 	})
@@ -90,6 +107,56 @@ func TestEtcdCluster_ValidateUpdate(t *testing.T) {
 			},
 		},
 		{
+			name: "VersionPatchIncrement",
+			modifier: func(o *v1alpha1.EtcdCluster) {
+				v := semver.Must(semver.NewVersion(o.Spec.Version))
+				v.Patch += 1
+				o.Spec.Version = v.String()
+			},
+		},
+		{
+			name: "VersionPatchDecrement",
+			modifier: func(o *v1alpha1.EtcdCluster) {
+				v := semver.Must(semver.NewVersion(o.Spec.Version))
+				v.Patch -= 1
+				o.Spec.Version = v.String()
+			},
+		},
+		{
+			name: "VersionMinorIncrement",
+			modifier: func(o *v1alpha1.EtcdCluster) {
+				v := semver.Must(semver.NewVersion(o.Spec.Version))
+				v.Minor += 1
+				o.Spec.Version = v.String()
+			},
+		},
+		{
+			name: "VersionMinorDecrement",
+			modifier: func(o *v1alpha1.EtcdCluster) {
+				v := semver.Must(semver.NewVersion(o.Spec.Version))
+				v.Minor += 1
+				o.Spec.Version = v.String()
+			},
+		},
+		{
+			name: "VersionMajorIncrement",
+			modifier: func(o *v1alpha1.EtcdCluster) {
+				v := semver.Must(semver.NewVersion(o.Spec.Version))
+				v.Major += 1
+				o.Spec.Version = v.String()
+			},
+			err: "^Unsupported changes:",
+		},
+		{
+			name: "VersionMajorDecrement",
+			modifier: func(o *v1alpha1.EtcdCluster) {
+				v := semver.Must(semver.NewVersion(o.Spec.Version))
+				v.Major -= 1
+				o.Spec.Version = v.String()
+			},
+			err: "^Unsupported changes:",
+		},
+		{
 			// TODO Support pod annotation modification https://github.com/improbable-eng/etcd-cluster-operator/issues/109
 			name: "ModifyPodSpecAnnotation",
 			modifier: func(o *v1alpha1.EtcdCluster) {
@@ -113,7 +180,12 @@ func TestEtcdCluster_ValidateUpdate(t *testing.T) {
 		{
 			name: "UnsupportedChange/ResourcesStorage",
 			modifier: func(o *v1alpha1.EtcdCluster) {
-				o.Spec.Storage.VolumeClaimTemplate.Resources.Requests["storage"] = resource.MustParse("1Mi")
+				storage, found := o.Spec.Storage.VolumeClaimTemplate.Resources.Requests["storage"]
+				if !found {
+					panic("A storage request must be set for this test")
+				}
+				storage.Add(resource.MustParse("1Mi"))
+				o.Spec.Storage.VolumeClaimTemplate.Resources.Requests["storage"] = storage
 			},
 			err: `^Unsupported changes:`,
 		},
@@ -140,6 +212,22 @@ func TestEtcdPeer_ValidateCreate(t *testing.T) {
 		o := test.ExampleEtcdPeer("ns1")
 		err := o.ValidateCreate()
 		if !assert.NoError(t, err) {
+			t.Log(err)
+		}
+	})
+	t.Run("VersionInvalid", func(t *testing.T) {
+		o := test.ExampleEtcdPeer("ns1")
+		o.Spec.Version = "foo"
+		err := o.ValidateCreate()
+		if assert.Error(t, err) {
+			t.Log(err)
+		}
+	})
+	t.Run("VersionUnsupported", func(t *testing.T) {
+		o := test.ExampleEtcdPeer("ns1")
+		o.Spec.Version = "4.0.0"
+		err := o.ValidateCreate()
+		if assert.Error(t, err) {
 			t.Log(err)
 		}
 	})
@@ -203,6 +291,15 @@ func TestEtcdPeer_ValidateUpdate(t *testing.T) {
 		err      string
 	}{
 		{
+			name: "UnsupportedChange/Version",
+			modifier: func(o *v1alpha1.EtcdPeer) {
+				v := semver.Must(semver.NewVersion(o.Spec.Version))
+				v.Patch += 1
+				o.Spec.Version = v.String()
+			},
+			err: `^Unsupported changes:`,
+		},
+		{
 			name: "UnsupportedChange/StorageClassName",
 			modifier: func(o *v1alpha1.EtcdPeer) {
 				*o.Spec.Storage.VolumeClaimTemplate.StorageClassName += "-changed"
@@ -212,7 +309,12 @@ func TestEtcdPeer_ValidateUpdate(t *testing.T) {
 		{
 			name: "UnsupportedChange/ResourcesStorage",
 			modifier: func(o *v1alpha1.EtcdPeer) {
-				o.Spec.Storage.VolumeClaimTemplate.Resources.Requests["storage"] = resource.MustParse("1Mi")
+				storage, found := o.Spec.Storage.VolumeClaimTemplate.Resources.Requests["storage"]
+				if !found {
+					panic("A storage request must be set for this test")
+				}
+				storage.Add(resource.MustParse("1Mi"))
+				o.Spec.Storage.VolumeClaimTemplate.Resources.Requests["storage"] = storage
 			},
 			err: `^Unsupported changes:`,
 		},
