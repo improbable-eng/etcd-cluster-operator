@@ -803,12 +803,10 @@ func versionTests(t *testing.T, kubectl *kubectlContext) {
 	t.Log("Containing data.")
 	expectedValue := "foobarbaz"
 
-	out, err := eventuallyInCluster(
+	out, err := etcdctlInCluster(
 		kubectl,
-		"set-etcd-value",
 		time.Minute*2,
-		"quay.io/coreos/etcd:v3.2.28",
-		"etcdctl", "--insecure-discovery", "--discovery-srv=cluster1",
+		"cluster1",
 		"set", "--", "foo", expectedValue,
 	)
 	require.NoError(t, err, out)
