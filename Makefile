@@ -1,5 +1,6 @@
+VERSION ?= $(shell git describe --tags)
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+IMG ?= "controller:$(VERSION)"
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 
@@ -45,7 +46,7 @@ kind:
 
 # Build manager binary
 manager:
-	go build -o bin/manager main.go
+	go build -o bin/manager -ldflags="-X 'github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}'" main.go
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 # Use 'DISABLE_WEBHOOKS=1` to run the controller-manager without the
