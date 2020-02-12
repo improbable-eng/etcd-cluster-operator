@@ -95,6 +95,14 @@ gomod:
 verify-gomod:
 	./hack/verify.sh make -s gomod
 
+# go-get-patch updates Golang dependencies to latest patch versions
+go-get-patch:
+	go get -u=patch -t
+
+# verify-go-get-patch checks that all Golang dependencies are updated to latest patch versions
+verify-go-get-patch:
+	./hack/verify.sh make -s go-get-patch
+
 # Build the docker image. This should be used for release versions, and builds the image on top of distroless.
 docker-build: test
 	docker build . --target release -t ${IMG}
