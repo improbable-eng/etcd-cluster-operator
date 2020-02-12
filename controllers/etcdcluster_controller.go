@@ -357,14 +357,19 @@ func (r *EtcdClusterReconciler) reconcile(
 			}
 		}
 
-		// If we've reached this point we're sure that the EtcdPeer resources in the cluster match the contents of the
-		// membership API. The next step is checking to see if we want to mutate the membership API of etcd to scale up
-		// or down. However we don't want to do this unless the cluster has stabilised from a previous member addition.
+		// If we've reached this point we're sure that there are EtcdPeer resources for every member in the Etcd
+		// membership API.
+		// We do not perform any other operations until all the EtcdPeer pods have started and
+		// all the etcd processes have joined the cluster.
 		if isAllMembersStable(*members) {
-			// It's finally time to see if we need to mutate the membership API to bring it in-line with our expected
-			// replicas. There are three cases, we have enough members, too few, or too many. The order we check these
-			// cases in is irrelevant as only one can possibly be true.
-
+			// The remaining operations can now be performed. In order:
+			// * Remove surplus EtcdPeers
+			// * Upgrade Etcd
+			// * Scale-up
+			// * Scale-down
+			//
+			// Remove surplus EtcdPeers
+			// There may be surplus EtcdPeers for members that have already been removed during a scale-down.
 			// Remove EtcdPeer resources which do not have members.
 			memberNames := sets.NewString()
 			for _, member := range *members {
@@ -399,6 +404,9 @@ func (r *EtcdClusterReconciler) reconcile(
 				}
 			}
 
+			// Upgrade Etcd.
+			// Remove EtcdPeers which  have a different version than EtcdCluster; in reverse name order, one-at-a-time.
+			// The EtcdPeers will be recreated in the next reconcile, with the correct version.
 			if peer := nextOutdatedPeer(cluster, peers); peer != nil {
 				if peer.Spec.Version == cluster.Spec.Version {
 					log.Info("Waiting for EtcdPeer to report expected server version", "etcdpeer-name", peer.Name)
@@ -420,7 +428,11 @@ func (r *EtcdClusterReconciler) reconcile(
 				return result, peerRemovedEvent, nil
 			}
 
+			// It's finally time to see if we need to mutate the membership API to bring it in-line with our expected
+			// replicas. There are three cases, we have enough members, too few, or too many. The order we check these
+			// cases in is irrelevant as only one can possibly be true.
 			if hasTooFewMembers(cluster, *members) {
+				// Scale-up.
 				// There are too few members for the expected number of replicas. Add a new member.
 				memberAddedEvent, err := r.addNewMember(ctx, cluster, peers)
 				if err != nil {
@@ -434,6 +446,7 @@ func (r *EtcdClusterReconciler) reconcile(
 					"peer-url", memberAddedEvent.Member.PeerURLs[0])
 				return result, memberAddedEvent, nil
 			} else if hasTooManyMembers(cluster, *members) {
+				// Scale-down.
 				// There are too many members for the expected number of replicas.
 				// Remove the member with the highest ordinal.
 				memberRemovedEvent, err := r.removeMember(ctx, cluster, *members)
