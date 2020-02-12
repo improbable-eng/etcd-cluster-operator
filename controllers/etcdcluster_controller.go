@@ -473,6 +473,9 @@ func (r *EtcdClusterReconciler) reconcile(
 	return result, nil, nil
 }
 
+// nextOutdatedPeer returns an EtcdPeer which has a different version than the
+// EtcdCluster.
+// It searches EtcdPeers in reverse name order.
 func nextOutdatedPeer(cluster *etcdv1alpha1.EtcdCluster, peers *etcdv1alpha1.EtcdPeerList) *etcdv1alpha1.EtcdPeer {
 	peerNames := make([]string, len(peers.Items))
 	peersByName := map[string]etcdv1alpha1.EtcdPeer{}
