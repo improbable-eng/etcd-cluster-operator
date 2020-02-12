@@ -807,7 +807,7 @@ func versionTests(t *testing.T, kubectl *kubectlContext) {
 		kubectl,
 		time.Minute*2,
 		"cluster1",
-		"set", "--", "foo", expectedValue,
+		"put", "--", "foo", expectedValue,
 	)
 	require.NoError(t, err, out)
 
