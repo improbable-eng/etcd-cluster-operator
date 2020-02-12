@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -13,6 +14,7 @@ import (
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
 	"github.com/improbable-eng/etcd-cluster-operator/controllers"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/etcd"
+	"github.com/improbable-eng/etcd-cluster-operator/version"
 	"github.com/improbable-eng/etcd-cluster-operator/webhooks"
 	"github.com/robfig/cron/v3"
 	// +kubebuilder:scaffold:imports
@@ -33,11 +35,20 @@ func init() {
 func main() {
 	var metricsAddr, backupTempDir string
 	var enableLeaderElection bool
+	var printVersion bool
+
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&backupTempDir, "backup-tmp-dir", os.TempDir(), "The directory to temporarily place backups before they are uploaded to their destination.")
+	flag.BoolVar(&printVersion, "version", false,
+		"Print version to stdout and exit")
 	flag.Parse()
+
+	if printVersion {
+		fmt.Println(version.Version)
+		return
+	}
 
 	ctrl.SetLogger(zap.Logger(true))
 
