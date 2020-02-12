@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path"
@@ -20,7 +21,29 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-const testNameLabelKey = "e2e.etcd.improbable.io/test-name"
+const (
+	testNameLabelKey = "e2e.etcd.improbable.io/test-name"
+	// The etcd image containing etcdctl
+	etcdctlImage = "quay.io/coreos/etcd:v3.3.18"
+	// charSet defines the alphanumeric set for random string generation.
+	// These must encode to a single byte in UTF-8 for compatibility with the
+	// randomString() function.
+	charSet = "0123456789abcdefghijklmnopqrstuvwxyz"
+)
+
+var (
+	rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
+)
+
+// randomString returns a random alphanumeric string.
+// Copied from https://github.com/kubernetes-sigs/cluster-api/blob/v0.2.9/util/util.go#L68
+func randomString(n int) string {
+	result := make([]byte, n)
+	for i := range result {
+		result[i] = charSet[rnd.Intn(len(charSet))]
+	}
+	return string(result)
+}
 
 // kubectlContext wraps shell calls to `kubectl', appropriately handling their results. It is only intended for use
 // in tests.
@@ -324,4 +347,15 @@ func eventuallyInCluster(kubectl *kubectlContext, name string, deadline time.Dur
 		return "", err
 	}
 	return kubectl.Logs("--selector", fmt.Sprintf("job-name=%s", name))
+}
+
+// etcdctlInCluster executes etcdctl as a Job in the cluster and waits for its output
+func etcdctlInCluster(kubectl *kubectlContext, deadline time.Duration, clusterName string, command ...string) (string, error) {
+	return eventuallyInCluster(
+		kubectl,
+		"etcdctl-"+randomString(8),
+		deadline,
+		etcdctlImage,
+		append([]string{"/usr/bin/env", "ETCDCTL_API=3", "etcdctl", "--insecure-discovery", "--discovery-srv", clusterName}, command...)...,
+	)
 }
