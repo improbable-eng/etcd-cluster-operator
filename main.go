@@ -52,6 +52,8 @@ func main() {
 
 	ctrl.SetLogger(zap.Logger(true))
 
+	setupLog.Info("Starting manager", "version", version.Version)
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
