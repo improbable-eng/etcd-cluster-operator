@@ -261,6 +261,9 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, log logr.Logger) appsv1.Replic
 				}
 			}
 		}
+		if peer.Spec.PodTemplate.Affinity != nil {
+			replicaSet.Spec.Template.Spec.Affinity = peer.Spec.PodTemplate.Affinity
+		}
 	}
 
 	return replicaSet

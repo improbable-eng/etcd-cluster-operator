@@ -103,6 +103,14 @@ gomod:
 verify-gomod:
 	./hack/verify.sh make -s gomod
 
+# go-get-patch updates Golang dependencies to latest patch versions
+go-get-patch:
+	go get -u=patch -t
+
+# verify-go-get-patch checks that all Golang dependencies are updated to latest patch versions
+verify-go-get-patch:
+	./hack/verify.sh make -s go-get-patch
+
 # Build the docker image. This should be used for release versions, and builds the image on top of distroless.
 docker-build: test
 	docker build . --target release -t ${IMG}
@@ -121,7 +129,7 @@ controller-gen:
 ifeq (, $(shell which controller-gen))
 # Prevents go get from modifying our go.mod file.
 # See https://github.com/kubernetes-sigs/kubebuilder/issues/909
-	cd /tmp; GO111MODULE=on go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.4
+	cd /tmp; GO111MODULE=on go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.5
 CONTROLLER_GEN=$(GOBIN)/controller-gen
 else
 CONTROLLER_GEN=$(shell which controller-gen)
