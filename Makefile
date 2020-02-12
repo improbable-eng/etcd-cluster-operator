@@ -1,5 +1,6 @@
+VERSION ?= $(shell git describe --tags)
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+IMG ?= "controller:$(VERSION)"
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 
@@ -45,7 +46,7 @@ kind:
 
 # Build manager binary
 manager:
-	go build -o bin/manager main.go
+	go build -o bin/manager -ldflags="-X 'github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}'" main.go
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 # Use 'DISABLE_WEBHOOKS=1` to run the controller-manager without the
@@ -104,12 +105,12 @@ verify-go-get-patch:
 	./hack/verify.sh make -s go-get-patch
 
 # Build the docker image. This should be used for release versions, and builds the image on top of distroless.
-docker-build: test
-	docker build . --target release -t ${IMG}
+docker-build:
+	docker build . --target release --build-arg VERSION=$(VERSION) -t ${IMG}
 
 # Build the docker image with debug tools installed.
-docker-build-debug: test
-	docker build . --target debug -t ${IMG}
+docker-build-debug:
+	docker build . --target debug --build-arg VERSION=$(VERSION) -t ${IMG}
 
 # Push the docker image
 docker-push:
