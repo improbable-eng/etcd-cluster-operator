@@ -161,7 +161,7 @@ func buildOperator(t *testing.T, ctx context.Context) (imageTar string, err erro
 	operatorImage := "etcd-cluster-operator:test"
 
 	// Build the operator.
-	out, err := exec.CommandContext(ctx, "docker", "build", "--target=debug", "-t", operatorImage, *fRepoRoot).CombinedOutput()
+	out, err := exec.CommandContext(ctx, "make", "-C", *fRepoRoot, "docker-build-debug", "IMG="+operatorImage).CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("%w Output: %s", err, out)
 	}
