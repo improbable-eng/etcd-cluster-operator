@@ -31,7 +31,8 @@ type UploadRequest struct {
 	ClusterIdentifier string `protobuf:"bytes,1,opt,name=cluster_identifier,json=clusterIdentifier,proto3" json:"cluster_identifier,omitempty"`
 	// This is the time when the backup was actually made. This may well be different from the time it was uploaded.
 	BackupMadeAt *timestamp.Timestamp `protobuf:"bytes,2,opt,name=backup_made_at,json=backupMadeAt,proto3" json:"backup_made_at,omitempty"`
-	// This is the binary contents of the backup itself.
+	// This is the binary contents of the backup itself. This is the same as what would be placed on-disk if using
+	// `etcdctl snapshot save`.
 	Backup               []byte   `protobuf:"bytes,3,opt,name=backup,proto3" json:"backup,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -126,7 +127,8 @@ func (m *UploadReply) GetBackupUrl() string {
 }
 
 type DownloadRequest struct {
-	// This is the URL of the backup to download.
+	// This is the URL of the backup to download. If downloading a previously uploaded backup, use the URL returned from
+	// the Upload.
 	BackupUrl            string   `protobuf:"bytes,1,opt,name=backup_url,json=backupUrl,proto3" json:"backup_url,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -166,7 +168,8 @@ func (m *DownloadRequest) GetBackupUrl() string {
 }
 
 type DownloadReply struct {
-	// This is the binary contents of the backup itself.
+	// This is the binary contents of the backup itself. This is the same as what would be placed on-disk if using
+	// `etcdctl snapshot save`.
 	Backup               []byte   `protobuf:"bytes,1,opt,name=backup,proto3" json:"backup,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`

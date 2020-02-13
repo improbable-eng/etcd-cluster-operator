@@ -19,7 +19,8 @@ message UploadRequest {
     // This is the time when the backup was actually made. This may well be different from the time it was uploaded.
     google.protobuf.Timestamp backup_made_at = 2;
 
-    // This is the binary contents of the backup itself.
+    // This is the binary contents of the backup itself. This is the same as what would be placed on-disk if using
+    // `etcdctl snapshot save`.
     bytes backup = 3;
 }
 
@@ -30,11 +31,13 @@ message UploadReply {
 }
 
 message DownloadRequest {
-    // This is the URL of the backup to download.
+    // This is the URL of the backup to download. If downloading a previously uploaded backup, use the URL returned from
+    // the Upload.
     string backup_url = 1;
 }
 
 message DownloadReply {
-    // This is the binary contents of the backup itself.
+    // This is the binary contents of the backup itself. This is the same as what would be placed on-disk if using
+    // `etcdctl snapshot save`.
     bytes backup = 1;
 }
