@@ -1,6 +1,6 @@
 # This Dockerfile is used to build an image with the Protobuf compiler and the Go Protobuf plugin together. This image
-# is not published from this repository, but is used to generate our protobuf Go code. This is nessicary as we need to
-# use spesific pinned versions of both protoc and the Go plugin to generate the correct output.
+# is not published from this repository, but is used to generate our protobuf Go code. This is necessary as we need to
+# use specific pinned versions of both protoc and the Go plugin to generate the correct output.
 
 FROM golang:1.13.1 as go-plugin-builder
 
