@@ -16,13 +16,21 @@ COPY controllers/ controllers/
 COPY internal/ internal/
 COPY webhooks/ webhooks/
 COPY version/ version/
+COPY cmd/ cmd/
 
 ARG VERSION
 
-# Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -o manager \
-    -ldflags="-X 'github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}'" \
-    main.go
+ENV CGO_ENABLED=0
+ENV GOOS=linux
+ENV GOARCH=amd64
+ENV GO111MODULE=on
+ENV GOFLAGS=-ldflags=-X=github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}
+
+# manager
+RUN go build -o manager main.go
+
+# backup-agent
+RUN go build -o backup-agent cmd/backup-agent/main.go
 
 FROM gcr.io/distroless/static:nonroot as release
 WORKDIR /
@@ -38,3 +46,9 @@ COPY --from=builder /workspace/manager .
 RUN apk update && apk add ca-certificates bash curl drill jq
 
 ENTRYPOINT ["/manager"]
+
+FROM gcr.io/distroless/static:nonroot as backup-agent
+WORKDIR /
+COPY --from=builder /workspace/backup-agent .
+USER nonroot:nonroot
+ENTRYPOINT ["/backup-agent"]

@@ -120,6 +120,10 @@ docker-build:
 docker-build-debug:
 	docker build . --target debug --build-arg VERSION=$(VERSION) -t ${IMG}
 
+# Build the docker image. This should be used for release versions, and builds the image on top of distroless.
+docker-build-backup-agent:
+	docker build . --target backup-agent --build-arg VERSION=$(VERSION) -t "eco-backup-agent:$(VERSION)"
+
 # Push the docker image
 docker-push:
 	docker push ${IMG}
