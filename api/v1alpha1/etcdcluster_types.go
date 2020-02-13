@@ -7,6 +7,10 @@ import (
 
 // EtcdClusterSpec defines the desired state of EtcdCluster
 type EtcdClusterSpec struct {
+	// Version determines the version of Etcd that will be used for this cluster.
+	// +kubebuilder:validation:Required
+	Version string `json:"version"`
+
 	// Number of instances of etcd to assemble into this cluster
 	//+kubebuilder:validation:Required
 	//+kubebuilder:validation:Minimum=1
@@ -72,6 +76,10 @@ type EtcdClusterStatus struct {
 	// Members contains information about each member from the etcd cluster.
 	// +optional
 	Members []EtcdMember `json:"members"`
+
+	// ClusterVersion contains the cluster API version
+	// +optional
+	ClusterVersion string `json:"clusterVersion"`
 }
 
 // +kubebuilder:object:root=true

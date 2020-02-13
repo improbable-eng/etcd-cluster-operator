@@ -16,6 +16,7 @@ replace (
 require (
 	cloud.google.com/go v0.38.0
 	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/coreos/go-semver v0.3.0
 	github.com/dustinkirkland/golang-petname v0.0.0-20190613200456-11339a705ed2
 	github.com/go-logr/logr v0.1.0
 	github.com/go-logr/zapr v0.1.1 // indirect

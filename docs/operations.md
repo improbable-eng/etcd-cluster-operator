@@ -26,6 +26,22 @@ replicas will degrade write performance](https://etcd.io/docs/v3.4.0/faq/#what-i
 This can be `1` for a testing environment, but for durability it is suggested that this is at least `3`. In most
 situations `5` is the highest sensible setting, although neither etcd nor this operator impose a limit.
 
+### Version
+
+The `spec.version` field determines the version of Etcd that will be used for the cluster.
+This is a required field.
+
+The version value must be a valid [Semantic Version](https://semver.org/)
+and must correspond to a tag of an [Official Etcd Docker Image](https://quay.io/repository/coreos/etcd).
+
+The operator only supports Etcd major version 3.
+
+NOTE: Use of Docker images from other repositories is not yet supported.
+But you can load the official Docker images into a local Docker image cache if necessary.
+
+The `etcd-cluster-operator` will use the supplied `version` value to compute a Docker image name
+which is then used by the Pods for each Etcd peer.
+
 ### Storage
 
 The `spec.storage` field determines the storage options that will be used on the etcd pods. This configuration is highly
@@ -306,6 +322,63 @@ $ kubectl apply -f config/samples/etcd_v1alpha1_etcdbackupschedule.yaml
 
 The resource specifies a crontab-style schedule defining how often the backup should be taken.
 It includes a spec similar to the  `EtcdBackup` resource to define how the backup should be taken, and where it should be placed.
+
+## Upgrade a Cluster
+
+To upgrade a cluster you update the `EtcdCluster`, setting a higher `.spec.version` field value.
+For example, you might upgrade the sample cluster (used in the examples above) to a newer *patch* version (from v3.2.27 to v3.2.28), by editing the
+`EtcdCluster` manifest file, as follows:
+
+```yaml
+spec:
+  version: 3.2.28
+```
+
+And then applying it:
+```bash
+$ kubectl apply -f config/samples/etcd_v1alpha1_etcdcluster.yaml
+```
+
+You can also upgrade to a higher *minor* version
+but you should first consult the [Upgrading etcd clusters and applications](https://etcd.io/docs/v3.4.0/upgrades/upgrading-etcd/) documentation
+for documentation of the upgrade from your current minor version to the new version.
+
+NOTE: You should always perform minor upgrades incrementally.
+For example, to upgrade from v3.2 to v3.4, you must first upgrade to v3.3.
+
+### Upgrade Operations
+
+When it detects a version change the `etcd-cluster-operator` will first check that the cluster is healthy.
+
+The operator will only perform upgrade operators if the Etcd cluster API is responding
+and if it reports that all Etcd members are healthy.
+
+The operator will now delete the `EtcdPeer` resources one by one and then recreate them with the new Etcd version.
+It waits for each recreated `EtcdPeer` to report its new version before deleting the next.
+It deletes and recreates the peers in reverse name order, starting with the peer that has the highest ordinal name.
+In the 3-node cluster example cluster, this will be `my-cluster-2`.
+
+As each `EtcdPeer` is deleted the associated `Pod` is also  deleted.
+NOTE: The PVC, PV and data for that `EtcdPeer` will not be deleted.
+
+When the operator recreates the `EtcdPeer`,
+a new `Pod` will be started with a newer Docker image and the new Etcd process will update the existing data (if necessary)
+and rejoin the cluster.
+
+NOTE: If "my-cluster-2" was the etcd leader, a leader election will take place and the cluster will briefly
+[Leader Failure](https://github.com/etcd-io/etcd/blob/master/Documentation/op-guide/failures.md#leader-failure)
+during which the cluster will *not be able to process write requests*.
+
+Once the operator detects that all cluster members are joined and health it will delete the next EtcdPeer, and so on,
+until all the `EtcPeers` have been recreated with the newer version.
+
+You can view the version of each `EtcdPeer` by checking the value of `.status.serverVersion`.
+You can view the `EtcdCluster` version by checking the value of `.status.clusterVersion`.
+
+Once the upgrade is complete, all the `EtcdPeers` should report the new version.
+
+Additionally, the `etcd-cluster-operator` will generate an `Event` for each operation it successfully performs,
+which allows you to track the progress of the upgrade operations.
 
 ## Frequently Asked Questions
 

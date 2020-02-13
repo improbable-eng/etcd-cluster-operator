@@ -6,6 +6,7 @@ metadata:
   name: e2e-defaulting-peer
 spec:
   clusterName: e2e-defaulting-peer
+  version: 3.2.28
   storage:
     volumeClaimTemplate:
       resources:

@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"reflect"
 	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
+	etcdclient "go.etcd.io/etcd/client"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -15,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -25,17 +28,19 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/etcd"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/etcdenvvar"
 )
 
 // EtcdPeerReconciler reconciles a EtcdPeer object
 type EtcdPeerReconciler struct {
 	client.Client
-	Log logr.Logger
+	Log  logr.Logger
+	Etcd etcd.APIBuilder
 }
 
 const (
-	etcdImage           = "quay.io/coreos/etcd:v3.2.28"
+	etcdRepository      = "quay.io/coreos/etcd"
 	etcdScheme          = "http"
 	peerLabel           = "etcd.improbable.io/peer-name"
 	pvcCleanupFinalizer = "etcdpeer.etcd.improbable.io/pvc-cleanup"
@@ -133,7 +138,7 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, log logr.Logger) appsv1.Replic
 
 	etcdContainer := corev1.Container{
 		Name:  appName,
-		Image: etcdImage,
+		Image: fmt.Sprintf("%s:v%s", etcdRepository, peer.Spec.Version),
 		Env: []corev1.EnvVar{
 			{
 				Name:  etcdenvvar.InitialCluster,
@@ -376,14 +381,20 @@ func (o *PeerPVCDeleter) Execute(ctx context.Context) error {
 	return nil
 }
 
-func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+func (r *EtcdPeerReconciler) updateStatus(peer *etcdv1alpha1.EtcdPeer, serverVersion string) {
+	peer.Status.ServerVersion = serverVersion
+}
+
+func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	log := r.Log.WithValues("peer", req.NamespacedName)
 
 	var peer etcdv1alpha1.EtcdPeer
 	if err := r.Get(ctx, req.NamespacedName, &peer); err != nil {
-		log.Error(err, "unable to fetch EtcdPeer")
+		// NotFound errors occur when the EtcdPeer has been deleted but a PVC is
+		// left behind.
+		// Ignore these and do not requeue in this case.
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -399,6 +410,45 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
+	original := peer.DeepCopy()
+
+	// Always attempt to patch the status after each reconciliation.
+	defer func() {
+		if reflect.DeepEqual(original.Status, peer.Status) {
+			return
+		}
+		if err := r.Client.Status().Patch(ctx, &peer, client.MergeFrom(original)); err != nil {
+			reterr = kerrors.NewAggregate([]error{reterr, fmt.Errorf("error while patching EtcdPeer.Status: %s ", err)})
+		}
+	}()
+
+	// Attempt to dial the etcd cluster, recording the cluster response if we can
+	var (
+		serverVersion string
+	)
+	etcdConfig := etcdclient.Config{
+		Endpoints:               []string{advertiseURL(peer, etcdClientPort).String()},
+		Transport:               etcdclient.DefaultTransport,
+		HeaderTimeoutPerRequest: time.Second * 1,
+	}
+
+	if c, err := r.Etcd.New(etcdConfig); err != nil {
+		log.V(2).Info("Unable to connect to etcd", "error", err)
+	} else {
+		if version, err := c.GetVersion(ctx); err != nil {
+			log.V(2).Info("Unable to get Etcd version", "error", err)
+		} else {
+			serverVersion = version.Server
+		}
+	}
+
+	r.updateStatus(&peer, serverVersion)
+
+	// Always requeue after ten seconds, as we don't watch on the membership list. So we don't auto-detect changes made
+	// to the etcd membership API.
+	// TODO(#76) Implement custom watch on etcd membership API, and remove this `requeueAfter`
+	result := ctrl.Result{RequeueAfter: time.Second * 10}
+
 	// Check if the peer has been marked for deletion
 	if !peer.ObjectMeta.DeletionTimestamp.IsZero() {
 		if hasPvcDeletionFinalizer(peer) {
@@ -408,14 +458,14 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				peer:   &peer,
 			}
 			err := action.Execute(ctx)
-			return ctrl.Result{}, err
+			return result, err
 		}
-		return ctrl.Result{}, nil
+		return result, nil
 	}
 
 	created, err := r.maybeCreatePvc(ctx, &peer)
 	if err != nil || created {
-		return ctrl.Result{}, err
+		return result, err
 	}
 
 	var existingReplicaSet appsv1.ReplicaSet
@@ -434,22 +484,20 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			"replica-set", replicaSet.Name)
 		if err := r.Create(ctx, &replicaSet); err != nil {
 			log.Error(err, "unable to create ReplicaSet for EtcdPeer", "replica-set", replicaSet)
-			return ctrl.Result{}, err
+			return result, err
 		}
-		return ctrl.Result{}, nil
+		return result, nil
 	}
 
 	// Check for some other error from the previous `r.Get`
 	if err != nil {
 		log.Error(err, "unable to query for replica sets")
-		return ctrl.Result{}, err
+		return result, err
 	}
 
 	log.V(2).Info("Replica set already exists", "replica-set", existingReplicaSet.Name)
 
-	// TODO Additional logic here
-
-	return ctrl.Result{}, nil
+	return result, nil
 }
 
 type pvcMapper struct{}

@@ -15,9 +15,14 @@ COPY api/ api/
 COPY controllers/ controllers/
 COPY internal/ internal/
 COPY webhooks/ webhooks/
+COPY version/ version/
+
+ARG VERSION
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -o manager main.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -o manager \
+    -ldflags="-X 'github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}'" \
+    main.go
 
 FROM gcr.io/distroless/static:nonroot as release
 WORKDIR /
