@@ -15,7 +15,7 @@ COPY api/ api/
 COPY internal/ internal/
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o proxy cmd/proxy/main.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -o proxy cmd/proxy/main.go
 
 FROM gcr.io/distroless/static:nonroot as release
 WORKDIR /
