@@ -28,7 +28,7 @@ require (
 	github.com/json-iterator/go v1.1.9 // indirect
 	github.com/prometheus/procfs v0.0.8 // indirect
 	github.com/robfig/cron/v3 v3.0.1
-	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.4.0
 	// Pin spesific etcd version via tag. See https://github.com/etcd-io/etcd/pull/11477
 	go.etcd.io/etcd v0.0.0-20191023171146-3cf2f69b5738
