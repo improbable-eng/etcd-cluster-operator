@@ -112,8 +112,8 @@ Please do not expect the operator to be stable, and expect breaking changes to t
 
 - [x] In-memory ETCD clusters
 - [x] Persisted data ETCD clusters
-- [ ] Scaling up/down of existing clusters
-- [ ] Upgrading existing clusters
+- [x] Scaling up/down of existing clusters
+- [x] Upgrading existing clusters
 - [ ] Backup/restore of cluster data
 - [ ] TLS between cluster peers
 
