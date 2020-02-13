@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+package proxy;
+
+service Proxy {
+    // Upload will store a backup file in cloud storage
+    rpc Upload (UploadRequest) returns (UploadReply) {}
+    // Download will retrieve a backup file from cloud storage
+    rpc Download (DownloadRequest) returns (DownloadReply) {}
+}
+
+message UploadRequest {
+    // The cluster identifier is a string that identifies this etcd cluster. It should be unique and stable between
+    // backups and restores.
+    string cluster_identifier = 1;
+
+    // This is the time when the backup was actually made. This may well be different from the time it was uploaded.
+    google.protobuf.Timestamp backup_made_at = 2;
+
+    // This is the binary contents of the backup itself. This is the same as what would be placed on-disk if using
+    // `etcdctl snapshot save`.
+    bytes backup = 3;
+}
+
+message UploadReply {
+    // This is the full URL of the backup in remote storage. The structure of this URL is entirely determined by the
+    // proxy and may change from backup to backup, users should not attempt to parse data out of the URL.
+    string backup_url = 1;
+}
+
+message DownloadRequest {
+    // This is the URL of the backup to download. If downloading a previously uploaded backup, use the URL returned from
+    // the Upload.
+    string backup_url = 1;
+}
+
+message DownloadReply {
+    // This is the binary contents of the backup itself. This is the same as what would be placed on-disk if using
+    // `etcdctl snapshot save`.
+    bytes backup = 1;
+}

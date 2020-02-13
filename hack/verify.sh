@@ -10,7 +10,7 @@ cd "${projectdir}"
 
 # Use short form arguments here to support BSD/macOS. `-d` instructs
 # it to make a directory, `-t` provides a prefix to use for the directory name.
-tmp="$(mktemp -d -t verify.sh.XXXXXXXX)"
+tmp="$(mktemp -d /tmp/verify.sh.XXXXXXXX)"
 
 cleanup() {
     rm -rf "${tmp}"
