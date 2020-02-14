@@ -11,7 +11,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
-	"github.com/improbable-eng/etcd-cluster-operator/controllers"
 	"github.com/improbable-eng/etcd-cluster-operator/version"
 )
 
@@ -22,14 +21,12 @@ var (
 
 func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
-
 	_ = etcdv1alpha1.AddToScheme(scheme)
-	// +kubebuilder:scaffold:scheme
 }
 
 func main() {
 	printVersion := flag.Bool("version", false, "Print the version to stdout and exit")
-	backupTmpDir := flag.String("backup-tmp-dir", os.TempDir(), "The directory to temporarily place backups before they are uploaded to their destination.")
+
 	flag.Parse()
 
 	if *printVersion {
@@ -44,15 +41,6 @@ func main() {
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
-		os.Exit(1)
-	}
-
-	if err = (&controllers.EtcdBackupReconciler{
-		Client:  mgr.GetClient(),
-		Log:     ctrl.Log.WithName("controllers").WithName("EtcdBackup"),
-		TempDir: *backupTmpDir,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "EtcdBackup")
 		os.Exit(1)
 	}
 
