@@ -28,16 +28,11 @@ func init() {
 }
 
 func main() {
-	var (
-		printVersion  bool
-		backupTempDir string
-	)
-
-	flag.BoolVar(&printVersion, "version", false, "Print the version to stdout and exit")
-	flag.StringVar(&backupTempDir, "backup-tmp-dir", os.TempDir(), "The directory to temporarily place backups before they are uploaded to their destination.")
+	printVersion := flag.Bool("version", false, "Print the version to stdout and exit")
+	backupTmpDir := flag.String("backup-tmp-dir", os.TempDir(), "The directory to temporarily place backups before they are uploaded to their destination.")
 	flag.Parse()
 
-	if printVersion {
+	if *printVersion {
 		fmt.Println(version.Version)
 		os.Exit(0)
 	}
@@ -55,7 +50,7 @@ func main() {
 	if err = (&controllers.EtcdBackupReconciler{
 		Client:  mgr.GetClient(),
 		Log:     ctrl.Log.WithName("controllers").WithName("EtcdBackup"),
-		TempDir: backupTempDir,
+		TempDir: *backupTmpDir,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "EtcdBackup")
 		os.Exit(1)

@@ -1,4 +1,3 @@
-# Build the manager binary
 FROM golang:1.13.1 as builder
 
 WORKDIR /workspace
@@ -10,13 +9,11 @@ COPY go.sum go.sum
 RUN go mod download
 
 # Copy the go source
-COPY main.go main.go
-COPY api/ api/
-COPY controllers/ controllers/
-COPY internal/ internal/
-COPY webhooks/ webhooks/
-COPY version/ version/
 COPY cmd/ cmd/
+COPY api/ api/
+COPY internal/ internal/
+COPY controllers/ controllers/
+COPY version/ version/
 
 ARG VERSION
 
@@ -26,20 +23,12 @@ ENV GOARCH=amd64
 ENV GO111MODULE=on
 ENV GOFLAGS=-ldflags=-X=github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}
 
-# manager
-RUN go build -o manager main.go
+# Build
+RUN go build -o backup-agent cmd/backup-agent/main.go
 
 FROM gcr.io/distroless/static:nonroot as release
 WORKDIR /
-COPY --from=builder /workspace/manager .
+COPY --from=builder /workspace/backup-agent .
 USER nonroot:nonroot
 
-ENTRYPOINT ["/manager"]
-
-FROM alpine:3.10.3 as debug
-WORKDIR /
-COPY --from=builder /workspace/manager .
-
-RUN apk update && apk add ca-certificates bash curl drill jq
-
-ENTRYPOINT ["/manager"]
+ENTRYPOINT ["/backup-agent"]
