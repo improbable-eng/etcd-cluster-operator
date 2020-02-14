@@ -68,7 +68,7 @@ protoc-docker:
 	docker build --quiet - -t protoc < hack/grpc-protoc.Dockerfile
 
 protobuf: protoc-docker
-	docker run -v `pwd`:/eco -w /eco protoc:latest -I=api/proxy --go_out=plugins=grpc:api/proxy api/proxy/proxy.proto
+	docker run -v `pwd`:/eco -w /eco protoc:latest -I=api/proxy --go_out=plugins=grpc:api/proxy api/proxy/v1/proxy.proto
 
 verify-protobuf-lint:
 	docker run --volume ${CURDIR}:/workspace:ro --workdir /workspace bufbuild/buf check lint
