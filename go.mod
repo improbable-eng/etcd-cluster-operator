@@ -38,6 +38,7 @@ require (
 	google.golang.org/genproto v0.0.0-20200128133413-58ce757ed39b // indirect
 	google.golang.org/grpc v1.23.1
 	k8s.io/api v0.17.3
+	k8s.io/apiextensions-apiserver v0.17.3 // indirect
 	k8s.io/apimachinery v0.17.3
 	k8s.io/client-go v11.0.0+incompatible
 	k8s.io/utils v0.0.0-20191114184206-e782cd3c129f
