@@ -12,10 +12,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
-	"github.com/improbable-eng/etcd-cluster-operator/controllers"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/controllers"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/etcd"
-	"github.com/improbable-eng/etcd-cluster-operator/version"
-	"github.com/improbable-eng/etcd-cluster-operator/webhooks"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/version"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/webhooks"
 	"github.com/robfig/cron/v3"
 	// +kubebuilder:scaffold:imports
 )

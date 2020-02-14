@@ -46,7 +46,7 @@ kind:
 
 # Build manager binary
 manager:
-	go build -o bin/manager -ldflags="-X 'github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}'" main.go
+	go build -o bin/manager -ldflags="-X 'github.com/improbable-eng/etcd-cluster-operator/internal/version.Version=${VERSION}'" main.go
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 # Use 'DISABLE_WEBHOOKS=1` to run the controller-manager without the

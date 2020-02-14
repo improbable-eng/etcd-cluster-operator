@@ -37,7 +37,7 @@ func setupSuite(t *testing.T) (suite *controllerSuite, teardownFunc func()) {
 	ctx, ctxCancel := context.WithTimeout(context.Background(), time.Minute*5)
 
 	testEnv := &envtest.Environment{
-		CRDDirectoryPaths: []string{filepath.Join("..", "config", "crd", "bases")},
+		CRDDirectoryPaths: []string{filepath.Join("..", "..", "config", "crd", "bases")},
 		KubeAPIServerFlags: append(
 			envtest.DefaultKubeAPIServerFlags,
 			"--advertise-address=127.0.0.1",
