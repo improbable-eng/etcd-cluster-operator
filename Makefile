@@ -65,12 +65,15 @@ deploy:
 	kustomize build config/default | kubectl apply -f -
 
 protoc-docker:
-	docker build - -t protoc < hack/grpc-protoc.Dockerfile
+	docker build --quiet - -t protoc < hack/grpc-protoc.Dockerfile
 
 protobuf: protoc-docker
 	docker run -v `pwd`:/eco -w /eco protoc:latest -I=api/proxy --go_out=plugins=grpc:api/proxy api/proxy/proxy.proto
 
-verify-protobuf:
+verify-protobuf-lint:
+	docker run --volume ${CURDIR}:/workspace:ro --workdir /workspace bufbuild/buf check lint
+
+verify-protobuf: verify-protobuf-lint
 	./hack/verify.sh make -s protobuf
 
 # Generate manifests e.g. CRD, RBAC etc.
