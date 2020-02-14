@@ -6,9 +6,9 @@ go 1.13
 replace (
 	// This must match the version below
 	go.etcd.io/etcd => go.etcd.io/etcd v0.0.0-20191023171146-3cf2f69b5738
-	k8s.io/api => k8s.io/api v0.17.2
-	k8s.io/apimachinery => k8s.io/apimachinery v0.17.2
-	k8s.io/client-go => k8s.io/client-go v0.17.2
+	k8s.io/api => k8s.io/api v0.17.3
+	k8s.io/apimachinery => k8s.io/apimachinery v0.17.3
+	k8s.io/client-go => k8s.io/client-go v0.17.3
 )
 
 require (
@@ -37,9 +37,8 @@ require (
 	google.golang.org/api v0.13.0 // indirect
 	google.golang.org/genproto v0.0.0-20200128133413-58ce757ed39b // indirect
 	google.golang.org/grpc v1.23.1
-	gopkg.in/yaml.v2 v2.2.8 // indirect
-	k8s.io/api v0.17.2
-	k8s.io/apimachinery v0.17.2
+	k8s.io/api v0.17.3
+	k8s.io/apimachinery v0.17.3
 	k8s.io/client-go v11.0.0+incompatible
 	k8s.io/utils v0.0.0-20191114184206-e782cd3c129f
 	sigs.k8s.io/controller-runtime v0.5.0
