@@ -8,11 +8,11 @@ import (
 	flag "github.com/spf13/pflag"
 	"google.golang.org/grpc"
 
-	pb "github.com/improbable-eng/etcd-cluster-operator/api/proxy"
+	pb "github.com/improbable-eng/etcd-cluster-operator/api/proxy/v1"
 )
 
 type proxyServer struct {
-	pb.UnimplementedProxyServer
+	pb.UnimplementedProxyServiceServer
 }
 
 func main() {
@@ -30,7 +30,7 @@ func main() {
 
 	log.Printf("Starting etcd-cluster-controller upload/download Proxy service")
 	srv := grpc.NewServer()
-	pb.RegisterProxyServer(srv, &proxyServer{})
+	pb.RegisterProxyServiceServer(srv, &proxyServer{})
 	if err := srv.Serve(listener); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
