@@ -2,13 +2,13 @@ syntax = "proto3";
 
 import "google/protobuf/timestamp.proto";
 
-package proxy;
+package proxy.v1;
 
-service Proxy {
+service ProxyService {
     // Upload will store a backup file in cloud storage
-    rpc Upload (UploadRequest) returns (UploadReply) {}
+    rpc Upload (UploadRequest) returns (UploadResponse) {}
     // Download will retrieve a backup file from cloud storage
-    rpc Download (DownloadRequest) returns (DownloadReply) {}
+    rpc Download (DownloadRequest) returns (DownloadResponse) {}
 }
 
 message UploadRequest {
@@ -24,7 +24,7 @@ message UploadRequest {
     bytes backup = 3;
 }
 
-message UploadReply {
+message UploadResponse {
     // This is the full URL of the backup in remote storage. The structure of this URL is entirely determined by the
     // proxy and may change from backup to backup, users should not attempt to parse data out of the URL.
     string backup_url = 1;
@@ -36,7 +36,7 @@ message DownloadRequest {
     string backup_url = 1;
 }
 
-message DownloadReply {
+message DownloadResponse {
     // This is the binary contents of the backup itself. This is the same as what would be placed on-disk if using
     // `etcdctl snapshot save`.
     bytes backup = 1;
