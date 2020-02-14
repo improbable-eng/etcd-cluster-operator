@@ -35,11 +35,14 @@ func init() {
 func main() {
 	var metricsAddr, backupTempDir string
 	var enableLeaderElection bool
+	var leaderElectionID string
 	var printVersion bool
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	flag.StringVar(&leaderElectionID, "leader-election-id", "etcd-cluster-operator-controller",
+		"The name of the configmap that leader election will use for holding the leader lock.")
 	flag.StringVar(&backupTempDir, "backup-tmp-dir", os.TempDir(), "The directory to temporarily place backups before they are uploaded to their destination.")
 	flag.BoolVar(&printVersion, "version", false,
 		"Print version to stdout and exit")
@@ -58,6 +61,7 @@ func main() {
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
 		LeaderElection:     enableLeaderElection,
+		LeaderElectionID:   leaderElectionID,
 		Port:               9443,
 	})
 	if err != nil {
