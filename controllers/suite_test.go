@@ -38,10 +38,6 @@ func setupSuite(t *testing.T) (suite *controllerSuite, teardownFunc func()) {
 
 	testEnv := &envtest.Environment{
 		CRDDirectoryPaths: []string{filepath.Join("..", "config", "crd", "bases")},
-		KubeAPIServerFlags: append(
-			envtest.DefaultKubeAPIServerFlags,
-			"--advertise-address=127.0.0.1",
-		),
 	}
 
 	cfg, err := testEnv.Start()

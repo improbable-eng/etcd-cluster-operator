@@ -2,15 +2,13 @@ module github.com/improbable-eng/etcd-cluster-operator
 
 go 1.13
 
-// Pin k8s.io/* dependencies to kubernetes-1.16.0 to match controller-runtime v0.4.0
+// Pin k8s.io/* dependencies to kubernetes-1.17.0 to match controller-runtime v0.5.0
 replace (
 	// This must match the version below
 	go.etcd.io/etcd => go.etcd.io/etcd v0.0.0-20191023171146-3cf2f69b5738
-	k8s.io/api => k8s.io/api v0.0.0-20190918155943-95b840bb6a1f
-	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.0.0-20190918161926-8f644eb6e783
-	k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20190913080033-27d36303b655
-	k8s.io/client-go => k8s.io/client-go v0.0.0-20190918160344-1fbdaa4c8d90
-	k8s.io/utils => k8s.io/utils v0.0.0-20190801114015-581e00157fb1
+	k8s.io/api => k8s.io/api v0.17.3
+	k8s.io/apimachinery => k8s.io/apimachinery v0.17.3
+	k8s.io/client-go => k8s.io/client-go v0.17.3
 )
 
 require (
@@ -30,7 +28,7 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.4.0
-	// Pin spesific etcd version via tag. See https://github.com/etcd-io/etcd/pull/11477
+	// Pin specific etcd version via tag. See https://github.com/etcd-io/etcd/pull/11477
 	go.etcd.io/etcd v0.0.0-20191023171146-3cf2f69b5738
 	go.opencensus.io v0.22.3 // indirect
 	go.uber.org/zap v1.10.0
@@ -39,11 +37,11 @@ require (
 	google.golang.org/api v0.13.0 // indirect
 	google.golang.org/genproto v0.0.0-20200128133413-58ce757ed39b // indirect
 	google.golang.org/grpc v1.23.1
-	gopkg.in/yaml.v2 v2.2.8 // indirect
-	k8s.io/api v0.0.0-20190918195907-bd6ac527cfd2
-	k8s.io/apimachinery v0.0.0-20190913080033-27d36303b655
+	k8s.io/api v0.17.3
+	k8s.io/apiextensions-apiserver v0.17.3 // indirect
+	k8s.io/apimachinery v0.17.3
 	k8s.io/client-go v11.0.0+incompatible
-	k8s.io/utils v0.0.0-20190801114015-581e00157fb1
-	sigs.k8s.io/controller-runtime v0.4.0
+	k8s.io/utils v0.0.0-20191114184206-e782cd3c129f
+	sigs.k8s.io/controller-runtime v0.5.0
 	sigs.k8s.io/kind v0.5.1
 )
