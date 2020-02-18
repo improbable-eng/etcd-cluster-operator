@@ -1,0 +1,9 @@
+build:
+  roots:
+    - api
+lint:
+  use:
+    - DEFAULT
+breaking:
+  use:
+    - FILE

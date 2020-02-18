@@ -10,7 +10,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	pb "github.com/improbable-eng/etcd-cluster-operator/api/proxy"
+	pb "github.com/improbable-eng/etcd-cluster-operator/api/proxy/v1"
 	"github.com/improbable-eng/etcd-cluster-operator/version"
 )
 
@@ -19,7 +19,7 @@ var (
 )
 
 type proxyServer struct {
-	pb.UnimplementedProxyServer
+	pb.UnimplementedProxyServiceServer
 }
 
 func main() {
@@ -45,7 +45,7 @@ func main() {
 	}
 
 	srv := grpc.NewServer()
-	pb.RegisterProxyServer(srv, &proxyServer{})
+	pb.RegisterProxyServiceServer(srv, &proxyServer{})
 	if err := srv.Serve(listener); err != nil {
 		setupLog.Error(err, "Failed to serve")
 		os.Exit(1)
