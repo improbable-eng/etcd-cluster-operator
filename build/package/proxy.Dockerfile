@@ -13,9 +13,18 @@ RUN go mod download
 COPY cmd/ cmd/
 COPY api/ api/
 COPY internal/ internal/
+COPY version/ version/
+
+ARG VERSION
+
+ENV CGO_ENABLED=0
+ENV GOOS=linux
+ENV GOARCH=amd64
+ENV GO111MODULE=on
+ENV GOFLAGS=-ldflags=-X=github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -o proxy cmd/proxy/main.go
+RUN go build -o proxy cmd/proxy/main.go
 
 FROM gcr.io/distroless/static:nonroot as release
 WORKDIR /

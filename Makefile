@@ -120,6 +120,12 @@ docker-build:
 docker-build-debug:
 	docker build . --target debug --build-arg VERSION=$(VERSION) -t ${IMG}
 
+docker-build-proxy:
+	docker build --build-arg VERSION=$(VERSION) --tag "eco-proxy:$(VERSION)" --file build/package/proxy.Dockerfile .
+
+docker-build-backup-agent:
+	docker build --build-arg VERSION=$(VERSION) --tag "eco-backup-agent:$(VERSION)" --file build/package/backup-agent.Dockerfile .
+
 # Push the docker image
 docker-push:
 	docker push ${IMG}
