@@ -68,6 +68,8 @@ controller, or directly communicate with the controller in any way.
 
 ### End to End tests
 
+#### Kind
+
 The end to end tests run, by default, using Kubernetes in Docker (KIND) and are capable of actually executing `etcd`
 pods. These tests are under `internal/test/e2e`. These tests should be limited in scope and should only focus on
 externally visible changes to etcd itself. This is to avoid the tests causing the implementation becoming too rigid.
@@ -77,11 +79,52 @@ using the expected DNS name. Elements of the Kuberentes API that a user might in
 on an `EtcdCluster` resource, may also be interacted with.
 
 Here are some examples of commands which run the end-to-end tests:
- * `make kind` will create a new Kind cluster, run all the the end-to-end tests and delete the cluster when the tests are complete.
- * `make kind CLEANUP=false` will create a Kind cluster, run the tests and leave the cluster running after the tests complete.
- * `make kind 'ARGS=-run TestE2E/Parallel/Webhooks'` will run a subset of the end-to-end tests.
+ * `make e2e-kind` will create a new Kind cluster, run all the the end-to-end tests and delete the cluster when the tests are complete.
+ * `make e2e-kind CLEANUP=false` will create a Kind cluster, run the tests and leave the cluster running after the tests complete.
+ * `make e2e-kind 'ARGS=-run TestE2E/Parallel/Webhooks'` will run a subset of the end-to-end tests.
 
 NB If a Kind cluster with the name "etcd-e2e" already exists, that cluster will be re-used.
+
+#### Minikube
+
+You can also run the end-to-end tests in an existing cluster.
+For example here's how you might run the tests in a [minikube](https://minikube.sigs.k8s.io/) cluster:
+
+```
+minikube start --cpus=4 --memory=4000mb
+eval $(minikube docker-env)
+make docker-build deploy e2e
+```
+
+This will create a minikube cluster with sufficient memory to build the Docker images,
+and with sufficient CPU to run multiple Etcd clusters in parallel.
+It will then build the operator Docker images, inside the `minikube` virtual machine
+and deploy the operator, using those images.
+Finally it runs the e2e tests.
+
+The `make` command can be re-run after any code or configuration changes,
+to build, push and deploy new Docker images and re-run the end-to-end tests.
+
+#### GKE
+
+To run the end-to-end tests on a GKE cluster, you would authenticate `docker` to your GCP private registry
+and push the images to that registry before deploying the operator and running the tests.
+
+```
+gcloud container clusters create e2e --zone europe-west2-b --preemptible --num-nodes 4
+gcloud container clusters get-credentials e2e --zone europe-west2-b
+gcloud auth configure-docker
+make DOCKER_REPO=gcr.io/my-project docker-build docker-push deploy e2e
+```
+
+This will create a 4-node GKE cluster and set KUBE_CONFIG to use that cluster.
+It will also allow docker to authenticate to your GCP private Docker image repository.
+It will build the Docker images and push them to the GCP private Docker image repository.
+It will deploy the operator.
+Finally it runs the end-to-end tests.
+
+The `make` command can be re-run after any code or configuration changes
+to build, push and deploy new Docker images and re-run the end-to-end tests.
 
 ### Static checks
 
@@ -95,7 +138,7 @@ string will be prefixed with `v` and use semver.
 ### Pre-release tasks
 
 * Sanity check documentation under `docs` and `README.md`.
-* Compile and prepare release notes under `docs/release-notes/$VERSION.md`. For example versions v0.1.X would share a 
+* Compile and prepare release notes under `docs/release-notes/$VERSION.md`. For example versions v0.1.X would share a
 file `docs/release-notes/v0.1.md`.
 
 ### Process

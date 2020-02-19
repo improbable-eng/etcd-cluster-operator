@@ -51,11 +51,17 @@ jobs:
             # Mark it executable & move to /bin
             sudo chmod +x ./kubectl
             sudo mv ./kubectl /usr/local/bin
+      - run:
+          name: Install kustomize
+          command: |
+            curl -L -o /tmp/kustomize.tar.gz https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v3.5.4/kustomize_v3.5.4_linux_amd64.tar.gz
+            echo "5cdeb2af81090ad428e3a94b39779b3e477e2bc946be1fe28714d1ca28502f6a  /tmp/kustomize.tar.gz" | sha256sum -c
+            sudo tar -C /usr/local/bin -x -f /tmp/kustomize.tar.gz
       - checkout
       - run:
          name: End to end tests
          # Limit parallelism of E2E tests to avoid overloading the CircleCI
-         command: make kind TEST_PARALLEL_E2E=1
+         command: make e2e-kind TEST_PARALLEL_E2E=1
       - store_artifacts:
           path: /tmp/etcd-e2e
 

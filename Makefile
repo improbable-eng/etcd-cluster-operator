@@ -1,9 +1,25 @@
+.DEFAULT_GOAL := help
+# The version which will be reported by the --version argument of each binary
+# and which will be used as the Docker image tag
 VERSION ?= $(shell git describe --tags)
-# Image URL to use all building/pushing image targets
-IMG ?= "controller:$(VERSION)"
+# Docker image configuration
+# Docker images are published to https://quay.io/repository/improbable-eng/etcd-cluster-operator
+DOCKER_TAG ?= ${VERSION}
+DOCKER_REPO ?= quay.io/improbable-eng
+DOCKER_IMAGES ?= controller controller-debug proxy backup-agent
+DOCKER_IMAGE_NAME_PREFIX ?= etcd-cluster-operator-
+# The Docker image for the controller-manager which will be deployed to the cluster in tests
+DOCKER_IMAGE_CONTROLLER := ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}controller$(if $DEBUG,-debug,):${DOCKER_TAG}
+
+# Set DEBUG=TRUE to use debug Docker images and to show debugging output
+DEBUG ?=
+
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 
+# Limit the number of parallel end-to-end tests
+# A higher number will result in more etcd nodes being deployed in the test
+# cluster at once and will require more CPU and memory.
 TEST_PARALLEL_E2E ?= 2
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
@@ -25,125 +41,134 @@ else
 CLEANUP="true"
 endif
 
+# from https://suva.sh/posts/well-documented-makefiles/
+.PHONY: help
+help: ## Display this help
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n\nTargets:\n"} /^[0-9a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
+
 .PHONY: all
 all: verify test manager
 
-# Get binary dependencies
-bin/kubebuilder:
+bin/kubebuilder: ## Get binary dependencies
 	hack/download-kubebuilder-local.sh
 
-# Run all static checks
 .PHONY: verify
+verify: ## Run all static checks
 verify: verify-gomod verify-manifests verify-generate verify-protobuf verify-fmt vet
 
-# Run unit tests
 .PHONY: test
+test: ## Run unit tests
 test: bin/kubebuilder
 	KUBEBUILDER_ASSETS="$(shell pwd)/bin/kubebuilder/bin" go test ./... -coverprofile cover.out $(ARGS)
 
-# Run end to end tests in a local Kind cluster. We do not clean up after running the tests to
+.PHONY: e2e-kind
+e2e-kind: ## Run end to end tests - creates a new Kind cluster called etcd-e2e
+	go test -v -parallel ${TEST_PARALLEL_E2E} -timeout 20m ./internal/test/e2e \
+			--kind \
+			--repo-root ${CURDIR} \
+			--cleanup=${CLEANUP} \
+			--controller-image=${DOCKER_IMAGE_CONTROLLER} \
+			$(ARGS)
+# We do not clean up after running the tests to
 #  a) speed up the test run time slightly
 #  b) allow debug sessions to be attached to figure out what caused failures
-.PHONY: kind
-kind:
-	go test -parallel ${TEST_PARALLEL_E2E} -timeout 20m ./internal/test/e2e --kind --repo-root ${CURDIR} -v --cleanup=${CLEANUP} $(ARGS)
 
-# Build manager binary
+.PHONY: e2e
+e2e: ## Run the end-to-end tests - uses the current KUBE_CONFIG and context
+e2e:
+	go test -parallel ${TEST_PARALLEL_E2E} -timeout 30m ./internal/test/e2e --current-context --repo-root ${CURDIR} -v $(ARGS)
+
 .PHONY: manager
-manager:
+manager: ## Build manager binary
 	go build -o bin/manager -ldflags="-X 'github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}'" main.go
 
-# Run against the configured Kubernetes cluster in ~/.kube/config
+.PHONY: run
+run: ## Run against the configured Kubernetes cluster in ~/.kube/config
+	DISABLE_WEBHOOKS=1 go run ./main.go
 # Use 'DISABLE_WEBHOOKS=1` to run the controller-manager without the
 # webhook server, and to skip the loading of webhook TLS keys, since these are
 # difficult to set up locally.
-.PHONY: run
-run:
-	DISABLE_WEBHOOKS=1 go run ./main.go
 
-# Install CRDs into a cluster
 .PHONY: install
-install:
+install: ## Install CRDs into a cluster
 	kustomize build config/crd | kubectl apply -f -
 
-# Deploy controller in the configured Kubernetes cluster in ~/.kube/config
-.PHONY: deploy
-deploy:
-	cd config/manager && kustomize edit set image controller=${IMG}
+.PHONY: deploy-cert-manager
+deploy-cert-manager: ## Deploy cert-manager in the configured Kubernetes cluster in ~/.kube/config
+	kubectl apply --validate=false --filename=https://github.com/jetstack/cert-manager/releases/download/v0.11.0/cert-manager.yaml
+	kubectl wait --for=condition=Available --timeout=300s apiservice v1beta1.webhook.cert-manager.io
+
+.PHONY: deploy-controller
+deploy-controller: ## Deploy controller in the configured Kubernetes cluster in ~/.kube/config
+	cd config/manager && kustomize edit set image controller=${DOCKER_IMAGE_CONTROLLER}
 	kustomize build config/default | kubectl apply -f -
+	kubectl --namespace eco-system wait --for=condition=Available --timeout=300s deploy eco-controller-manager
+
+.PHONY: deploy
+deploy: ## Deploy the operator, including dependencies
+deploy: install deploy-cert-manager deploy-controller
 
 .PHONY: protoc-docker
-protoc-docker:
+protoc-docker: ## Build a Docker image which can be used for generating protobuf code (below)
 	docker build --quiet - -t protoc < hack/grpc-protoc.Dockerfile
 
 .PHONY: protobuf
+protobuf: ## Generate a go implementation of the protobuf proxy API
 protobuf: protoc-docker
 	docker run -v `pwd`:/eco -w /eco protoc:latest -I=api/proxy --go_out=plugins=grpc:api/proxy api/proxy/v1/proxy.proto
 
 .PHONY: verify-protobuf-lint
-verify-protobuf-lint:
+verify-protobuf-lint: ## Run protobuf static checks
 	docker run --volume ${CURDIR}:/workspace:ro --workdir /workspace bufbuild/buf check lint
 
-# Generate manifests e.g. CRD, RBAC etc.
 .PHONY: manifests
+manifests: ## Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
-# Run go fmt against code
 .PHONY: fmt
-fmt:
+fmt: ## Run go fmt against code
 	gofmt -w .
 
 .PHONY: verify-fmt
-verify-fmt:
+verify-fmt: ## Check go code formatting
 	gofmt -d .
 
-# Run go vet against code
 .PHONY: vet
-vet:
+vet: ## Run go vet against code
 	go vet ./...
 
-# Generate code
 .PHONY: generate
+generate: ## Generate code
 generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths="./..."
 
 .PHONY: gomod
-gomod:
+gomod: ## Update the go.mod and go.sum files
 	go mod tidy
 
-# go-get-patch updates Golang dependencies to latest patch versions
 .PHONY: go-get-patch
-go-get-patch:
+go-get-patch: ## Update Golang dependencies to latest patch versions
 	go get -u=patch -t
 
-# Build the docker image. This should be used for release versions, and builds the image on top of distroless.
 .PHONY: docker-build
-docker-build:
-	docker build . --target release --build-arg VERSION=$(VERSION) -t ${IMG}
+docker-build: ## Build the all the docker images
+docker-build: $(addprefix docker-build-,$(DOCKER_IMAGES))
 
-# Build the docker image with debug tools installed.
-.PHONY: docker-build-debug
-docker-build-debug:
-	docker build . --target debug --build-arg VERSION=$(VERSION) -t ${IMG}
+docker-build-%: FORCE
+	docker build . $(if ${DEBUG},,--quiet) --target $* --build-arg VERSION=$(VERSION) --tag ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}$*:${DOCKER_TAG}
+FORCE:
 
-.PHONY: docker-build-proxy
-docker-build-proxy:
-	docker build --build-arg VERSION=$(VERSION) --tag "eco-proxy:$(VERSION)" --file build/package/proxy.Dockerfile .
-
-.PHONY: docker-build-backup-agent
-docker-build-backup-agent:
-	docker build --build-arg VERSION=$(VERSION) --tag "eco-backup-agent:$(VERSION)" --file build/package/backup-agent.Dockerfile .
-
-# Push the docker image
 .PHONY: docker-push
-docker-push:
-	docker push ${IMG}
+docker-push: ## Push all the docker images
+docker-push: $(addprefix docker-push-,$(DOCKER_IMAGES))
 
-# find or download controller-gen
-# download controller-gen if necessary
+docker-push-%: FORCE
+	docker push ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}$*:${DOCKER_TAG}
+FORCE:
+
 .PHONY: controller-gen
-controller-gen:
+controller-gen: ## find or download controller-gen
 ifeq (, $(shell which controller-gen))
 # Prevents go get from modifying our go.mod file.
 # See https://github.com/kubernetes-sigs/kubebuilder/issues/909

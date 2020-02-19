@@ -18,6 +18,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
@@ -290,7 +291,7 @@ func DeleteAllTestNamespaces(t *testing.T, kubectl *kubectlContext) {
 }
 
 // eventuallyInCluster runs a command as a Job in the current Kubernetes cluster namespace.
-func eventuallyInCluster(kubectl *kubectlContext, name string, deadline time.Duration, image string, command ...string) (string, error) {
+func eventuallyInCluster(kubectl *kubectlContext, name string, deadline time.Duration, image string, command ...string) (_ string, reterr error) {
 	job := &batchv1.Job{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Job",
@@ -341,7 +342,15 @@ func eventuallyInCluster(kubectl *kubectlContext, name string, deadline time.Dur
 	if err != nil {
 		return "", err
 	}
-
+	defer func() {
+		err := kubectl.Delete("--filename", f.Name())
+		if err != nil {
+			reterr = kerrors.NewAggregate([]error{
+				reterr,
+				fmt.Errorf("error while deleting job in eventuallyInCluster: %s ", err),
+			})
+		}
+	}()
 	err = kubectl.Wait("job", name, "--for", fmt.Sprintf("condition=%s", batchv1.JobComplete), "--timeout", deadline.String())
 	if err != nil {
 		return "", err
