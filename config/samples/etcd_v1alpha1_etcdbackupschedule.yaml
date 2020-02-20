@@ -3,5 +3,9 @@ kind: EtcdBackupSchedule
 metadata:
   name: etcdbackupschedule-sample
 spec:
-  # Add fields here
-  foo: bar
+  schedule: "* * * * *"
+  backupTemplate:
+    source:
+      clusterURL: http://my-cluster:2379
+    destination:
+      objectURL: "s3://foo-bucket/snapshot-{{ .UID }}.sb"

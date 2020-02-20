@@ -14,13 +14,11 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
-	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/etcd"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/test"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/test/crontest"
@@ -44,12 +42,9 @@ func setupSuite(t *testing.T) (suite *controllerSuite, teardownFunc func()) {
 	require.NoError(t, err)
 	require.NotNil(t, cfg)
 
-	err = etcdv1alpha1.AddToScheme(scheme.Scheme)
-	require.NoError(t, err)
-
 	// Add new resources here.
 
-	k8sClient, err := client.New(cfg, client.Options{Scheme: scheme.Scheme})
+	k8sClient, err := client.New(cfg, client.Options{Scheme: scheme})
 	require.NoError(t, err)
 	require.NotNil(t, k8sClient)
 
@@ -88,6 +83,7 @@ func (s *controllerSuite) setupTest(t *testing.T, etcdAPI etcd.APIBuilder) (tear
 
 	mgr, err := ctrl.NewManager(s.cfg, ctrl.Options{
 		Namespace: namespace.Name,
+		Scheme:    scheme,
 	})
 	require.NoError(t, err, "failed to create manager")
 
@@ -108,13 +104,24 @@ func (s *controllerSuite) setupTest(t *testing.T, etcdAPI etcd.APIBuilder) (tear
 	err = clusterController.SetupWithManager(mgr)
 	require.NoError(t, err, "failed to setup EtcdCluster controller")
 
-	backupController := EtcdBackupScheduleReconciler{
+	backupController := EtcdBackupReconciler{
+		Client:           mgr.GetClient(),
+		Log:              logger.WithName("EtcdBackup"),
+		Scheme:           mgr.GetScheme(),
+		BackupAgentImage: "UNTESTED",
+		ProxyURL:         "UNTESTED",
+		Recorder:         mgr.GetEventRecorderFor("etcdbackup-reconciler"),
+	}
+	err = backupController.SetupWithManager(mgr)
+	require.NoError(t, err, "failed to setup EtcdBackup controller")
+
+	backupScheduleController := EtcdBackupScheduleReconciler{
 		Client:      mgr.GetClient(),
-		Log:         logger.WithName("EtcdCluster"),
+		Log:         logger.WithName("EtcdBackupSchedule"),
 		CronHandler: crontest.FakeCron{},
 		Schedules:   NewScheduleMap(),
 	}
-	err = backupController.SetupWithManager(mgr)
+	err = backupScheduleController.SetupWithManager(mgr)
 	require.NoError(t, err, "failed to setup EtcdBackupSchedule controller")
 
 	restoreController := EtcdRestoreReconciler{

@@ -1,31 +1,66 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path/filepath"
+	"time"
 
+	"github.com/go-logr/logr"
+	"github.com/go-logr/zapr"
+	"github.com/spf13/pflag"
 	flag "github.com/spf13/pflag"
-	"k8s.io/apimachinery/pkg/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"go.etcd.io/etcd/clientv3"
+	"go.etcd.io/etcd/clientv3/snapshot"
+	"google.golang.org/grpc"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
+	pb "github.com/improbable-eng/etcd-cluster-operator/api/proxy/v1"
 	"github.com/improbable-eng/etcd-cluster-operator/version"
 )
 
 var (
-	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
 )
 
-func init() {
-	_ = clientgoscheme.AddToScheme(scheme)
-	_ = etcdv1alpha1.AddToScheme(scheme)
+// loggedError logs an error locally and returns the error decorated with the
+// log message so that it can be returned to the protobuf client.
+func loggedError(log logr.Logger, err error, message string) error {
+	log.Error(err, message)
+	return fmt.Errorf("%s: %s", message, err)
 }
 
 func main() {
-	printVersion := flag.Bool("version", false, "Print the version to stdout and exit")
+	proxyURL := pflag.String("proxy-url",
+		"",
+		"URL of the proxy server to use to download the backup from remote storage.")
+
+	backupTempDir := flag.String("backup-tmp-dir",
+		os.TempDir(),
+		"The directory to temporarily place backups before they are uploaded to their destination.")
+
+	backupURL := pflag.String("backup-url",
+		"",
+		"URL for the backup.")
+
+	etcdURL := pflag.String("etcd-url",
+		"",
+		"URL for etcd.")
+
+	etcdDialTimeoutSeconds := pflag.Int64("etcd-dial-timeout-seconds",
+		5,
+		"Timeout, in seconds, for dialing the Etcd API.")
+
+	timeoutSeconds := pflag.Int64("timeout-seconds",
+		60,
+		"Timeout, in seconds, of the whole restore operation.")
+
+	printVersion := pflag.Bool("version",
+		false,
+		"Print version information and exit")
 
 	flag.Parse()
 
@@ -33,20 +68,66 @@ func main() {
 		fmt.Println(version.Version)
 		os.Exit(0)
 	}
-	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
+	zapLogger := zap.NewRaw(zap.UseDevMode(true))
+	ctrl.SetLogger(zapr.NewLogger(zapLogger))
+	setupLog.Info(
+		"Starting backup-agent",
+		"version", version.Version,
+		"proxy-url", *proxyURL,
+		"backup-temp-dir", *backupTempDir,
+		"backup-url", *backupURL,
+		"etcd-url", *etcdURL,
+		"etcd-dial-timeout-seconds", *etcdDialTimeoutSeconds,
+		"timeout-seconds", *timeoutSeconds,
+	)
 
-	setupLog.Info("Starting backup-agent", "version", version.Version)
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme: scheme,
+	ctx, ctxCancel := context.WithTimeout(context.Background(), time.Second*time.Duration(*timeoutSeconds))
+	defer ctxCancel()
+
+	log := ctrl.Log.WithName("backup-agent")
+
+	log.Info("Connecting to Etcd and getting snapshot")
+	localPath := filepath.Join(*backupTempDir, "snapshot.db")
+	etcdClient := snapshot.NewV3(zapLogger.Named("etcd-client"))
+	err := etcdClient.Save(
+		ctx,
+		clientv3.Config{
+			Endpoints:   []string{*etcdURL},
+			DialTimeout: time.Second * time.Duration(*etcdDialTimeoutSeconds),
+		},
+		localPath,
+	)
+	if err != nil {
+		panic(loggedError(log, err, "failed to get etcd snapshot"))
+	}
+
+	log.Info("Opening snapshot file")
+	sourceFile, err := os.Open(localPath)
+	if err != nil {
+		panic(loggedError(log, err, "failed to open snapshot file"))
+	}
+	defer sourceFile.Close()
+
+	log.Info("Reading snapshot file")
+	sourceBytes, err := ioutil.ReadAll(sourceFile)
+	if err != nil {
+		panic(loggedError(log, err, "failed to read snapshot file"))
+	}
+
+	log.Info("Dialing proxy")
+	conn, err := grpc.Dial(*proxyURL, grpc.WithInsecure())
+	if err != nil {
+		panic(loggedError(log, err, "failed to dial proxy"))
+	}
+	client := pb.NewProxyServiceClient(conn)
+
+	log.Info("Uploading snapshot")
+	_, err = client.Upload(ctx, &pb.UploadRequest{
+		BackupUrl: *backupURL,
+		Backup:    sourceBytes,
 	})
 	if err != nil {
-		setupLog.Error(err, "unable to start manager")
-		os.Exit(1)
+		panic(loggedError(log, err, "failed to upload backup"))
 	}
-
-	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		setupLog.Error(err, "problem running manager")
-		os.Exit(1)
-	}
+	log.Info("Backup complete")
 }

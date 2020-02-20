@@ -309,8 +309,29 @@ A backup can be taken at any time by deploying an `EtcdBackup` resource:
 $ kubectl apply -f config/samples/etcd_v1alpha1_etcdbackup.yaml
 ```
 
-When the operator detects this resource has been applied, it will take a snapshot of the etcd state from the given cluster endpoints.
-This snapshot is then uploaded to the given destination where it can be persisted.
+When the operator detects this resource has been applied, it will take a snapshot of the etcd state from the supplied `source.clusterURL`
+which should be the URL of a single node in the Etcd cluster.
+This snapshot is then uploaded to the destination given in the `destination.objectURL` field.
+
+Currently the only supported destination is `objectURL` which writes the file to Google Cloud Storage or Amazon S3.
+The `destination.objectURL` field should have a scheme to indicate which destination is being used.
+
+| Storage Type         | Bucket URL Scheme |
+| -------------------- | ----------------- |
+| Google Cloud Storage | `gs://`           |
+| Amazon S3            | `s3://`           |
+
+You can use MinIO, or similar storage with an S3-compatible API, by setting the S3 endpoint using
+[query parameters](https://gocloud.dev/howto/blob/#s3-compatible).
+
+For example to use MinIO hosted at `minio.example.com`:
+
+```yaml
+objectURL: s3://bucket-name/snapshot.db?endpoint=http://minio.example.com:9000&disableSSL=true&s3ForcePathStyle=true&region=eu-west-2
+```
+
+The MinIO endpoint should be resolvable and accessible by the proxy, and you may need to pass MinIO credentials as AWS credentials to the proxy.
+
 
 ### The `EtcdBackupSchedule` resource
 
@@ -322,6 +343,9 @@ $ kubectl apply -f config/samples/etcd_v1alpha1_etcdbackupschedule.yaml
 
 The resource specifies a crontab-style schedule defining how often the backup should be taken.
 It includes a spec similar to the  `EtcdBackup` resource to define how the backup should be taken, and where it should be placed.
+
+The `.destination.objectURL` should contain a template field `{{ .UID }}` which will be replaced by the UID of the EtcdBackup resource that gets created.
+This ensures that backup files all have unique names.
 
 ## Upgrade a Cluster
 

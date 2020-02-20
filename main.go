@@ -24,9 +24,9 @@ import (
 var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
-	// This is replaced as part of the build so that the restore-agent image
-	// matches the name prefix and version of the controller image.
-	// See Dockerfile.
+	// These are replaced as part of the build so that the images match the name
+	// prefix and version of the controller image. See Dockerfile.
+	defaultBackupAgentImage  = "REPLACE_ME"
 	defaultRestoreAgentImage = "REPLACE_ME"
 )
 
@@ -36,29 +36,31 @@ const (
 
 func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
-
 	_ = etcdv1alpha1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
 func main() {
-	var metricsAddr, backupTempDir string
-	var enableLeaderElection bool
-	var leaderElectionID string
-	var printVersion bool
-	var restoreAgentImage string
-	var proxyURL string
+	var (
+		enableLeaderElection bool
+		leaderElectionID     string
+		metricsAddr          string
+		printVersion         bool
+		proxyURL             string
+		restoreAgentImage    string
+		backupAgentImage     string
+	)
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&leaderElectionID, "leader-election-id", "etcd-cluster-operator-controller-leader-election-helper",
 		"The name of the configmap that leader election will use for holding the leader lock.")
-	flag.StringVar(&backupTempDir, "backup-tmp-dir", os.TempDir(), "The directory to temporarily place backups before they are uploaded to their destination.")
-	flag.BoolVar(&printVersion, "version", false,
-		"Print version to stdout and exit")
+	flag.StringVar(&backupAgentImage, "backup-agent-image", defaultBackupAgentImage, "The Docker image for the backup-agent")
 	flag.StringVar(&restoreAgentImage, "restore-agent-image", defaultRestoreAgentImage, "The Docker image to use to perform a restore")
 	flag.StringVar(&proxyURL, "proxy-url", "", "The URL of the upload/download proxy")
+	flag.BoolVar(&printVersion, "version", false,
+		"Print version to stdout and exit")
 	flag.Parse()
 
 	if printVersion {
@@ -69,7 +71,13 @@ func main() {
 	// See https://github.com/improbable-eng/etcd-cluster-operator/issues/171
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
-	setupLog.Info("Starting manager", "version", version.Version, "restore-agent-image", restoreAgentImage)
+	setupLog.Info(
+		"Starting manager",
+		"version", version.Version,
+		"backup-agent-image", backupAgentImage,
+		"restore-agent-image", restoreAgentImage,
+		"proxy-url", proxyURL,
+	)
 
 	if !strings.Contains(proxyURL, ":") {
 		// gRPC needs a port, and this address doesn't seem to have one.
@@ -109,17 +117,21 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&controllers.EtcdBackupReconciler{
-		Client:  mgr.GetClient(),
-		Log:     ctrl.Log.WithName("controllers").WithName("EtcdBackup"),
-		TempDir: backupTempDir,
+		Client:           mgr.GetClient(),
+		Log:              ctrl.Log.WithName("controllers").WithName("EtcdBackup"),
+		Scheme:           mgr.GetScheme(),
+		BackupAgentImage: backupAgentImage,
+		ProxyURL:         proxyURL,
+		Recorder:         mgr.GetEventRecorderFor("etcdbackup-reconciler"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "EtcdBackup")
 		os.Exit(1)
 	}
+	cronHandler := cron.New()
 	if err = (&controllers.EtcdBackupScheduleReconciler{
 		Client:      mgr.GetClient(),
 		Log:         ctrl.Log.WithName("controllers").WithName("EtcdBackupSchedule"),
-		CronHandler: cron.New(),
+		CronHandler: cronHandler,
 		Schedules:   controllers.NewScheduleMap(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "EtcdBackupSchedule")
@@ -154,6 +166,12 @@ func main() {
 		}
 	}
 
+	setupLog.Info("Starting cron handler")
+	cronHandler.Start()
+	defer func() {
+		setupLog.Info("Stopping cron handler")
+		<-cronHandler.Stop().Done()
+	}()
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")

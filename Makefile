@@ -8,11 +8,6 @@ SHELL := bash
 # and which will be used as the Docker image tag
 VERSION ?= $(shell git describe --tags)
 
-# Set DEBUG=TRUE to use debug Docker images
-# This is required by the E2E backup tests so that the test can exec `ls
-# /tmp/backup_file` in the controller-manager container.
-DEBUG ?= $(if $(filter e2e,${MAKECMDGOALS}),TRUE,)
-
 # Set ARGS to specify extra go test arguments
 ARGS ?=
 
@@ -37,10 +32,10 @@ GO := $(or $(shell which go${GO_VERSION}),$(shell which go))
 # Docker images are published to https://quay.io/repository/improbable-eng/etcd-cluster-operator
 DOCKER_TAG ?= ${VERSION}
 DOCKER_REPO ?= quay.io/improbable-eng
-DOCKER_IMAGES ?= controller controller-debug proxy backup-agent restore-agent
+DOCKER_IMAGES ?= controller proxy backup-agent restore-agent
 DOCKER_IMAGE_NAME_PREFIX ?= etcd-cluster-operator-
 # The Docker image for the controller-manager which will be deployed to the cluster in tests
-DOCKER_IMAGE_CONTROLLER = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}controller$(if ${DEBUG},-debug,):${DOCKER_TAG}
+DOCKER_IMAGE_CONTROLLER = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}controller:${DOCKER_TAG}
 DOCKER_IMAGE_PROXY = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}proxy:${DOCKER_TAG}
 DOCKER_IMAGE_RESTORE_AGENT = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}restore-agent:${DOCKER_TAG}
 DOCKER_IMAGE_BACKUP_AGENT = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}backup-agent:${DOCKER_TAG}
@@ -92,12 +87,10 @@ test: bin/kubebuilder
 
 .PHONY: e2e-kind
 e2e-kind: ## Run end to end tests - creates a new Kind cluster called etcd-e2e
-e2e-kind: DEBUG=TRUE
 e2e-kind: docker-build kind-cluster kind-load deploy-e2e e2e
 
 .PHONY: e2e
 e2e: ## Run the end-to-end tests - uses the current KUBE_CONFIG and context
-e2e: DEBUG=TRUE
 e2e:
 	${GO} test -v -parallel ${TEST_PARALLEL_E2E} -timeout 20m ./internal/test/e2e --e2e-enabled --repo-root ${CURDIR} --output-directory ${E2E_ARTIFACTS_DIRECTORY} $(ARGS)
 
@@ -192,6 +185,7 @@ docker-build-%: FORCE
 	docker build --target $* \
 		--build-arg GO_VERSION=${GO_VERSION} \
 		--build-arg VERSION=$(VERSION) \
+		--build-arg BACKUP_AGENT_IMAGE=${DOCKER_IMAGE_BACKUP_AGENT} \
 		--build-arg RESTORE_AGENT_IMAGE=${DOCKER_IMAGE_RESTORE_AGENT} \
 		--tag ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}$*:${DOCKER_TAG} \
 		--file Dockerfile \

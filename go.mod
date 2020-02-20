@@ -12,9 +12,9 @@ replace (
 )
 
 require (
-	cloud.google.com/go v0.39.0
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/coreos/go-semver v0.3.0
+	github.com/dustin/go-humanize v1.0.0
 	github.com/dustinkirkland/golang-petname v0.0.0-20190613200456-11339a705ed2
 	github.com/go-logr/logr v0.1.0
 	github.com/go-logr/zapr v0.1.1
@@ -32,7 +32,6 @@ require (
 	// Pin specific etcd version via tag. See https://github.com/etcd-io/etcd/pull/11477
 	go.etcd.io/etcd v0.0.0-20191023171146-3cf2f69b5738
 	go.opencensus.io v0.22.3 // indirect
-	go.uber.org/zap v1.10.0
 	gocloud.dev v0.17.0
 	golang.org/x/net v0.0.0-20200202094626-16171245cfb2 // indirect
 	golang.org/x/sys v0.0.0-20200202164722-d101bd2416d5 // indirect

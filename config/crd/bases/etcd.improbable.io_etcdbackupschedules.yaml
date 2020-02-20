@@ -34,99 +34,41 @@ spec:
         spec:
           description: EtcdBackupScheduleSpec defines the desired state of EtcdBackupSchedule
           properties:
-            backupSpec:
+            backupTemplate:
               description: BackupTemplate describes the template used to create backup
                 resources. Every time the schedule fires an `EtcdBackup' will be created
                 with this template.
               properties:
-                clusterEndpoints:
-                  description: ClusterEndpoints holds one or more endpoints fronting
-                    etcd's gRPC API. Multiple endpoints may only be supported by some
-                    backup types.
-                  items:
-                    description: EtcdClusterEndpoint holds an addressable endpoint
-                      for an etcd member.
-                    properties:
-                      host:
-                        description: An IP address or DNS name of an endpoint.
-                        type: string
-                      port:
-                        description: Port that is exposing the etcd client API for
-                          this member.
-                        type: integer
-                      scheme:
-                        description: Scheme to use for connecting to the host.
-                        type: string
-                    required:
-                    - host
-                    - port
-                    - scheme
-                    type: object
-                  type: array
                 destination:
                   description: Destination is the remote location where the backup
                     will be placed.
                   properties:
-                    gcsBucket:
-                      description: GCSBucket, when set, will push the backup to a
-                        Google Cloud Storage bucket.
-                      properties:
-                        bucketName:
-                          description: BucketName is the name of the storage bucket.
-                          maxLength: 222
-                          minLength: 3
-                          type: string
-                        credentials:
-                          description: Credentials holds the method of obtaining credentials
-                            that will be provided to the Google Cloud APIs in order
-                            to write backup data.
-                          properties:
-                            secretKeySelector:
-                              description: Credentials are taken from the key of a
-                                Kubernetes secret.
-                              properties:
-                                key:
-                                  description: The key of the secret to select from.  Must
-                                    be a valid secret key.
-                                  type: string
-                                name:
-                                  description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                                    TODO: Add other useful fields. apiVersion, kind,
-                                    uid?'
-                                  type: string
-                                optional:
-                                  description: Specify whether the Secret or its key
-                                    must be defined
-                                  type: boolean
-                              required:
-                              - key
-                              type: object
-                          type: object
-                      required:
-                      - bucketName
-                      type: object
-                    local:
-                      description: Local, when set, will copy the backup into a local
-                        volume on the pod taking the backup.
-                      properties:
-                        path:
-                          description: Directory is an absolute filepath to a directory
-                            where backups will be placed.
-                          type: string
-                      required:
-                      - path
-                      type: object
+                    objectURL:
+                      description: ObjectURL is a URL of a file of a backup in object
+                        storage. The scheme of this URL should be gs:// or s3://.
+                      type: string
+                  required:
+                  - objectURL
+                  type: object
+                source:
+                  description: Source describes the cluster to be backed up.
+                  properties:
+                    clusterURL:
+                      description: ClusterURL is a URL endpoint for the Etcd cluster
+                      type: string
+                  required:
+                  - clusterURL
                   type: object
               required:
-              - clusterEndpoints
               - destination
+              - source
               type: object
             schedule:
               description: Schedule holds a crontab-like scheule holding defining
                 the schedule in which backups will be started.
               type: string
           required:
-          - backupSpec
+          - backupTemplate
           - schedule
           type: object
         status:

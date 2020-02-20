@@ -1,7 +1,5 @@
 syntax = "proto3";
 
-import "google/protobuf/timestamp.proto";
-
 package proxy.v1;
 
 service ProxyService {
@@ -12,12 +10,8 @@ service ProxyService {
 }
 
 message UploadRequest {
-    // The cluster identifier is a string that identifies this etcd cluster. It should be unique and stable between
-    // backups and restores.
-    string cluster_identifier = 1;
-
-    // This is the time when the backup was actually made. This may well be different from the time it was uploaded.
-    google.protobuf.Timestamp backup_made_at = 2;
+    // This is the URL of the backup to upload.
+    string backup_url = 1;
 
     // This is the binary contents of the backup itself. This is the same as what would be placed on-disk if using
     // `etcdctl snapshot save`.
