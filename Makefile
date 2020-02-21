@@ -84,18 +84,10 @@ protobuf: protoc-docker
 verify-protobuf-lint:
 	docker run --volume ${CURDIR}:/workspace:ro --workdir /workspace bufbuild/buf check lint
 
-.PHONY: verify-protobuf
-verify-protobuf: verify-protobuf-lint
-	./hack/verify.sh make -s protobuf
-
 # Generate manifests e.g. CRD, RBAC etc.
 .PHONY: manifests
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
-
-.PHONY: verify-manifests
-verify-manifests: controller-gen
-	./hack/verify.sh make -s manifests
 
 # Run go fmt against code
 .PHONY: fmt
@@ -116,27 +108,14 @@ vet:
 generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths="./..."
 
-.PHONY: verify-generate
-verify-generate: controller-gen
-	./hack/verify.sh make -s generate
-
 .PHONY: gomod
 gomod:
 	go mod tidy
-
-.PHONY: verify-gomod
-verify-gomod:
-	./hack/verify.sh make -s gomod
 
 # go-get-patch updates Golang dependencies to latest patch versions
 .PHONY: go-get-patch
 go-get-patch:
 	go get -u=patch -t
-
-# verify-go-get-patch checks that all Golang dependencies are updated to latest patch versions
-.PHONY: verify-go-get-patch
-verify-go-get-patch:
-	./hack/verify.sh make -s go-get-patch
 
 # Build the docker image. This should be used for release versions, and builds the image on top of distroless.
 .PHONY: docker-build
@@ -173,3 +152,8 @@ CONTROLLER_GEN=$(GOBIN)/controller-gen
 else
 CONTROLLER_GEN=$(shell which controller-gen)
 endif
+
+# Run the supplied make target argument in a temporary workspace and diff the results.
+verify-%: FORCE
+	./hack/verify.sh make -s $*
+FORCE:
