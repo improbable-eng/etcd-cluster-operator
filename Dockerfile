@@ -3,6 +3,8 @@
 # -----------------
 FROM golang:1.13.1 as builder
 
+RUN apt-get -y update && apt-get -y install upx
+
 WORKDIR /workspace
 # Copy the Go Modules manifests
 COPY go.mod go.mod
@@ -24,19 +26,19 @@ ENV CGO_ENABLED=0
 ENV GOOS=linux
 ENV GOARCH=amd64
 ENV GO111MODULE=on
-ENV GOFLAGS="-mod=readonly"
 
 # Do an initial compilation before setting the version so that there is less to
 # re-compile when the version changes
-RUN go build ./...
+RUN go build -mod=readonly "-ldflags=-s -w" ./...
 
 ARG VERSION
-ENV GOFLAGS="-mod=readonly -ldflags=-X=github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}"
 
 # Compile all the binaries
-RUN go build -o manager main.go
-RUN go build -o proxy cmd/proxy/main.go
-RUN go build -o backup-agent cmd/backup-agent/main.go
+RUN go build -mod=readonly "-ldflags=-s -w -X=github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}" -o manager main.go
+RUN go build -mod=readonly "-ldflags=-s -w -X=github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}" -o proxy cmd/proxy/main.go
+RUN go build -mod=readonly "-ldflags=-s -w -X=github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}" -o backup-agent cmd/backup-agent/main.go
+
+RUN upx manager proxy backup-agent
 
 #
 # IMAGE TARGETS
