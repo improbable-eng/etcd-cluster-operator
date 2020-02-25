@@ -143,7 +143,12 @@ file `docs/release-notes/v0.1.md`.
 
 ### Process
 
-1. Tag the repository with the new version, e.g., `git tag v0.1.0` and push the tag to GitHub.
-2. Mark the tag as a release on GitHub.
-3. Build a Docker Image from the repository at that tag and push it to Docker Hub.
-4. Build a version of the deployment YAML with the image tag, attach it to the GitHub release as a YAML file.
+1. Run `make release VERSION=v0.0.1-rc.1` to:
+    1. Build Docker images with the supplied VERSION
+    2. Update `config/manager` with the Docker image name and sha256 hash
+    3. Commit `config/manager` with a release message
+    4. Create an annotated Git tag for the supplied VERSION
+    5. Output a version of the deployment YAML with the image tag and sha256 hash included.
+2. Push the tag to GitHub.
+3. Mark the tag as a release on GitHub.
+4. Attach `deployment.${VERSION}.yaml` to the GitHub release as a YAML file.

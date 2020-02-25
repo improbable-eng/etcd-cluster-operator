@@ -9,7 +9,10 @@ DOCKER_REPO ?= quay.io/improbable-eng
 DOCKER_IMAGES ?= controller controller-debug proxy backup-agent
 DOCKER_IMAGE_NAME_PREFIX ?= etcd-cluster-operator-
 # The Docker image for the controller-manager which will be deployed to the cluster in tests
-DOCKER_IMAGE_CONTROLLER := ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}controller$(if $DEBUG,-debug,):${DOCKER_TAG}
+DOCKER_IMAGE_CONTROLLER := ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}controller$(if ${DEBUG},-debug,):${DOCKER_TAG}
+
+BUILD_DIR ?= .build
+BUILD_DIR_IMAGES := ${BUILD_DIR}/images
 
 # Set DEBUG=TRUE to use debug Docker images and to show debugging output
 DEBUG ?=
@@ -98,9 +101,14 @@ deploy-cert-manager: ## Deploy cert-manager in the configured Kubernetes cluster
 	kubectl apply --validate=false --filename=https://github.com/jetstack/cert-manager/releases/download/v0.11.0/cert-manager.yaml
 	kubectl wait --for=condition=Available --timeout=300s apiservice v1beta1.webhook.cert-manager.io
 
+.PHONY: kustomize-edit
+kustomize-edit: ## Update the config/ manifests to use the latest controller image
+kustomize-edit: ${BUILD_DIR_IMAGES} docker-build-controller$(if ${DEBUG},-debug,)
+	cd config/manager && kustomize edit set image controller=${DOCKER_IMAGE_CONTROLLER}:$(file < ${BUILD_DIR_IMAGES}/controller$(if ${DEBUG},-debug,).iid)
+
 .PHONY: deploy-controller
 deploy-controller: ## Deploy controller in the configured Kubernetes cluster in ~/.kube/config
-	cd config/manager && kustomize edit set image controller=${DOCKER_IMAGE_CONTROLLER}
+deploy-controller: kustomize-edit
 	kustomize build config/default | kubectl apply -f -
 	kubectl --namespace eco-system wait --for=condition=Available --timeout=300s deploy eco-controller-manager
 
@@ -155,8 +163,8 @@ go-get-patch: ## Update Golang dependencies to latest patch versions
 docker-build: ## Build the all the docker images
 docker-build: $(addprefix docker-build-,$(DOCKER_IMAGES))
 
-docker-build-%: FORCE
-	docker build . $(if ${DEBUG},,--quiet) --target $* --build-arg VERSION=$(VERSION) --tag ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}$*:${DOCKER_TAG}
+docker-build-%: FORCE ${BUILD_DIR_IMAGES}
+	docker build . $(if ${DEBUG},,--quiet) --target $* --build-arg VERSION=$(VERSION) --tag ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}$*:${DOCKER_TAG} --iidfile ${BUILD_DIR_IMAGES}/$*.iid
 FORCE:
 
 .PHONY: docker-push
@@ -182,3 +190,17 @@ endif
 verify-%: FORCE
 	./hack/verify.sh make -s $*
 FORCE:
+
+.PHONY: .release-tag
+.create-release-tag:
+	git add config/manager
+	git commit --message "Release ${VERSION}"
+	git tag --annotate --message "Release ${VERSION}" ${VERSION}
+
+.PHONY: release
+release: ## Create a tagged release
+release: docker-build docker-push kustomize-edit .create-release-tag
+	kustomize build config/manager > deployment.${VERSION}.yaml
+
+${BUILD_DIR}/%:
+	mkdir -p ${BUILD_DIR}/$*
