@@ -65,7 +65,11 @@ func (ps *proxyServer) Download(ctx context.Context, req *pb.DownloadRequest) (*
 	if err != nil {
 		return nil, loggedError(log, err, "failed to create blob reader")
 	}
-
+	defer func() {
+		if err := blobReader.Close(); err != nil {
+			log.Error(err, "failed to close blob reader")
+		}
+	}()
 	// Here we read the entire contents of the backup into memory. In theory these could be quite big (multiple
 	// gigabytes). So we're actually taking a risk that the backup could be *too big* for our available memory.
 	backup, err := ioutil.ReadAll(blobReader)
