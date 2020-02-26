@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -21,7 +22,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	etcd "go.etcd.io/etcd/client"
+	etcd "go.etcd.io/etcd/clientv3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -48,16 +49,10 @@ var (
 	fUseKind           = flag.Bool("kind", false, "Creates a Kind cluster to run the tests against.")
 	fOutputDirectory   = flag.String("output-directory", "/tmp/etcd-e2e", "The absolute path to a directory where E2E results logs will be saved.")
 	fKindClusterName   = flag.String("kind-cluster-name", "etcd-e2e", "The name of the Kind cluster to use or create")
+	fControllerImage   = flag.String("controller-image", "", "The name of the controller image")
 	fUseCurrentContext = flag.Bool("current-context", false, "Runs the tests against the current Kubernetes context, the path to kube config defaults to ~/.kube/config, unless overridden by the KUBECONFIG environment variable.")
 	fRepoRoot          = flag.String("repo-root", "", "The absolute path to the root of the etcd-cluster-operator git repository.")
 	fCleanup           = flag.Bool("cleanup", true, "Tears down the Kind cluster once the test is finished.")
-
-	etcdConfig = etcd.Config{
-		Endpoints: []string{"http://127.0.0.1:2379"},
-		Transport: etcd.DefaultTransport,
-		// set timeout per request to fail fast when the target endpoint is unavailable
-		HeaderTimeoutPerRequest: time.Second,
-	}
 )
 
 func objFromYaml(objBytes []byte) (runtime.Object, error) {
@@ -157,13 +152,11 @@ func startKind(t *testing.T, ctx context.Context, stopped chan struct{}) (kind *
 
 func buildOperator(t *testing.T, ctx context.Context) (imageTar string, err error) {
 	t.Log("Building the operator")
-	// Tag for running this test, for naming resources.
-	operatorImage := "etcd-cluster-operator:test"
 
 	// Build the operator.
-	out, err := exec.CommandContext(ctx, "make", "-C", *fRepoRoot, "docker-build-debug", "IMG="+operatorImage).CombinedOutput()
+	out, err := exec.CommandContext(ctx, "make", "-C", *fRepoRoot, "docker-build").CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("%w Output: %s", err, out)
+		return "", fmt.Errorf("%w Output: %s", err, string(out))
 	}
 
 	// Bundle the image to a tar.
@@ -175,14 +168,14 @@ func buildOperator(t *testing.T, ctx context.Context) (imageTar string, err erro
 	imageTar = filepath.Join(tmpDir, "etcd-cluster-operator.tar")
 
 	t.Log("Exporting the operator image")
-	out, err = exec.CommandContext(ctx, "docker", "save", "-o", imageTar, operatorImage).CombinedOutput()
+	out, err = exec.CommandContext(ctx, "docker", "save", "-o", imageTar, *fControllerImage).CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("%w Output: %s", err, out)
 	}
 	return imageTar, nil
 }
 
-func installOperator(t *testing.T, kubectl *kubectlContext, kind *cluster.Context, imageTar string) {
+func installOperator(t *testing.T, ctx context.Context, kubectl *kubectlContext, kind *cluster.Context, imageTar string) {
 	var wg sync.WaitGroup
 
 	wg.Add(1)
@@ -204,11 +197,8 @@ func installOperator(t *testing.T, kubectl *kubectlContext, kind *cluster.Contex
 	go func() {
 		defer wg.Done()
 		t.Log("Installing cert-manager")
-		err := kubectl.Apply("--validate=false", "--filename=https://github.com/jetstack/cert-manager/releases/download/v0.11.0/cert-manager.yaml")
-		require.NoError(t, err)
-		t.Log("Waiting for cert-manager to be ready")
-		err = kubectl.Wait("--for=condition=Available", "--timeout=300s", "apiservice", "v1beta1.webhook.cert-manager.io")
-		require.NoError(t, err)
+		out, err := exec.CommandContext(ctx, "make", "-C", *fRepoRoot, "deploy-cert-manager").CombinedOutput()
+		require.NoError(t, err, string(out))
 	}()
 
 	wg.Add(1)
@@ -240,23 +230,9 @@ func installOperator(t *testing.T, kubectl *kubectlContext, kind *cluster.Contex
 
 	wg.Wait()
 
-	// Deploy the operator.
-	t.Log("Applying operator")
-	err := kubectl.Apply("--kustomize", filepath.Join(*fRepoRoot, "config", "test"))
-	require.NoError(t, err)
-
-	// Ensure the operator starts.
-	err = try.Eventually(func() error {
-		out, err := kubectl.Get("--namespace", "eco-system", "deploy", "eco-controller-manager", "-o=jsonpath='{.status.readyReplicas}'")
-		if err != nil {
-			return err
-		}
-		if out != "'1'" {
-			return errors.New("expected exactly 1 replica of the operator to be available, got: " + out)
-		}
-		return nil
-	}, time.Minute, time.Second*5)
-	require.NoError(t, err)
+	t.Log("Deploying controller")
+	out, err := exec.CommandContext(ctx, "make", "-C", *fRepoRoot, "deploy-controller").CombinedOutput()
+	require.NoError(t, err, string(out))
 }
 
 func setupKind(t *testing.T, ctx context.Context, stopped chan struct{}) *kubectlContext {
@@ -299,7 +275,11 @@ func setupKind(t *testing.T, ctx context.Context, stopped chan struct{}) *kubect
 		configPath: kind.KubeConfigPath(),
 	}
 
-	installOperator(t, kubectl, kind, imageTar)
+	t.Log("Setting the environment variable KUBECONFIG", kubectl.configPath)
+	err := os.Setenv("KUBECONFIG", kubectl.configPath)
+	require.NoError(t, err)
+
+	installOperator(t, ctx, kubectl, kind, imageTar)
 
 	return kubectl
 }
@@ -363,9 +343,10 @@ func TestE2E(t *testing.T) {
 		t.Run("SampleCluster", func(t *testing.T) {
 			t.Parallel()
 			rl := corev1.ResourceList{
-				// 5 node cluster
-				corev1.ResourceCPU:    resource.MustParse("1000m"),
-				corev1.ResourceMemory: resource.MustParse("2000Mi"),
+				// 4 node cluster
+				// set job
+				corev1.ResourceCPU:    resource.MustParse("900m"),
+				corev1.ResourceMemory: resource.MustParse("850Mi"),
 			}
 			kubectl := kubectl.WithT(t)
 			ns, cleanup := NamespaceForTest(t, kubectl, rl)
@@ -547,31 +528,17 @@ func webhookTests(t *testing.T, kubectl *kubectlContext) {
 }
 
 func sampleClusterTests(t *testing.T, kubectl *kubectlContext, sampleClusterPath string) {
-	err := kubectl.Apply(
-		"--filename", filepath.Join(*fRepoRoot, "internal", "test", "e2e", "fixtures", "cluster-client-service.yaml"),
-		"--filename", sampleClusterPath,
-	)
+	err := kubectl.Apply("--filename", sampleClusterPath)
 	require.NoError(t, err)
 
 	t.Run("EtcdClusterAvailability", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
-		defer cancel()
-
-		etcdClient, err := etcd.New(etcdConfig)
-		require.NoError(t, err)
-
-		err = try.Eventually(func() error {
-			members, err := etcd.NewMembersAPI(etcdClient).List(ctx)
-			if err != nil {
-				return err
-			}
-
-			if len(members) != expectedClusterSize {
-				return errors.New(fmt.Sprintf("expected %d etcd peers, got %d", expectedClusterSize, len(members)))
-			}
-			return nil
-		}, time.Minute*2, time.Second*10)
-		require.NoError(t, err)
+		out, err := etcdctlInCluster(
+			kubectl,
+			time.Minute*2,
+			"my-cluster",
+			"put", "--", "foo", "sample-cluster-tests-value",
+		)
+		require.NoError(t, err, out)
 	})
 
 	t.Run("EtcdClusterStatus", func(t *testing.T) {
@@ -594,22 +561,49 @@ func sampleClusterTests(t *testing.T, kubectl *kubectlContext, sampleClusterPath
 
 	t.Run("ScaleUp", func(t *testing.T) {
 		kubectl := kubectl.WithT(t)
-		// Attempt to scale up to five nodes
-		err = kubectl.Scale("etcdcluster/my-cluster", 5)
+		// Attempt to scale up to four nodes
+
+		const expectedReplicas = 4
+		err := kubectl.Scale("etcdcluster/my-cluster", expectedReplicas)
 		require.NoError(t, err)
 
-		etcdClient, err := etcd.New(etcdConfig)
+		t.Log("The etcdcluster.status is updated when the cluster has been resized.")
+		err = try.Eventually(
+			func() error {
+				out, err := kubectl.Get("etcdcluster", "my-cluster", "-o=jsonpath={.status.replicas}")
+				require.NoError(t, err, out)
+				statusReplicas, err := strconv.Atoi(out)
+				require.NoError(t, err, out)
+				if expectedReplicas != statusReplicas {
+					return fmt.Errorf("unexpected status.replicas. Wanted: %d, Got: %d", expectedReplicas, statusReplicas)
+				}
+				return err
+			},
+			time.Minute*5, time.Second*10,
+		)
 		require.NoError(t, err)
 
 		err = try.Eventually(func() error {
-			t.Log("Listing etcd members")
-			members, err := etcd.NewMembersAPI(etcdClient).List(context.Background())
+			out, err := etcdctlInCluster(
+				kubectl,
+				time.Minute*2,
+				"my-cluster",
+				"member", "list", "--write-out=json",
+			)
 			if err != nil {
-				return err
+				return fmt.Errorf("etcdctlInCluster error: %s, out: %s", err, out)
 			}
 
-			if len(members) != 5 {
-				return errors.New(fmt.Sprintf("expected %d etcd peers, got %d", 5, len(members)))
+			var response etcd.MemberListResponse
+
+			err = json.Unmarshal([]byte(out), &response)
+			if err != nil {
+				return fmt.Errorf("json.Unmarshal error: %s", err)
+			}
+
+			members := response.Members
+			if len(members) != expectedReplicas {
+				return errors.New(fmt.Sprintf("expected %d etcd peers, got %d", expectedReplicas, len(members)))
 			}
 
 			for _, member := range members {
@@ -619,7 +613,7 @@ func sampleClusterTests(t *testing.T, kubectl *kubectlContext, sampleClusterPath
 				if len(member.PeerURLs) == 0 {
 					return errors.New("peer has no peer URLs")
 				}
-				if member.ID == "" {
+				if member.ID == 0 {
 					return errors.New("peer has no ID")
 				}
 				if member.Name == "" {
