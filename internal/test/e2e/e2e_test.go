@@ -215,7 +215,7 @@ func installOperator(t *testing.T, ctx context.Context, kubectl *kubectlContext,
 		for _, name := range images {
 			func() {
 				t.Log("Exporting the operator image", name)
-				f, err := ioutil.TempFile("", name)
+				f, err := ioutil.TempFile("", "etcd-e2e-*")
 				require.NoError(t, err)
 				defer func() {
 					assert.NoError(t, f.Close(), "failed to close image tar")
