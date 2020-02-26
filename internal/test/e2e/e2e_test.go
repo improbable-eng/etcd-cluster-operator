@@ -473,7 +473,7 @@ func backupTests(t *testing.T, kubectl *kubectlContext) {
 	kubectlSystem := kubectl.WithDefaultNamespace("eco-system")
 	var podNames string
 	err = try.Eventually(func() (err error) {
-		podNames, err = kubectlSystem.Get("pods", "--output=name")
+		podNames, err = kubectlSystem.Get("pods", "--output=name", "--selector", "control-plane=controller-manager")
 		return err
 	}, time.Minute, time.Second*5)
 	require.NoError(t, err)
