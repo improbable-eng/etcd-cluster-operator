@@ -64,7 +64,7 @@ func main() {
 		return
 	}
 
-	ctrl.SetLogger(zap.New())
+	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
 	setupLog.Info("Starting manager", "version", version.Version, "restore-agent-image", restoreAgentImage)
 

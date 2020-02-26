@@ -33,7 +33,7 @@ func main() {
 		fmt.Println(version.Version)
 		os.Exit(0)
 	}
-	ctrl.SetLogger(zap.New())
+	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
 	setupLog.Info("Starting backup-agent", "version", version.Version)
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{

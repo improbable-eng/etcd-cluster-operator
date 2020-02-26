@@ -90,7 +90,7 @@ func main() {
 		fmt.Println(version.Version)
 		os.Exit(0)
 	}
-	ctrl.SetLogger(zap.New())
+	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
 	setupLog.Info("Starting proxy", "version", version.Version)
 

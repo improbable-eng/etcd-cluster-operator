@@ -82,7 +82,7 @@ func main() {
 		fmt.Println(version.Version)
 		os.Exit(0)
 	}
-	zapLogger := zap.NewRaw()
+	zapLogger := zap.NewRaw(zap.UseDevMode(true))
 	ctrl.SetLogger(zapr.NewLogger(zapLogger))
 	setupLog.Info(
 		"Starting restore-agent",
@@ -158,7 +158,7 @@ func main() {
 		SkipHashCheck:       false,
 	}
 
-	client := snapshot.NewV3(zapLogger)
+	client := snapshot.NewV3(zapLogger.Named("etcd-client"))
 	log.V(2).Info("Executing restore")
 	err = client.Restore(restoreConfig)
 	if err != nil {
