@@ -72,8 +72,8 @@ COPY --from=builder /workspace/backup-agent .
 USER nonroot:nonroot
 ENTRYPOINT ["/backup-agent"]
 
-FROM gcr.io/distroless/static:nonroot as restore-agent
+FROM gcr.io/distroless/static as restore-agent
 WORKDIR /
 COPY --from=builder /workspace/restore-agent .
-USER nonroot:nonroot
+USER root:root
 ENTRYPOINT ["/restore-agent"]
