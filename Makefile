@@ -10,6 +10,7 @@ DOCKER_IMAGES ?= controller controller-debug proxy backup-agent restore-agent
 DOCKER_IMAGE_NAME_PREFIX ?= etcd-cluster-operator-
 # The Docker image for the controller-manager which will be deployed to the cluster in tests
 DOCKER_IMAGE_CONTROLLER := ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}controller$(if $DEBUG,-debug,):${DOCKER_TAG}
+DOCKER_IMAGE_PROXY := ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}proxy:${DOCKER_TAG}
 DOCKER_IMAGE_RESTORE_AGENT := ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}restore-agent:${DOCKER_TAG}
 
 # Set DEBUG=TRUE to use debug Docker images and to show debugging output
@@ -102,6 +103,7 @@ deploy-cert-manager: ## Deploy cert-manager in the configured Kubernetes cluster
 .PHONY: deploy-controller
 deploy-controller: ## Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 	cd config/manager && kustomize edit set image controller=${DOCKER_IMAGE_CONTROLLER}
+	cd config/proxy && kustomize edit set image proxy=${DOCKER_IMAGE_PROXY}
 	kustomize build config/default | kubectl apply -f -
 	kubectl --namespace eco-system wait --for=condition=Available --timeout=300s deploy eco-controller-manager
 
