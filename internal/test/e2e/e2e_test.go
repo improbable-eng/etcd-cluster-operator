@@ -259,14 +259,8 @@ func installOperator(t *testing.T, ctx context.Context, kubectl *kubectlContext,
 	go func() {
 		defer wg.Done()
 		t.Log("Installing MinIO")
-		err := kubectl.Apply("-k", filepath.Join(*fRepoRoot, "config", "test", "e2e", "minio"))
-		require.NoError(t, err)
-		t.Log("Waiting for MinIO to be ready")
-		// We can't wait on the `minio` service (https://github.com/kubernetes/kubernetes/issues/80828) so instead
-		// wait for the underlying pod. It's got a deterministic name (`minio-0`) so this isn't so bad.
-		time.Sleep(time.Second * 10)
-		err = kubectl.Wait("--namespace=minio", "--for=condition=Ready", "--timeout=300s", "pod", "minio-0")
-		require.NoError(t, err)
+		out, err := exec.CommandContext(ctx, "make", "-C", *fRepoRoot, "deploy-minio").CombinedOutput()
+		require.NoError(t, err, string(out))
 	}()
 
 	wg.Add(1)

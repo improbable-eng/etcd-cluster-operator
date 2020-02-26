@@ -95,6 +95,15 @@ run: ## Run against the configured Kubernetes cluster in ~/.kube/config
 install: ## Install CRDs into a cluster
 	kustomize build config/crd | kubectl apply -f -
 
+.PHONY: deploy-minio
+deploy-minio: ## Deploy MinIO in the cluster for backups and restores
+deploy-minio:
+	kubectl apply -k config/test/e2e/minio
+# We can't wait on the `minio` service: https://github.com/kubernetes/kubernetes/issues/80828
+# Nor can we wait on a statefulset: https://github.com/kubernetes/kubernetes/issues/79606
+# So instead:
+	kubectl wait --namespace=minio --for=condition=Ready --timeout=300s pod minio-0
+
 .PHONY: deploy-cert-manager
 deploy-cert-manager: ## Deploy cert-manager in the configured Kubernetes cluster in ~/.kube/config
 	kubectl apply --validate=false --filename=https://github.com/jetstack/cert-manager/releases/download/v0.11.0/cert-manager.yaml
