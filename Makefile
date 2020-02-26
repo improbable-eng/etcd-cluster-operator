@@ -6,7 +6,7 @@ VERSION ?= $(shell git describe --tags)
 # Docker images are published to https://quay.io/repository/improbable-eng/etcd-cluster-operator
 DOCKER_TAG ?= ${VERSION}
 DOCKER_REPO ?= quay.io/improbable-eng
-DOCKER_IMAGES ?= controller controller-debug proxy backup-agent
+DOCKER_IMAGES ?= controller controller-debug proxy backup-agent restore-agent
 DOCKER_IMAGE_NAME_PREFIX ?= etcd-cluster-operator-
 # The Docker image for the controller-manager which will be deployed to the cluster in tests
 DOCKER_IMAGE_CONTROLLER := ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}controller$(if $DEBUG,-debug,):${DOCKER_TAG}

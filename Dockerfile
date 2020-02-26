@@ -37,8 +37,9 @@ ARG VERSION
 RUN go build -mod=readonly "-ldflags=-s -w -X=github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}" -o manager main.go
 RUN go build -mod=readonly "-ldflags=-s -w -X=github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}" -o proxy cmd/proxy/main.go
 RUN go build -mod=readonly "-ldflags=-s -w -X=github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}" -o backup-agent cmd/backup-agent/main.go
+RUN go build -mod=readonly "-ldflags=-s -w -X=github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}" -o restore-agent cmd/restore-agent/main.go
 
-RUN upx manager proxy backup-agent
+RUN upx manager proxy backup-agent restore-agent
 
 #
 # IMAGE TARGETS
@@ -66,3 +67,9 @@ WORKDIR /
 COPY --from=builder /workspace/backup-agent .
 USER nonroot:nonroot
 ENTRYPOINT ["/backup-agent"]
+
+FROM gcr.io/distroless/static:nonroot as restore-agent
+WORKDIR /
+COPY --from=builder /workspace/restore-agent .
+USER nonroot:nonroot
+ENTRYPOINT ["/restore-agent"]
