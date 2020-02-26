@@ -215,18 +215,21 @@ func installOperator(t *testing.T, ctx context.Context, kubectl *kubectlContext,
 		for _, name := range images {
 			func() {
 				t.Log("Exporting the operator image", name)
-				f, err := ioutil.TempFile("", "etcd-e2e-*")
+				exportFile, err := ioutil.TempFile("", "etcd-e2e-*")
 				require.NoError(t, err)
-				defer func() {
-					assert.NoError(t, f.Close(), "failed to close image tar")
-				}()
-				out, err := exec.CommandContext(ctx, "docker", "save", "-o", f.Name(), name).CombinedOutput()
+				require.NoError(t, exportFile.Close(), "failed to close image tar")
+				exportFileName := exportFile.Name()
+				defer assert.NoError(t, os.Remove(exportFileName), "failed to delete image tar")
+				out, err := exec.CommandContext(ctx, "docker", "save", "-o", exportFileName, name).CombinedOutput()
 				require.NoError(t, err, out)
 
-				t.Log("Loading image in to Kind cluster")
+				t.Log("Loading image in to Kind cluster", name, exportFileName)
 				for _, node := range nodes {
-					err := node.LoadImageArchive(f)
-					require.NoError(t, err)
+					func() {
+						f, err := os.Open(exportFileName)
+						require.NoError(t, err, "failed to open image tar", exportFileName)
+						require.NoError(t, node.LoadImageArchive(f), "failed to load image archive", exportFileName)
+					}()
 				}
 			}()
 		}
