@@ -82,12 +82,12 @@ e2e:
 manager: ## Build manager binary
 	go build -o bin/manager -ldflags="-X 'github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}'" main.go
 
-.PHONY: run
-run: ## Run against the configured Kubernetes cluster in ~/.kube/config
-	DISABLE_WEBHOOKS=1 go run ./main.go
 # Use 'DISABLE_WEBHOOKS=1` to run the controller-manager without the
 # webhook server, and to skip the loading of webhook TLS keys, since these are
 # difficult to set up locally.
+.PHONY: run
+run: ## Run against the configured Kubernetes cluster in ~/.kube/config
+	DISABLE_WEBHOOKS=1 go run ./main.go
 
 .PHONY: install
 install: ## Install CRDs into a cluster
@@ -106,7 +106,7 @@ deploy-controller: ## Deploy controller in the configured Kubernetes cluster in 
 
 .PHONY: deploy
 deploy: ## Deploy the operator, including dependencies
-deploy: install deploy-cert-manager deploy-controller
+deploy: deploy-cert-manager deploy-controller
 
 .PHONY: protoc-docker
 protoc-docker: ## Build a Docker image which can be used for generating protobuf code (below)
