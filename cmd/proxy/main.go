@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 
+	"github.com/go-logr/logr"
 	flag "github.com/spf13/pflag"
 	"gocloud.dev/blob"
 	"google.golang.org/grpc"
@@ -24,6 +25,7 @@ var (
 
 type proxyServer struct {
 	pb.UnimplementedProxyServiceServer
+	log logr.Logger
 }
 
 // Turn a full object URL like `gs://my-bucket/my-dir/my-obj.db` into a bucket URL (`gs://my-bucket`) and an object path
@@ -39,7 +41,7 @@ func parseBackupURL(backupUrl string) (string, string, error) {
 }
 
 func (ps *proxyServer) Download(ctx context.Context, req *pb.DownloadRequest) (*pb.DownloadResponse, error) {
-	setupLog.Info("Downloading file %q", req.BackupUrl)
+	ps.log.Info("Download", "url", req.BackupUrl)
 
 	bucketName, objectPath, err := parseBackupURL(req.BackupUrl)
 	if err != nil {
@@ -89,7 +91,7 @@ func main() {
 	}
 
 	srv := grpc.NewServer()
-	pb.RegisterProxyServiceServer(srv, &proxyServer{})
+	pb.RegisterProxyServiceServer(srv, &proxyServer{log: ctrl.Log.WithName("proxyServer")})
 	if err := srv.Serve(listener); err != nil {
 		setupLog.Error(err, "Failed to serve")
 		os.Exit(1)
