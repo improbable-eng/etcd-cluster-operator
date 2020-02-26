@@ -14,8 +14,6 @@ import (
 	"github.com/otiai10/copy"
 	"github.com/spf13/pflag"
 	"go.etcd.io/etcd/clientv3/snapshot"
-	_ "gocloud.dev/blob/gcsblob"
-	_ "gocloud.dev/blob/s3blob"
 	"google.golang.org/grpc"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"

@@ -11,6 +11,8 @@ import (
 	"github.com/go-logr/logr"
 	flag "github.com/spf13/pflag"
 	"gocloud.dev/blob"
+	_ "gocloud.dev/blob/gcsblob"
+	_ "gocloud.dev/blob/s3blob"
 	"google.golang.org/grpc"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
