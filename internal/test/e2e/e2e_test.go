@@ -491,10 +491,10 @@ func TestE2E(t *testing.T) {
 		t.Run("Restore", func(t *testing.T) {
 			t.Parallel()
 			rl := corev1.ResourceList{
-				// 1-node cluster
-				// set job
-				corev1.ResourceCPU:    resource.MustParse("300m"),
-				corev1.ResourceMemory: resource.MustParse("250Mi"),
+				// 3-node cluster
+				// set and get jobs
+				corev1.ResourceCPU:    resource.MustParse("700m"),
+				corev1.ResourceMemory: resource.MustParse("650Mi"),
 			}
 			ns, _ := NamespaceForTest(t, kubectl, rl)
 			// defer cleanup()
