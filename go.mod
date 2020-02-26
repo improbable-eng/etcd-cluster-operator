@@ -17,7 +17,7 @@ require (
 	github.com/coreos/go-semver v0.3.0
 	github.com/dustinkirkland/golang-petname v0.0.0-20190613200456-11339a705ed2
 	github.com/go-logr/logr v0.1.0
-	github.com/go-logr/zapr v0.1.1 // indirect
+	github.com/go-logr/zapr v0.1.1
 	github.com/golang/protobuf v1.3.3
 	github.com/google/go-cmp v0.3.1
 	github.com/google/gofuzz v1.0.0

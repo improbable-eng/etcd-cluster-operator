@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/go-logr/zapr"
 	"github.com/otiai10/copy"
 	"github.com/spf13/pflag"
 	"go.etcd.io/etcd/clientv3/snapshot"
@@ -81,8 +82,8 @@ func main() {
 		fmt.Println(version.Version)
 		os.Exit(0)
 	}
-
-	ctrl.SetLogger(zap.Logger(true))
+	zapLogger := zap.NewRaw()
+	ctrl.SetLogger(zapr.NewLogger(zapLogger))
 	setupLog.Info(
 		"Starting restore-agent",
 		"version", version.Version,
@@ -103,7 +104,7 @@ func main() {
 
 	log := ctrl.Log.WithName("restore-agent")
 
-	log.Info("Dialing proxy")
+	log.V(2).Info("Dialing proxy")
 	conn, err := grpc.Dial(*proxyURL, grpc.WithInsecure())
 	if err != nil {
 		panic(loggedError(log, err, "failed to dial proxy"))
@@ -157,7 +158,7 @@ func main() {
 		SkipHashCheck:       false,
 	}
 
-	client := snapshot.NewV3(nil)
+	client := snapshot.NewV3(zapLogger)
 	log.V(2).Info("Executing restore")
 	err = client.Restore(restoreConfig)
 	if err != nil {
