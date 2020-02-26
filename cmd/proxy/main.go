@@ -86,7 +86,7 @@ func main() {
 	}
 	ctrl.SetLogger(zap.Logger(true))
 
-	setupLog.Info("Starting etcd-cluster-controller upload/download Proxy service", "version", version.Version)
+	setupLog.Info("Starting proxy", "version", version.Version)
 
 	// Launch gRPC server
 	grpcAddress := fmt.Sprintf(":%d", *apiPort)
@@ -98,7 +98,7 @@ func main() {
 	}
 
 	srv := grpc.NewServer()
-	pb.RegisterProxyServiceServer(srv, &proxyServer{log: ctrl.Log.WithName("proxyServer")})
+	pb.RegisterProxyServiceServer(srv, &proxyServer{log: ctrl.Log.WithName("proxy-server")})
 	if err := srv.Serve(listener); err != nil {
 		setupLog.Error(err, "Failed to serve")
 		os.Exit(1)

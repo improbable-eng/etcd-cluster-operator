@@ -10,16 +10,30 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/otiai10/copy"
 	"github.com/spf13/pflag"
 	"go.etcd.io/etcd/clientv3/snapshot"
 	_ "gocloud.dev/blob/gcsblob"
 	_ "gocloud.dev/blob/s3blob"
 	"google.golang.org/grpc"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	pb "github.com/improbable-eng/etcd-cluster-operator/api/proxy/v1"
 	"github.com/improbable-eng/etcd-cluster-operator/version"
 )
+
+var (
+	setupLog = ctrl.Log.WithName("setup")
+)
+
+// loggedError logs an error locally and returns the error decorated with the
+// log message so that it can be returned to the protobuf client.
+func loggedError(log logr.Logger, err error, message string) error {
+	log.Error(err, message)
+	return fmt.Errorf("%s: %s", message, err)
+}
 
 func main() {
 
@@ -63,66 +77,73 @@ func main() {
 		false,
 		"Print version information and exit")
 
-	verbose := pflag.Bool("verbose", false, "Print out verbose information")
-
 	pflag.Parse()
-
-	if *verbose {
-		fmt.Printf("Using etcd peer name: %s\n", *etcdPeerName)
-		fmt.Printf("Using etcd cluster name: %s\n", *etcdClusterName)
-		fmt.Printf("Using etcd initial cluster: %s\n", *etcdInitialCluster)
-		fmt.Printf("Using etcd advertise URL: %s\n", *etcdAdvertiseURL)
-		fmt.Printf("Using etcd data directory: %s\n", *etcdDataDir)
-		fmt.Printf("Using snapshot directory: %s\n", *snapshotDir)
-		fmt.Printf("Using proxy URL: %s\n", *proxyURL)
-		fmt.Printf("Using backup URL: %s\n", *backupURL)
-		fmt.Printf("Using timeout: %d seconds\n", *timeoutSeconds)
-	}
 
 	if *printVersion {
 		fmt.Println(version.Version)
 		os.Exit(0)
 	}
 
+	ctrl.SetLogger(zap.Logger(true))
+	setupLog.Info(
+		"Starting restore-agent",
+		"version", version.Version,
+		"etcd-peer-name", *etcdPeerName,
+		"etcd-cluster-name", *etcdClusterName,
+		"etcd-initial-cluster", *etcdInitialCluster,
+		"etcd-advertise-url", *etcdAdvertiseURL,
+		"etcd-data-directory", *etcdDataDir,
+		"snapshot-directory", *snapshotDir,
+		"proxy-url", *proxyURL,
+		"backup-url", *backupURL,
+		"timeout", *timeoutSeconds,
+	)
+
 	// Pull the object from cloud storage into the snapshot directory.
 	ctx, ctxCancel := context.WithTimeout(context.Background(), time.Second*time.Duration(*timeoutSeconds))
 	defer ctxCancel()
 
-	fmt.Printf("Downloading backup file from Proxy %s\n", *backupURL)
+	log := ctrl.Log.WithName("restore-agent")
+
+	log.Info("Dialing proxy")
 	conn, err := grpc.Dial(*proxyURL, grpc.WithInsecure())
 	if err != nil {
-		panic(err)
+		panic(loggedError(log, err, "failed to dial proxy"))
 	}
 
 	c := pb.NewProxyServiceClient(conn)
+
+	log.V(2).Info("Downloading")
 	r, err := c.Download(ctx, &pb.DownloadRequest{
 		// The inconsistent capitalisation of 'URL' is because of https://github.com/golang/protobuf/issues/156
 		BackupUrl: *backupURL,
 	})
 	if err != nil {
-		panic(err)
+		panic(loggedError(log, err, "failed to download"))
 	}
 
+	log.V(2).Info("Closing proxy connection")
 	err = conn.Close()
 	if err != nil {
-		panic(err)
+		panic(loggedError(log, err, "failed to close proxy connection"))
 	}
-	fmt.Printf("Have backup file of size %d", len(r.Backup))
+
+	log.V(2).Info("Download complete", "backup-size", len(r.Backup))
 
 	snapshotFilePath := filepath.Join(*snapshotDir, "snapshot.db")
-	fmt.Printf("Saving Object to local storage location %s\n", snapshotFilePath)
+	log.V(2).Info("Saving object", "local-storage-location", snapshotFilePath)
 	snapshotFile, err := os.Create(snapshotFilePath)
 	if err != nil {
-		panic(err)
+		panic(loggedError(log, err, "failed to create snapshot file"))
 	}
 	snapshotFileWriter := bufio.NewWriter(snapshotFile)
 	_, err = io.Copy(snapshotFileWriter, bytes.NewReader(r.Backup))
 	if err != nil {
-		panic(err)
+		panic(loggedError(log, err, "failed to copy backup to snapshot file"))
 	}
 	err = snapshotFileWriter.Flush()
 	if err != nil {
-		panic(err)
+		panic(loggedError(log, err, "failed to flush snapshot file"))
 	}
 
 	restoreDir := filepath.Join(*snapshotDir, "data-dir")
@@ -139,15 +160,15 @@ func main() {
 	}
 
 	client := snapshot.NewV3(nil)
-	fmt.Printf("Executing restore\n")
+	log.V(2).Info("Executing restore")
 	err = client.Restore(restoreConfig)
 	if err != nil {
-		panic(err)
+		panic(loggedError(log, err, "failed to restore"))
 	}
-	fmt.Printf("Copying restored data directory %s into correct PV on path %s\n", restoreDir, *etcdDataDir)
+	log.V(2).Info("Copying restored data directory into PV", "restore-dir", restoreDir, "etcd-data-dir", *etcdDataDir)
 	err = copy.Copy(restoreDir, *etcdDataDir)
 	if err != nil {
-		panic(err)
+		panic(loggedError(log, err, "failed to copy restored data into PV"))
 	}
-	fmt.Printf("Restore complete\n")
+	log.V(2).Info("Restore complete")
 }

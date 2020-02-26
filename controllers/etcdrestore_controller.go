@@ -427,11 +427,6 @@ func (r *EtcdRestoreReconciler) podForRestore(restore etcdv1alpha1.EtcdRestore, 
 		// We know there's only one container and it's the first in the list
 		pod.Spec.Containers[0].Args = append(pod.Spec.Containers[0].Args, fmt.Sprintf("--%s=%s", flag, value))
 	}
-	boolFlag := func(flag string) {
-		// We know there's only one container and it's the first in the list
-		pod.Spec.Containers[0].Args = append(pod.Spec.Containers[0].Args, fmt.Sprintf("--%s", flag))
-	}
-
 	stringFlag("etcd-peer-name", peer.Name)
 	stringFlag("etcd-cluster-name", restore.Spec.ClusterTemplate.ClusterName)
 	stringFlag("etcd-initial-cluster", staticBootstrapInitialCluster(*peer.Spec.Bootstrap.Static))
@@ -440,7 +435,6 @@ func (r *EtcdRestoreReconciler) podForRestore(restore etcdv1alpha1.EtcdRestore, 
 	stringFlag("snapshot-dir", snapshotDir)
 	stringFlag("backup-url", restore.Spec.Source.ObjectURL)
 	stringFlag("proxy-url", r.ProxyURL)
-	boolFlag("verbose")
 
 	markPod(restore, &pod)
 	return &pod
