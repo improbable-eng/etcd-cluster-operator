@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+configMapGenerator:
+  - name: example-backup
+    namespace: minio
+    files:
+      - snapshot.db
+resources:
+  - minio.yaml
+generatorOptions:
+  disableNameSuffixHash: true

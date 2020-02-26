@@ -19,7 +19,7 @@ type ServiceCreatedEvent struct {
 
 func (s *ServiceCreatedEvent) Record(recorder record.EventRecorder) {
 	recorder.Event(s.Object,
-		"Normal",
+		K8sEventTypeNormal,
 		"ServiceCreated",
 		fmt.Sprintf("Created service with name %q", s.ServiceName))
 }
@@ -31,7 +31,7 @@ type PeerCreatedEvent struct {
 
 func (s *PeerCreatedEvent) Record(recorder record.EventRecorder) {
 	recorder.Event(s.Object,
-		"Normal",
+		K8sEventTypeNormal,
 		"PeerCreated",
 		fmt.Sprintf("Created a new EtcdPeer with name %q", s.PeerName))
 }
@@ -43,7 +43,7 @@ type PeerRemovedEvent struct {
 
 func (s *PeerRemovedEvent) Record(recorder record.EventRecorder) {
 	recorder.Event(s.Object,
-		"Normal",
+		K8sEventTypeNormal,
 		"PeerRemoved",
 		fmt.Sprintf("Removed EtcdPeer with name %q", s.PeerName))
 }
@@ -56,7 +56,7 @@ type MemberAddedEvent struct {
 
 func (s *MemberAddedEvent) Record(recorder record.EventRecorder) {
 	recorder.Event(s.Object,
-		"Normal",
+		K8sEventTypeNormal,
 		"MemberAdded",
 		fmt.Sprintf("Added a new member with name %q", s.Name))
 }
@@ -69,7 +69,7 @@ type MemberRemovedEvent struct {
 
 func (s *MemberRemovedEvent) Record(recorder record.EventRecorder) {
 	recorder.Event(s.Object,
-		"Normal",
+		K8sEventTypeNormal,
 		"MemberRemoved",
 		fmt.Sprintf("Removed a member with name %q", s.Name))
 }

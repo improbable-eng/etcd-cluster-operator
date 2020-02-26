@@ -14,3 +14,6 @@ resources:
 - group: etcd
   version: v1alpha1
   kind: EtcdBackupSchedule
+- group: etcd
+  version: v1alpha1
+  kind: EtcdRestore

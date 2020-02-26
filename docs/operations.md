@@ -301,24 +301,24 @@ which allows you to track the progress of the scale down operations.
 
 The operator includes two controllers to help taking scheduled backups of etcd data, responding to `EtcdBackup` and `EtcdBackupSchedule` resources.
 
-#### The `EtcdBackup` resource
+### The `EtcdBackup` resource
 
 A backup can be taken at any time by deploying an `EtcdBackup` resource:
 
-```
+```bash
 $ kubectl apply -f config/samples/etcd_v1alpha1_etcdbackup.yaml
 ```
 
 When the operator detects this resource has been applied, it will take a snapshot of the etcd state from the given cluster endpoints.
 This snapshot is then uploaded to the given destination where it can be persisted.
 
-#### The `EtcdBackupSchedule` resource
+### The `EtcdBackupSchedule` resource
 
 Backups can be scheduled to be taken at given intervals:
 
-```
+```bash
 $ kubectl apply -f config/samples/etcd_v1alpha1_etcdbackupschedule.yaml
-```
+```	
 
 The resource specifies a crontab-style schedule defining how often the backup should be taken.
 It includes a spec similar to the  `EtcdBackup` resource to define how the backup should be taken, and where it should be placed.
@@ -379,6 +379,57 @@ Once the upgrade is complete, all the `EtcdPeers` should report the new version.
 
 Additionally, the `etcd-cluster-operator` will generate an `Event` for each operation it successfully performs,
 which allows you to track the progress of the upgrade operations.
+
+### Restore from a Backup
+
+A restore is represented by an `EtcdRestore` resource. To restore from a backup, a new cluster must be created. It is
+not possible to restore a backup into an existing, already running cluster. An existing cluster should be deleted,
+including the Persistent Volume Claims, before restoring a new one with the same name.
+
+An example of a restore resource is below:
+
+```yaml
+apiVersion: etcd.improbable.io/v1alpha1
+kind: EtcdRestore
+metadata:
+  name: e2e-restore
+spec:
+  source:
+    bucket:
+      bucketURL: gs://etcd-backup-test
+      objectPath: foo.db
+      credentials:
+        googleCloud:
+          secretKeyRef:
+            name: backup-gcs-cred
+            key: gcp.json
+            optional: false
+  clusterTemplate:
+    clusterName: e2e-backup-cluster
+    spec:
+      replicas: 3
+      storage:
+        volumeClaimTemplate:
+          storageClassName: standard
+          resources:
+            requests:
+              storage: 100Mi
+```
+
+The `spec.source` field is used to define the source of the backup `.db` file. Currently the only supported option is
+`bucket` which can pull a restore file from Google Cloud Storage or Amazon S3. The `bucketURL` field should have a
+scheme to indicate which source is being used.
+
+| Storage Type         | Bucket URL Scheme |
+| -------------------- | ----------------- |
+| Google Cloud Storage | `gs://`           |
+| Amazon S3            | `s3://`           |
+
+The `objectPath` should be the path to the backup file object inside the bucket. The `credentials` field can be used to
+provide credentials (via a Secret) to access the storage bucket in question, in a provider specific manner.
+
+The `spec.clusterTemplate` field describes the `spec` of the cluster we will create, and supports exactly the same
+options as the `spec` field on a `EtcdCluster` resource.
 
 ## Frequently Asked Questions
 

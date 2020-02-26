@@ -97,15 +97,23 @@ Once a backup has finished, the controller will ensure that we are only keeping 
 
 ## Backup Restoration
 
-Providing tooling to restore backups is out of scope of this design.
-We have judged it to be sufficient to provide documentation on how to restore backups, but not provide any built-in mechanisms to perform the restoration for you.
-The ETCD tooling does well at restoring the backup snapshots and we do not feel like there is much value to be added there.
+Restores are done via an `EtcdRestore` resource. This will create a new cluster from the restored data. Based on the
+etcd documentation it is not possible to do a restore in-place. At least, not without stopping the `etcd` process and
+replacing the data directory.
+
+Traditionally a restore is done 'on the node' using `etcdctl`, before starting the `etcd` process. In Kubernetes we
+instead pre-create the PVC for the peers ahead of time, then use a Pod to execute the restore (using the "restore
+agent"). The cluster is then created to use those PVCs. Because it's a property of etcd to ignore bootstrap instructions
+if the data directory already exists, the cluster will ignore bootstrap and simply start.
+
+Because of this requirement to restore into the data directory, we can't do the restore from the operator pod like we
+can with the backup. (The PVC location may be in a different zone to the operator pod.) So a Pod must be used.
 
 ## Alternatives
 
 This behaviour could conceivably live inside of a Kubernetes `Job` / `CronJob` running some custom container to make the backup & push it to a remote.
 We chose to avoid this approach as it limits the configurability of the backups. 
-It would quicky become complex to support different backup strategies and storage destinations, and we'd likely end up implementing some configuration layer infront of the job.
+It would quickly become complex to support different backup strategies and storage destinations, and we'd likely end up implementing some configuration layer infront of the job.
 
 The [Velero](https://github.com/vmware-tanzu/velero) project aims to provide tools to back up all important data in a Kubernetes cluster. 
 We considered building an integration in to this project to do the ETCD backups for us - and there was no technical reason we found why this wouldn't be possible. 

@@ -18,6 +18,7 @@ bases:
 - ../manager
 - ../webhook
 - ../certmanager
+- ../proxy
 
 resources:
 - namespace.yaml

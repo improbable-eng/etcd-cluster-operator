@@ -1,0 +1,7 @@
+apiVersion: etcd.improbable.io/v1alpha1
+kind: EtcdRestore
+metadata:
+  name: etcdrestore-sample
+spec:
+  # Add fields here
+  foo: bar

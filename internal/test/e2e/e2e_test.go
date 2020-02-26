@@ -175,7 +175,61 @@ func buildOperator(t *testing.T, ctx context.Context) (imageTar string, err erro
 	return imageTar, nil
 }
 
-func installOperator(t *testing.T, ctx context.Context, kubectl *kubectlContext, kind *cluster.Context, imageTar string) {
+func buildProxy(t *testing.T, ctx context.Context) (imageTar string, err error) {
+	t.Log("Building the proxy")
+	// Tag for running this test, for naming resources.
+	operatorImage := "eco-proxy:test"
+
+	// Build the operator.
+	out, err := exec.CommandContext(ctx, "make", "-C", *fRepoRoot, "docker-build-proxy", "VERSION=test").CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("%w Output: %s", err, out)
+	}
+
+	// Bundle the image to a tar.
+	tmpDir, err := ioutil.TempDir("", "etcd-cluster-operator-e2e-test")
+	if err != nil {
+		return "", err
+	}
+
+	imageTar = filepath.Join(tmpDir, "eco-proxy.tar")
+
+	t.Log("Exporting the operator image")
+	out, err = exec.CommandContext(ctx, "docker", "save", "-o", imageTar, operatorImage).CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("%w Output: %s", err, out)
+	}
+	return imageTar, nil
+}
+
+func buildRestoreAgent(t *testing.T, ctx context.Context) (imageTar string, err error) {
+	t.Log("Building the restore agent")
+	// Tag for running this test, for naming resources.
+	restoreAgentImage := "eco-restore-agent:test"
+
+	// Build the operator.
+	out, err := exec.CommandContext(ctx, "make", "-C", *fRepoRoot, "docker-build-restore-agent", "VERSION=test").CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("%w Output: %s", err, out)
+	}
+
+	// Bundle the image to a tar.
+	tmpDir, err := ioutil.TempDir("", "etcd-cluster-operator-e2e-test")
+	if err != nil {
+		return "", err
+	}
+
+	imageTar = filepath.Join(tmpDir, "eco-restore-agent.tar")
+
+	t.Log("Exporting the operator image")
+	out, err = exec.CommandContext(ctx, "docker", "save", "-o", imageTar, restoreAgentImage).CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("%w Output: %s", err, out)
+	}
+	return imageTar, nil
+}
+
+func installOperator(t *testing.T, ctx context.Context, kubectl *kubectlContext, kind *cluster.Context, imageTars []string) {
 	var wg sync.WaitGroup
 
 	wg.Add(1)
@@ -204,6 +258,20 @@ func installOperator(t *testing.T, ctx context.Context, kubectl *kubectlContext,
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		t.Log("Installing MinIO")
+		err := kubectl.Apply("-k", filepath.Join(*fRepoRoot, "config", "test", "e2e", "minio"))
+		require.NoError(t, err)
+		t.Log("Waiting for MinIO to be ready")
+		// We can't wait on the `minio` service (https://github.com/kubernetes/kubernetes/issues/80828) so instead
+		// wait for the underlying pod. It's got a deterministic name (`minio-0`) so this isn't so bad.
+		time.Sleep(time.Second * 10)
+		err = kubectl.Wait("--namespace=minio", "--for=condition=Ready", "--timeout=300s", "pod", "minio-0")
+		require.NoError(t, err)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
 		// Ensure CRDs exist in the cluster.
 		t.Log("Applying CRDs")
 		err := kubectl.Apply("--kustomize", filepath.Join(*fRepoRoot, "config", "crd"))
@@ -213,18 +281,20 @@ func installOperator(t *testing.T, ctx context.Context, kubectl *kubectlContext,
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		imageFile, err := os.Open(imageTar)
-		require.NoError(t, err)
-		defer func() {
-			assert.NoError(t, imageFile.Close(), "failed to close operator image tar")
-		}()
-		// Load the built image into the Kind cluster.
-		t.Log("Loading image in to Kind cluster")
-		nodes, err := kind.ListInternalNodes()
-		require.NoError(t, err)
-		for _, node := range nodes {
-			err := node.LoadImageArchive(imageFile)
+		for _, imageTar := range imageTars {
+			imageFile, err := os.Open(imageTar)
 			require.NoError(t, err)
+			defer func() {
+				assert.NoError(t, imageFile.Close(), "failed to close image tar")
+			}()
+			// Load the built image into the Kind cluster.
+			t.Log("Loading image in to Kind cluster")
+			nodes, err := kind.ListInternalNodes()
+			require.NoError(t, err)
+			for _, node := range nodes {
+				err := node.LoadImageArchive(imageFile)
+				require.NoError(t, err)
+			}
 		}
 	}()
 
@@ -238,9 +308,11 @@ func installOperator(t *testing.T, ctx context.Context, kubectl *kubectlContext,
 func setupKind(t *testing.T, ctx context.Context, stopped chan struct{}) *kubectlContext {
 	ctx, cancel := context.WithCancel(ctx)
 	var (
-		kind     *cluster.Context
-		imageTar string
-		wg       sync.WaitGroup
+		kind                 *cluster.Context
+		operatorImageTar     string
+		proxyImageTar        string
+		restoreAgentImageTar string
+		wg                   sync.WaitGroup
 	)
 	stoppedKind := make(chan struct{})
 	go func() {
@@ -251,11 +323,34 @@ func setupKind(t *testing.T, ctx context.Context, stopped chan struct{}) *kubect
 	go func() {
 		defer wg.Done()
 		var err error
-		imageTar, err = buildOperator(t, ctx)
+		operatorImageTar, err = buildOperator(t, ctx)
 		if err != nil {
 			assert.NoError(t, err)
 			cancel()
 		}
+
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		var err error
+		proxyImageTar, err = buildProxy(t, ctx)
+		if err != nil {
+			assert.NoError(t, err)
+			cancel()
+		}
+
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		var err error
+		restoreAgentImageTar, err = buildRestoreAgent(t, ctx)
+		if err != nil {
+			assert.NoError(t, err)
+			cancel()
+		}
+
 	}()
 	wg.Add(1)
 	go func() {
@@ -279,7 +374,7 @@ func setupKind(t *testing.T, ctx context.Context, stopped chan struct{}) *kubect
 	err := os.Setenv("KUBECONFIG", kubectl.configPath)
 	require.NoError(t, err)
 
-	installOperator(t, ctx, kubectl, kind, imageTar)
+	installOperator(t, ctx, kubectl, kind, []string{operatorImageTar, proxyImageTar, restoreAgentImageTar})
 
 	return kubectl
 }
@@ -399,6 +494,18 @@ func TestE2E(t *testing.T) {
 			defer cleanup()
 			backupTests(t, kubectl.WithT(t).WithDefaultNamespace(ns))
 		})
+		t.Run("Restore", func(t *testing.T) {
+			t.Parallel()
+			rl := corev1.ResourceList{
+				// 1-node cluster
+				// set job
+				corev1.ResourceCPU:    resource.MustParse("300m"),
+				corev1.ResourceMemory: resource.MustParse("250Mi"),
+			}
+			ns, _ := NamespaceForTest(t, kubectl, rl)
+			// defer cleanup()
+			restoreTests(t, kubectl.WithT(t).WithDefaultNamespace(ns))
+		})
 		t.Run("Version", func(t *testing.T) {
 			t.Parallel()
 			rl := corev1.ResourceList{
@@ -413,6 +520,24 @@ func TestE2E(t *testing.T) {
 			versionTests(t, kubectl.WithDefaultNamespace(ns))
 		})
 	})
+}
+
+func restoreTests(t *testing.T, kubectl *kubectlContext) {
+	t.Log("Create EtcdRestore from backup in MinIO")
+	err := kubectl.Apply("--filename",
+		filepath.Join(*fRepoRoot, "config", "test", "e2e", "restore", "etcdrestore.yaml"))
+	require.NoError(t, err)
+
+	t.Log("And the data is still available.")
+	out, err := etcdctlInCluster(
+		kubectl,
+		time.Minute*2,
+		"restored-cluster",
+		"get", "--print-value-only", "--", "foo",
+	)
+	require.NoError(t, err, out)
+	assert.Equal(t, "bar\n", out)
+	require.NoError(t, err, out)
 }
 
 func backupTests(t *testing.T, kubectl *kubectlContext) {

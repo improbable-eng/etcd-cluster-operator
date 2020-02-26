@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"io/ioutil"
 	"net"
+	"net/url"
 	"os"
 
 	flag "github.com/spf13/pflag"
+	"gocloud.dev/blob"
 	"google.golang.org/grpc"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -20,6 +24,46 @@ var (
 
 type proxyServer struct {
 	pb.UnimplementedProxyServiceServer
+}
+
+// Turn a full object URL like `gs://my-bucket/my-dir/my-obj.db` into a bucket URL (`gs://my-bucket`) and an object path
+// (`/my-dir/my-obj.db`).
+func parseBackupURL(backupUrl string) (string, string, error) {
+	u, err := url.Parse(backupUrl)
+	if err != nil {
+		return "", "", err
+	}
+	path := u.Path
+	u.Path = ""
+	return u.String(), path, nil
+}
+
+func (ps *proxyServer) Download(ctx context.Context, req *pb.DownloadRequest) (*pb.DownloadResponse, error) {
+	setupLog.Info("Downloading file %q", req.BackupUrl)
+
+	bucketName, objectPath, err := parseBackupURL(req.BackupUrl)
+	if err != nil {
+		return nil, err
+	}
+	bucket, err := blob.OpenBucket(ctx, bucketName)
+	if err != nil {
+		return nil, err
+	}
+
+	blobReader, err := bucket.NewReader(ctx, objectPath, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Here we read the entire contents of the backup into memory. In theory these could be quite big (multiple
+	// gigabytes). So we're actually taking a risk that the backup could be *too big* for our available memory.
+	backup, err := ioutil.ReadAll(blobReader)
+	if err != nil {
+		return nil, err
+	}
+
+	setupLog.Info("Returning response with backup file size %d bytes", len(backup))
+	return &pb.DownloadResponse{Backup: backup}, nil
 }
 
 func main() {

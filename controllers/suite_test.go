@@ -116,6 +116,15 @@ func (s *controllerSuite) setupTest(t *testing.T, etcdAPI etcd.APIBuilder) (tear
 	}
 	err = backupController.SetupWithManager(mgr)
 	require.NoError(t, err, "failed to setup EtcdBackupSchedule controller")
+
+	restoreController := EtcdRestoreReconciler{
+		Client:   mgr.GetClient(),
+		Recorder: mgr.GetEventRecorderFor("etcdrestore-reconciler"),
+		Log:      logger.WithName("EtcdCluster"),
+	}
+	err = restoreController.SetupWithManager(mgr)
+	require.NoError(t, err, "failed to setup EtcdRestoreReconciler controller")
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
