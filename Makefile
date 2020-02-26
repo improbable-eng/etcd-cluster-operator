@@ -12,6 +12,7 @@ DOCKER_IMAGE_NAME_PREFIX ?= etcd-cluster-operator-
 DOCKER_IMAGE_CONTROLLER := ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}controller$(if $DEBUG,-debug,):${DOCKER_TAG}
 DOCKER_IMAGE_PROXY := ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}proxy:${DOCKER_TAG}
 DOCKER_IMAGE_RESTORE_AGENT := ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}restore-agent:${DOCKER_TAG}
+DOCKER_IMAGE_BACKUP_AGENT := ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}backup-agent:${DOCKER_TAG}
 
 # Set DEBUG=TRUE to use debug Docker images and to show debugging output
 DEBUG ?=
@@ -70,6 +71,9 @@ e2e-kind: ## Run end to end tests - creates a new Kind cluster called etcd-e2e
 			--repo-root ${CURDIR} \
 			--cleanup=${CLEANUP} \
 			--controller-image=${DOCKER_IMAGE_CONTROLLER} \
+			--proxy-image=${DOCKER_IMAGE_PROXY} \
+			--restore-agent-image=${DOCKER_IMAGE_RESTORE_AGENT} \
+			--backup-agent-image=${DOCKER_IMAGE_BACKUP_AGENT} \
 			$(ARGS)
 # We do not clean up after running the tests to
 #  a) speed up the test run time slightly
