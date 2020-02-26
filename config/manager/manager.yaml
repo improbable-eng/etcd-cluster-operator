@@ -20,7 +20,6 @@ spec:
         - /manager
         args:
         - --enable-leader-election
-        - --restore-image-name=eco-restore-agent:test
         - --proxy-url=eco-proxy.eco-system.svc
         image: controller:latest
         name: manager

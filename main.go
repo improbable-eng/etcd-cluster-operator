@@ -22,8 +22,9 @@ import (
 )
 
 var (
-	scheme   = runtime.NewScheme()
-	setupLog = ctrl.Log.WithName("setup")
+	scheme                   = runtime.NewScheme()
+	setupLog                 = ctrl.Log.WithName("setup")
+	defaultRestoreAgentImage = "REPLACE_ME"
 )
 
 const (
@@ -43,7 +44,7 @@ func main() {
 	var enableLeaderElection bool
 	var leaderElectionID string
 	var printVersion bool
-	var restoreImageName string
+	var restoreAgentImage string
 	var proxyURL string
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
@@ -54,7 +55,7 @@ func main() {
 	flag.StringVar(&backupTempDir, "backup-tmp-dir", os.TempDir(), "The directory to temporarily place backups before they are uploaded to their destination.")
 	flag.BoolVar(&printVersion, "version", false,
 		"Print version to stdout and exit")
-	flag.StringVar(&restoreImageName, "restore-image-name", "", "The Docker image to use to perform a restore")
+	flag.StringVar(&restoreAgentImage, "restore-agent-image", defaultRestoreAgentImage, "The Docker image to use to perform a restore")
 	flag.StringVar(&proxyURL, "proxy-url", "", "The URL of the upload/download proxy")
 	flag.Parse()
 
@@ -65,7 +66,7 @@ func main() {
 
 	ctrl.SetLogger(zap.Logger(true))
 
-	setupLog.Info("Starting manager", "version", version.Version)
+	setupLog.Info("Starting manager", "version", version.Version, "restore-agent-image", restoreAgentImage)
 
 	if !strings.Contains(proxyURL, ":") {
 		// gRPC needs a port, and this address doesn't seem to have one.
@@ -125,7 +126,7 @@ func main() {
 		Client:          mgr.GetClient(),
 		Log:             ctrl.Log.WithName("controllers").WithName("EtcdRestore"),
 		Recorder:        mgr.GetEventRecorderFor("etcdrestore-reconciler"),
-		RestorePodImage: restoreImageName,
+		RestorePodImage: restoreAgentImage,
 		ProxyURL:        proxyURL,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "EtcdRestore")

@@ -32,9 +32,13 @@ ENV GO111MODULE=on
 RUN go build -mod=readonly "-ldflags=-s -w" ./...
 
 ARG VERSION
+ARG RESTORE_AGENT_IMAGE
 
 # Compile all the binaries
-RUN go build -mod=readonly "-ldflags=-s -w -X=github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}" -o manager main.go
+RUN go build \
+    -mod=readonly \
+    -ldflags="-X=github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION} -X=main.defaultRestoreAgentImage=${RESTORE_AGENT_IMAGE}" \
+    -o manager main.go
 RUN go build -mod=readonly "-ldflags=-s -w -X=github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}" -o proxy cmd/proxy/main.go
 RUN go build -mod=readonly "-ldflags=-s -w -X=github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}" -o backup-agent cmd/backup-agent/main.go
 RUN go build -mod=readonly "-ldflags=-s -w -X=github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}" -o restore-agent cmd/restore-agent/main.go

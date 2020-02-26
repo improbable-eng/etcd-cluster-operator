@@ -10,6 +10,7 @@ DOCKER_IMAGES ?= controller controller-debug proxy backup-agent restore-agent
 DOCKER_IMAGE_NAME_PREFIX ?= etcd-cluster-operator-
 # The Docker image for the controller-manager which will be deployed to the cluster in tests
 DOCKER_IMAGE_CONTROLLER := ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}controller$(if $DEBUG,-debug,):${DOCKER_TAG}
+DOCKER_IMAGE_RESTORE_AGENT := ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}restore-agent:${DOCKER_TAG}
 
 # Set DEBUG=TRUE to use debug Docker images and to show debugging output
 DEBUG ?=
@@ -156,7 +157,10 @@ docker-build: ## Build the all the docker images
 docker-build: $(addprefix docker-build-,$(DOCKER_IMAGES))
 
 docker-build-%: FORCE
-	docker build . $(if ${DEBUG},,--quiet) --target $* --build-arg VERSION=$(VERSION) --tag ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}$*:${DOCKER_TAG}
+	docker build . $(if ${DEBUG},,--quiet) --target $* \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg RESTORE_AGENT_IMAGE=${DOCKER_IMAGE_RESTORE_AGENT} \
+		--tag ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}$*:${DOCKER_TAG}
 FORCE:
 
 .PHONY: docker-push
