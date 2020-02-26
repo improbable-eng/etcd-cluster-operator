@@ -40,31 +40,38 @@ func parseBackupURL(backupUrl string) (string, string, error) {
 	return u.String(), path, nil
 }
 
+// loggedError logs an error locally and returns the error decorated with the
+// log message so that it can be returned to the protobuf client.
+func loggedError(log logr.Logger, err error, message string) error {
+	log.Error(err, message)
+	return fmt.Errorf("%s: %s", message, err)
+}
+
 func (ps *proxyServer) Download(ctx context.Context, req *pb.DownloadRequest) (*pb.DownloadResponse, error) {
-	ps.log.Info("Download", "url", req.BackupUrl)
+	log := ps.log.WithName("download").WithValues("req-backup-url", req.GetBackupUrl())
 
 	bucketName, objectPath, err := parseBackupURL(req.BackupUrl)
 	if err != nil {
-		return nil, err
+		return nil, loggedError(log, err, "failed to parse backup URL")
 	}
 	bucket, err := blob.OpenBucket(ctx, bucketName)
 	if err != nil {
-		return nil, err
+		return nil, loggedError(log, err, "failed to open bucket")
 	}
 
 	blobReader, err := bucket.NewReader(ctx, objectPath, nil)
 	if err != nil {
-		return nil, err
+		return nil, loggedError(log, err, "failed to create blob reader")
 	}
 
 	// Here we read the entire contents of the backup into memory. In theory these could be quite big (multiple
 	// gigabytes). So we're actually taking a risk that the backup could be *too big* for our available memory.
 	backup, err := ioutil.ReadAll(blobReader)
 	if err != nil {
-		return nil, err
+		return nil, loggedError(log, err, "failed to read blob")
 	}
 
-	setupLog.Info("Returning response with backup file size %d bytes", len(backup))
+	log.V(2).Info("Returning response", "backup-size", len(backup))
 	return &pb.DownloadResponse{Backup: backup}, nil
 }
 
