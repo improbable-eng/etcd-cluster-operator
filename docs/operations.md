@@ -440,6 +440,18 @@ scheme to indicate which source is being used.
 | Google Cloud Storage | `gs://`           |
 | Amazon S3            | `s3://`           |
 
+You can use MinIO, or similar storage with an S3-compatible API, by setting the S3 endpoint using
+[query parameters](https://gocloud.dev/howto/blob/#s3-compatible).
+
+For example to use MinIO hosted at `minio.example.com`:
+
+```yaml
+objectURL: s3://bucket-name/snapshot.db?endpoint=http://minio.example.com:9000&disableSSL=true&s3ForcePathStyle=true&region=eu-west-2
+```
+
+The MinIO endpoint should be resolvable and accessible by the proxy, and you may need to pass MinIO credentials as AWS
+credentials to the proxy.
+
 The `spec.clusterTemplate` field describes the `spec` of the cluster we will create, and supports exactly the same
 options as the `spec` field on a `EtcdCluster` resource.
 
