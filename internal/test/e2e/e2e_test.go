@@ -252,9 +252,8 @@ func installOperator(t *testing.T, ctx context.Context, kubectl *kubectlContext,
 				return nil
 			}()
 			if err != nil {
-				err = fmt.Errorf("error %q loading image %q", err, imageName)
+				return fmt.Errorf("error %q loading image %q", err, imageName)
 			}
-			return err
 		}
 		return nil
 	})
