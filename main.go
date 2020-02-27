@@ -31,8 +31,7 @@ var (
 )
 
 const (
-	defaultRestoreTimeoutSeconds = 300
-	defaultProxyPort             = 80
+	defaultProxyPort = 80
 )
 
 func init() {
