@@ -1,3 +1,8 @@
+MAKEFLAGS += --warn-undefined-variables
+SHELL := bash
+.SHELLFLAGS := -eu -o pipefail -c
+.DELETE_ON_ERROR:
+.SUFFIXES:
 .DEFAULT_GOAL := help
 # The version which will be reported by the --version argument of each binary
 # and which will be used as the Docker image tag
@@ -16,6 +21,8 @@ DOCKER_IMAGE_BACKUP_AGENT := ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}backup-ag
 
 # Set DEBUG=TRUE to use debug Docker images and to show debugging output
 DEBUG ?=
+# Set ARGS to specify extra go test arguments
+ARGS ?=
 
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
