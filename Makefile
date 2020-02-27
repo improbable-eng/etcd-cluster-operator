@@ -105,7 +105,7 @@ deploy-minio:
 	kubectl apply -k config/test/e2e/minio
 # We can't wait on the `minio` service: https://github.com/kubernetes/kubernetes/issues/80828
 # Nor can we wait on a statefulset: https://github.com/kubernetes/kubernetes/issues/79606
-# So instead:
+# TODO: There should be a timeout here, but the `timeout` command is not installed on macOS.
 	until [[ $$(kubectl get -n minio statefulset minio -o jsonpath="{.status.readyReplicas}") == 1 ]]; do sleep 1; done
 
 .PHONY: deploy-cert-manager

@@ -72,6 +72,8 @@ COPY --from=builder /workspace/backup-agent .
 USER nonroot:nonroot
 ENTRYPOINT ["/backup-agent"]
 
+# restore-agent must run as root
+# See https://github.com/improbable-eng/etcd-cluster-operator/issues/139
 FROM gcr.io/distroless/static as restore-agent
 WORKDIR /
 COPY --from=builder /workspace/restore-agent .

@@ -22,8 +22,11 @@ import (
 )
 
 var (
-	scheme                   = runtime.NewScheme()
-	setupLog                 = ctrl.Log.WithName("setup")
+	scheme   = runtime.NewScheme()
+	setupLog = ctrl.Log.WithName("setup")
+	// This is replaced as part of the build so that the restore-agent image
+	// matches the name prefix and version of the controller image.
+	// See Dockerfile.
 	defaultRestoreAgentImage = "REPLACE_ME"
 )
 
