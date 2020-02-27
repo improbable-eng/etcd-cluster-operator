@@ -106,7 +106,7 @@ deploy-minio:
 # We can't wait on the `minio` service: https://github.com/kubernetes/kubernetes/issues/80828
 # Nor can we wait on a statefulset: https://github.com/kubernetes/kubernetes/issues/79606
 # So instead:
-	kubectl wait --namespace=minio --for=condition=Ready --timeout=300s pod minio-0
+	timeout 300 bash -c 'until [[ $$(kubectl get -n minio statefulset minio -o jsonpath="{.status.readyReplicas}") == 1 ]]; do sleep 1; done';
 
 .PHONY: deploy-cert-manager
 deploy-cert-manager: ## Deploy cert-manager in the configured Kubernetes cluster in ~/.kube/config
