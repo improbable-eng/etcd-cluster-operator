@@ -915,12 +915,12 @@ spec:
             source:
               description: Source describes the location the backup is pulled from
               properties:
-                objectUrl:
-                  description: Bucket identifies a generic blob Storage bucket to
-                    pull the snapshot from.
+                objectURL:
+                  description: ObjectURL is a URL of a file of a backup in object
+                    storage. The scheme of this URL should be gs:// or s3://.
                   type: string
               required:
-              - objectUrl
+              - objectURL
               type: object
           required:
           - clusterTemplate

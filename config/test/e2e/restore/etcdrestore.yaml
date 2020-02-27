@@ -6,7 +6,7 @@ spec:
   source:
     # See https://gocloud.dev/howto/blob/#s3-compatible for details on how this query string works.
     # And https://godoc.org/gocloud.dev/aws#ConfigFromURLParams
-    objectUrl: s3://backups.test.improbable.io/snapshot.db?endpoint=http://minio.minio.svc:9000&disableSSL=true&s3ForcePathStyle=true&region=eu-west-2
+    objectURL: s3://backups.test.improbable.io/snapshot.db?endpoint=http://minio.minio.svc:9000&disableSSL=true&s3ForcePathStyle=true&region=eu-west-2
   clusterTemplate:
     clusterName: restored-cluster
     spec:

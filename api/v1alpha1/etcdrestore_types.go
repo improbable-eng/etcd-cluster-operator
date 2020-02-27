@@ -5,8 +5,9 @@ import (
 )
 
 type EtcdRestoreSource struct {
-	// Bucket identifies a generic blob Storage bucket to pull the snapshot from.
-	ObjectURL string `json:"objectUrl"`
+	// ObjectURL is a URL of a file of a backup in object storage.
+	// The scheme of this URL should be gs:// or s3://.
+	ObjectURL string `json:"objectURL"`
 }
 
 // A template to define the cluster we'll make. The namespace will be the same as this restore resource.
