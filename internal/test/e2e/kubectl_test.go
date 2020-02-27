@@ -67,8 +67,8 @@ func (k *kubectlContext) do(args ...string) ([]byte, error) {
 	if k.defaultNamespace != nil {
 		args = append([]string{"--namespace", *k.defaultNamespace}, args...)
 	}
-
-	k.t.Log("Running kubectl " + strings.Join(args, " "))
+	commandLine := "kubectl " + strings.Join(args, " ")
+	k.t.Log("Running ", commandLine)
 	cmd := exec.Command("kubectl", args...)
 	cmd.Env = append(cmd.Env, "KUBECONFIG="+k.configPath)
 	cmd.Env = append(cmd.Env, "HOME="+k.homeDir)
@@ -76,7 +76,7 @@ func (k *kubectlContext) do(args ...string) ([]byte, error) {
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
-		err = fmt.Errorf("%s: %w", stderr.String(), err)
+		err = fmt.Errorf("error %q from command %q with stderr %q", err, commandLine, stderr.String())
 	}
 	if stderr.Len() > 0 {
 		k.t.Logf("STDERR: %s", stderr.String())
@@ -284,10 +284,8 @@ func NamespaceForTest(t *testing.T, kubectl *kubectlContext, rl corev1.ResourceL
 	return name, cleanup
 }
 
-func DeleteAllTestNamespaces(t *testing.T, kubectl *kubectlContext) {
-	t.Log("Deleting existing test namespaces")
-	err := kubectl.Delete("namespace", "--selector", testNameLabelKey, "--wait")
-	require.NoError(t, err)
+func DeleteAllTestNamespaces(kubectl *kubectlContext) error {
+	return kubectl.Delete("namespace", "--selector", testNameLabelKey, "--wait")
 }
 
 // eventuallyInCluster runs a command as a Job in the current Kubernetes cluster namespace.
