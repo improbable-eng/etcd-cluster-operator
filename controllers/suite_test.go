@@ -120,7 +120,7 @@ func (s *controllerSuite) setupTest(t *testing.T, etcdAPI etcd.APIBuilder) (tear
 	restoreController := EtcdRestoreReconciler{
 		Client:   mgr.GetClient(),
 		Recorder: mgr.GetEventRecorderFor("etcdrestore-reconciler"),
-		Log:      logger.WithName("EtcdCluster"),
+		Log:      logger.WithName("EtcdRestore"),
 	}
 	err = restoreController.SetupWithManager(mgr)
 	require.NoError(t, err, "failed to setup EtcdRestoreReconciler controller")
