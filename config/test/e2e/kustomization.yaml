@@ -1,6 +1,6 @@
 resources:
 - ../../default
+# Patch the proxy so that it has minio credentials in the form of AWS
+# environment variables
 patchesStrategicMerge:
-  # Patch the proxy so that it has minio credentials in the form of AWS_
-  # environment variables
 - proxy_minio_credentials.yaml
