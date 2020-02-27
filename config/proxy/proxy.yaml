@@ -20,11 +20,6 @@ spec:
         args:
           - --api-port=8080
         image: proxy:latest
-        env:
-          - name: AWS_ACCESS_KEY_ID
-            value: minioadmin
-          - name: AWS_SECRET_ACCESS_KEY
-            value: minioadmin
         resources:
           limits:
             cpu: 100m

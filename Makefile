@@ -115,9 +115,9 @@ deploy-cert-manager: ## Deploy cert-manager in the configured Kubernetes cluster
 
 .PHONY: deploy-controller
 deploy-controller: ## Deploy controller in the configured Kubernetes cluster in ~/.kube/config
-	cd config/manager && kustomize edit set image controller=${DOCKER_IMAGE_CONTROLLER}
-	cd config/proxy && kustomize edit set image proxy=${DOCKER_IMAGE_PROXY}
-	kustomize build config/default | kubectl apply -f -
+	cd config/test/e2e && kustomize edit set image controller=${DOCKER_IMAGE_CONTROLLER}
+	cd config/test/e2e && kustomize edit set image proxy=${DOCKER_IMAGE_PROXY}
+	kustomize build config/test/e2e | kubectl apply -f -
 	kubectl --namespace eco-system wait --for=condition=Available --timeout=300s deploy eco-controller-manager
 
 .PHONY: deploy
