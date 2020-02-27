@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -23,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	etcd "go.etcd.io/etcd/clientv3"
+	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -50,6 +50,9 @@ var (
 	fOutputDirectory   = flag.String("output-directory", "/tmp/etcd-e2e", "The absolute path to a directory where E2E results logs will be saved.")
 	fKindClusterName   = flag.String("kind-cluster-name", "etcd-e2e", "The name of the Kind cluster to use or create")
 	fControllerImage   = flag.String("controller-image", "", "The name of the controller image")
+	fProxyImage        = flag.String("proxy-image", "", "The name of the proxy image")
+	fRestoreAgentImage = flag.String("restore-agent-image", "", "The name of the restore-agent image")
+	fBackupAgentImage  = flag.String("backup-agent-image", "", "The name of the backup-agent image")
 	fUseCurrentContext = flag.Bool("current-context", false, "Runs the tests against the current Kubernetes context, the path to kube config defaults to ~/.kube/config, unless overridden by the KUBECONFIG environment variable.")
 	fRepoRoot          = flag.String("repo-root", "", "The absolute path to the root of the etcd-cluster-operator git repository.")
 	fCleanup           = flag.Bool("cleanup", true, "Tears down the Kind cluster once the test is finished.")
@@ -145,90 +148,116 @@ func startKind(t *testing.T, ctx context.Context, stopped chan struct{}) (kind *
 		},
 	}))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error %q from kind.Create", err)
 	}
 	return kind, nil
 }
 
-func buildOperator(t *testing.T, ctx context.Context) (imageTar string, err error) {
-	t.Log("Building the operator")
-
-	// Build the operator.
+func buildImages(t *testing.T, ctx context.Context) error {
+	t.Log("Building Docker images")
 	out, err := exec.CommandContext(ctx, "make", "-C", *fRepoRoot, "docker-build").CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("%w Output: %s", err, string(out))
+		return fmt.Errorf("%w Output: %s", err, string(out))
 	}
-
-	// Bundle the image to a tar.
-	tmpDir, err := ioutil.TempDir("", "etcd-cluster-operator-e2e-test")
-	if err != nil {
-		return "", err
-	}
-
-	imageTar = filepath.Join(tmpDir, "etcd-cluster-operator.tar")
-
-	t.Log("Exporting the operator image")
-	out, err = exec.CommandContext(ctx, "docker", "save", "-o", imageTar, *fControllerImage).CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("%w Output: %s", err, out)
-	}
-	return imageTar, nil
+	return nil
 }
 
-func installOperator(t *testing.T, ctx context.Context, kubectl *kubectlContext, kind *cluster.Context, imageTar string) {
-	var wg sync.WaitGroup
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+func installOperator(t *testing.T, ctx context.Context, kubectl *kubectlContext, kind *cluster.Context) {
+	g, groupContext := errgroup.WithContext(ctx)
+	g.Go(func() error {
 		t.Log("Deleting test namespaces")
-		DeleteAllTestNamespaces(t, kubectl)
-	}()
+		return DeleteAllTestNamespaces(kubectl)
+	})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	g.Go(func() error {
 		t.Log("Deleting etcd-cluster-operator namespace")
-		err := kubectl.Delete("namespace", "eco-system", "--ignore-not-found")
-		require.NoError(t, err)
-	}()
+		return kubectl.Delete("namespace", "eco-system", "--ignore-not-found")
+	})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	g.Go(func() error {
 		t.Log("Installing cert-manager")
-		out, err := exec.CommandContext(ctx, "make", "-C", *fRepoRoot, "deploy-cert-manager").CombinedOutput()
-		require.NoError(t, err, string(out))
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		// Ensure CRDs exist in the cluster.
-		t.Log("Applying CRDs")
-		err := kubectl.Apply("--kustomize", filepath.Join(*fRepoRoot, "config", "crd"))
-		require.NoError(t, err)
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		imageFile, err := os.Open(imageTar)
-		require.NoError(t, err)
-		defer func() {
-			assert.NoError(t, imageFile.Close(), "failed to close operator image tar")
-		}()
-		// Load the built image into the Kind cluster.
-		t.Log("Loading image in to Kind cluster")
-		nodes, err := kind.ListInternalNodes()
-		require.NoError(t, err)
-		for _, node := range nodes {
-			err := node.LoadImageArchive(imageFile)
-			require.NoError(t, err)
+		out, err := exec.CommandContext(groupContext, "make", "-C", *fRepoRoot, "deploy-cert-manager").CombinedOutput()
+		if err != nil {
+			err = fmt.Errorf("error %q in make deploy-cert-manager with output %q", err, string(out))
 		}
-	}()
+		return err
+	})
 
-	wg.Wait()
+	g.Go(func() error {
+		t.Log("Installing MinIO")
+		out, err := exec.CommandContext(groupContext, "make", "-C", *fRepoRoot, "deploy-minio").CombinedOutput()
+		if err != nil {
+			err = fmt.Errorf("error %q in make deploy-minio with output %q", err, string(out))
+		}
+		return err
+	})
+
+	g.Go(func() error {
+		t.Log("Applying CRDs")
+		return kubectl.Apply("--kustomize", filepath.Join(*fRepoRoot, "config", "crd"))
+	})
+
+	g.Go(func() error {
+		images := []string{*fControllerImage, *fProxyImage, *fRestoreAgentImage, *fBackupAgentImage}
+		nodes, err := kind.ListInternalNodes()
+		if err != nil {
+			return fmt.Errorf("error %q from ListInternalNodes", err)
+		}
+
+		for _, imageName := range images {
+			select {
+			case <-groupContext.Done():
+				return groupContext.Err()
+			default:
+			}
+			err := func() error {
+				t.Log("Exporting the operator image", imageName)
+				var exportFileName string
+				if exportFile, err := ioutil.TempFile("", "etcd-e2e-*"); err == nil {
+					defer os.Remove(exportFileName)
+					if err := exportFile.Close(); err != nil {
+						return fmt.Errorf("error %q closing exportFile", err)
+					}
+					exportFileName = exportFile.Name()
+				} else {
+					return fmt.Errorf("error %q creating exportFile", err)
+				}
+
+				if out, err := exec.CommandContext(groupContext, "docker", "save", "-o", exportFileName, imageName).CombinedOutput(); err != nil {
+					return fmt.Errorf("error %q from docker save with output %q", err, string(out))
+				}
+
+				t.Log("Loading image in to Kind cluster", imageName, exportFileName)
+				for _, node := range nodes {
+					select {
+					case <-groupContext.Done():
+						return groupContext.Err()
+					default:
+					}
+					err := func() error {
+						f, err := os.Open(exportFileName)
+						if err != nil {
+							return fmt.Errorf("error %q opening exportFile %q", err, exportFileName)
+						}
+						defer f.Close()
+						if err := node.LoadImageArchive(f); err != nil {
+							return fmt.Errorf("error %q loading image archive %q", err, exportFileName)
+						}
+						return nil
+					}()
+					if err != nil {
+						return fmt.Errorf("error %q loading image into node %q", err, node.Name())
+					}
+				}
+				return nil
+			}()
+			if err != nil {
+				return fmt.Errorf("error %q loading image %q", err, imageName)
+			}
+		}
+		return nil
+	})
+	require.NoError(t, g.Wait())
 
 	t.Log("Deploying controller")
 	out, err := exec.CommandContext(ctx, "make", "-C", *fRepoRoot, "deploy-controller").CombinedOutput()
@@ -236,40 +265,34 @@ func installOperator(t *testing.T, ctx context.Context, kubectl *kubectlContext,
 }
 
 func setupKind(t *testing.T, ctx context.Context, stopped chan struct{}) *kubectlContext {
+	var g errgroup.Group
 	ctx, cancel := context.WithCancel(ctx)
-	var (
-		kind     *cluster.Context
-		imageTar string
-		wg       sync.WaitGroup
-	)
+	t.Log("Building images and starting Kind in parallel")
+	g.Go(func() error {
+		err := buildImages(t, ctx)
+		if err != nil {
+			cancel()
+		}
+		return err
+	})
+
+	var kind *cluster.Context
 	stoppedKind := make(chan struct{})
 	go func() {
 		<-stoppedKind
 		close(stopped)
 	}()
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		var err error
-		imageTar, err = buildOperator(t, ctx)
-		if err != nil {
-			assert.NoError(t, err)
-			cancel()
-		}
-	}()
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+
+	g.Go(func() error {
 		var err error
 		kind, err = startKind(t, ctx, stoppedKind)
 		if err != nil {
-			assert.NoError(t, err)
 			cancel()
 		}
-	}()
+		return err
+	})
+	require.NoError(t, g.Wait())
 
-	wg.Wait()
-	require.NoError(t, ctx.Err())
 	kubectl := &kubectlContext{
 		t:          t,
 		configPath: kind.KubeConfigPath(),
@@ -279,7 +302,7 @@ func setupKind(t *testing.T, ctx context.Context, stopped chan struct{}) *kubect
 	err := os.Setenv("KUBECONFIG", kubectl.configPath)
 	require.NoError(t, err)
 
-	installOperator(t, ctx, kubectl, kind, imageTar)
+	installOperator(t, ctx, kubectl, kind)
 
 	return kubectl
 }
@@ -320,7 +343,7 @@ func TestE2E(t *testing.T) {
 	}
 
 	// Delete all existing test namespaces, to free up resources before running new tests.
-	DeleteAllTestNamespaces(t, kubectl)
+	require.NoError(t, DeleteAllTestNamespaces(kubectl), "failed to delete test namespaces")
 
 	sampleClusterPath := filepath.Join(*fRepoRoot, "config", "samples", "etcd_v1alpha1_etcdcluster.yaml")
 
@@ -399,6 +422,18 @@ func TestE2E(t *testing.T) {
 			defer cleanup()
 			backupTests(t, kubectl.WithT(t).WithDefaultNamespace(ns))
 		})
+		t.Run("Restore", func(t *testing.T) {
+			t.Parallel()
+			rl := corev1.ResourceList{
+				// 3-node cluster
+				// set and get jobs
+				corev1.ResourceCPU:    resource.MustParse("700m"),
+				corev1.ResourceMemory: resource.MustParse("650Mi"),
+			}
+			ns, cleanup := NamespaceForTest(t, kubectl, rl)
+			defer cleanup()
+			restoreTests(t, kubectl.WithT(t).WithDefaultNamespace(ns))
+		})
 		t.Run("Version", func(t *testing.T) {
 			t.Parallel()
 			rl := corev1.ResourceList{
@@ -413,6 +448,24 @@ func TestE2E(t *testing.T) {
 			versionTests(t, kubectl.WithDefaultNamespace(ns))
 		})
 	})
+}
+
+func restoreTests(t *testing.T, kubectl *kubectlContext) {
+	t.Log("Create EtcdRestore from backup in MinIO")
+	err := kubectl.Apply("--filename",
+		filepath.Join(*fRepoRoot, "config", "test", "e2e", "restore", "etcdrestore.yaml"))
+	require.NoError(t, err)
+
+	t.Log("And the data is still available.")
+	out, err := etcdctlInCluster(
+		kubectl,
+		time.Minute*2,
+		"restored-cluster",
+		"get", "--print-value-only", "--", "foo",
+	)
+	require.NoError(t, err, out)
+	assert.Equal(t, "bar\n", out)
+	require.NoError(t, err, out)
 }
 
 func backupTests(t *testing.T, kubectl *kubectlContext) {
@@ -436,7 +489,7 @@ func backupTests(t *testing.T, kubectl *kubectlContext) {
 	kubectlSystem := kubectl.WithDefaultNamespace("eco-system")
 	var podNames string
 	err = try.Eventually(func() (err error) {
-		podNames, err = kubectlSystem.Get("pods", "--output=name")
+		podNames, err = kubectlSystem.Get("pods", "--output=name", "--selector", "control-plane=controller-manager")
 		return err
 	}, time.Minute, time.Second*5)
 	require.NoError(t, err)
@@ -517,7 +570,7 @@ func webhookTests(t *testing.T, kubectl *kubectlContext) {
 				out, err := kubectl.DryRun(lPath)
 				assert.Regexp(
 					t,
-					`^Error from server \(spec.storage.volumeClaimTemplate.storageClassName: Required value\):`,
+					`Error from server \(spec.storage.volumeClaimTemplate.storageClassName: Required value\):`,
 					err,
 				)
 				assert.Empty(t, out)

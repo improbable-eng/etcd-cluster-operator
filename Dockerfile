@@ -32,13 +32,18 @@ ENV GO111MODULE=on
 RUN go build -mod=readonly "-ldflags=-s -w" ./...
 
 ARG VERSION
+ARG RESTORE_AGENT_IMAGE
 
 # Compile all the binaries
-RUN go build -mod=readonly "-ldflags=-s -w -X=github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}" -o manager main.go
+RUN go build \
+    -mod=readonly \
+    -ldflags="-X=github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION} -X=main.defaultRestoreAgentImage=${RESTORE_AGENT_IMAGE}" \
+    -o manager main.go
 RUN go build -mod=readonly "-ldflags=-s -w -X=github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}" -o proxy cmd/proxy/main.go
 RUN go build -mod=readonly "-ldflags=-s -w -X=github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}" -o backup-agent cmd/backup-agent/main.go
+RUN go build -mod=readonly "-ldflags=-s -w -X=github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}" -o restore-agent cmd/restore-agent/main.go
 
-RUN upx manager proxy backup-agent
+RUN upx manager proxy backup-agent restore-agent
 
 #
 # IMAGE TARGETS
@@ -66,3 +71,11 @@ WORKDIR /
 COPY --from=builder /workspace/backup-agent .
 USER nonroot:nonroot
 ENTRYPOINT ["/backup-agent"]
+
+# restore-agent must run as root
+# See https://github.com/improbable-eng/etcd-cluster-operator/issues/139
+FROM gcr.io/distroless/static as restore-agent
+WORKDIR /
+COPY --from=builder /workspace/restore-agent .
+USER root:root
+ENTRYPOINT ["/restore-agent"]

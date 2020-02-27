@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	flag "github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -23,6 +24,14 @@ import (
 var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
+	// This is replaced as part of the build so that the restore-agent image
+	// matches the name prefix and version of the controller image.
+	// See Dockerfile.
+	defaultRestoreAgentImage = "REPLACE_ME"
+)
+
+const (
+	defaultProxyPort = 80
 )
 
 func init() {
@@ -37,6 +46,8 @@ func main() {
 	var enableLeaderElection bool
 	var leaderElectionID string
 	var printVersion bool
+	var restoreAgentImage string
+	var proxyURL string
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
@@ -46,16 +57,27 @@ func main() {
 	flag.StringVar(&backupTempDir, "backup-tmp-dir", os.TempDir(), "The directory to temporarily place backups before they are uploaded to their destination.")
 	flag.BoolVar(&printVersion, "version", false,
 		"Print version to stdout and exit")
+	flag.StringVar(&restoreAgentImage, "restore-agent-image", defaultRestoreAgentImage, "The Docker image to use to perform a restore")
+	flag.StringVar(&proxyURL, "proxy-url", "", "The URL of the upload/download proxy")
 	flag.Parse()
 
 	if printVersion {
 		fmt.Println(version.Version)
 		return
 	}
+	// TODO: Allow users to configure JSON logging.
+	// See https://github.com/improbable-eng/etcd-cluster-operator/issues/171
+	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
-	ctrl.SetLogger(zap.Logger(true))
+	setupLog.Info("Starting manager", "version", version.Version, "restore-agent-image", restoreAgentImage)
 
-	setupLog.Info("Starting manager", "version", version.Version)
+	if !strings.Contains(proxyURL, ":") {
+		// gRPC needs a port, and this address doesn't seem to have one.
+		proxyURL = fmt.Sprintf("%s:%d", proxyURL, defaultProxyPort)
+		setupLog.Info("Defaulting port on configured Proxy URL",
+			"default-proxy-port", defaultProxyPort,
+			"proxy-url", proxyURL)
+	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:             scheme,
@@ -101,6 +123,16 @@ func main() {
 		Schedules:   controllers.NewScheduleMap(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "EtcdBackupSchedule")
+		os.Exit(1)
+	}
+	if err = (&controllers.EtcdRestoreReconciler{
+		Client:          mgr.GetClient(),
+		Log:             ctrl.Log.WithName("controllers").WithName("EtcdRestore"),
+		Recorder:        mgr.GetEventRecorderFor("etcdrestore-reconciler"),
+		RestorePodImage: restoreAgentImage,
+		ProxyURL:        proxyURL,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "EtcdRestore")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

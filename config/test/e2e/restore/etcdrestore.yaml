@@ -1,0 +1,28 @@
+apiVersion: etcd.improbable.io/v1alpha1
+kind: EtcdRestore
+metadata:
+  name: simple-restore
+spec:
+  source:
+    # See https://gocloud.dev/howto/blob/#s3-compatible for details on how this query string works.
+    # And https://godoc.org/gocloud.dev/aws#ConfigFromURLParams
+    objectURL: s3://backups.test.improbable.io/snapshot.db?endpoint=http://minio.minio.svc:9000&disableSSL=true&s3ForcePathStyle=true&region=eu-west-2
+  clusterTemplate:
+    clusterName: restored-cluster
+    spec:
+      replicas: 3
+      version: 3.2.28
+      storage:
+        volumeClaimTemplate:
+          storageClassName: standard
+          resources:
+            requests:
+              storage: 100Mi
+      podTemplate:
+        resources:
+          requests:
+            cpu: 200m
+            memory: 200Mi
+          limits:
+            cpu: 200m
+            memory: 200Mi

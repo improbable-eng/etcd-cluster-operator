@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proxy
+  namespace: system
+  labels:
+    control-plane: proxy
+spec:
+  selector:
+    matchLabels:
+      control-plane: proxy
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        control-plane: proxy
+    spec:
+      containers:
+      - name: proxy
+        args:
+          - --api-port=8080
+        image: proxy:latest
+        resources:
+          limits:
+            cpu: 100m
+            memory: 50Mi
+          requests:
+            cpu: 100m
+            memory: 50Mi
+      terminationGracePeriodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxy
+  namespace: system
+  labels:
+    control-plane: proxy
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  selector:
+    control-plane: proxy

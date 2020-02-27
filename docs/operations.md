@@ -301,22 +301,22 @@ which allows you to track the progress of the scale down operations.
 
 The operator includes two controllers to help taking scheduled backups of etcd data, responding to `EtcdBackup` and `EtcdBackupSchedule` resources.
 
-#### The `EtcdBackup` resource
+### The `EtcdBackup` resource
 
 A backup can be taken at any time by deploying an `EtcdBackup` resource:
 
-```
+```bash
 $ kubectl apply -f config/samples/etcd_v1alpha1_etcdbackup.yaml
 ```
 
 When the operator detects this resource has been applied, it will take a snapshot of the etcd state from the given cluster endpoints.
 This snapshot is then uploaded to the given destination where it can be persisted.
 
-#### The `EtcdBackupSchedule` resource
+### The `EtcdBackupSchedule` resource
 
 Backups can be scheduled to be taken at given intervals:
 
-```
+```bash
 $ kubectl apply -f config/samples/etcd_v1alpha1_etcdbackupschedule.yaml
 ```
 
@@ -379,6 +379,81 @@ Once the upgrade is complete, all the `EtcdPeers` should report the new version.
 
 Additionally, the `etcd-cluster-operator` will generate an `Event` for each operation it successfully performs,
 which allows you to track the progress of the upgrade operations.
+
+### Restore from a Backup
+
+A restore is represented by an `EtcdRestore` resource. To restore from a backup, a new cluster must be created. It is
+not possible to restore a backup into an existing, already running cluster. An existing cluster should be deleted,
+including the Persistent Volume Claims, before restoring a new one with the same name.
+
+An example of a restore resource is below:
+
+```yaml
+apiVersion: etcd.improbable.io/v1alpha1
+kind: EtcdRestore
+metadata:
+  name: etcdrestore-sample
+spec:
+  source:
+    # See https://gocloud.dev/howto/blob/#s3-compatible for details on how this query string works.
+    # And https://godoc.org/gocloud.dev/aws#ConfigFromURLParams
+    objectURL: s3://foo-bucket/snapshot.sb
+  clusterTemplate:
+    clusterName: my-cluster
+    spec:
+      replicas: 3
+      version: 3.2.28
+      storage:
+        volumeClaimTemplate:
+          storageClassName: standard
+          resources:
+            requests:
+              storage: 1Mi
+      podTemplate:
+        resources:
+          requests:
+            cpu: 200m
+            memory: 200Mi
+          limits:
+            cpu: 200m
+            memory: 200Mi
+        affinity:
+          podAntiAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                podAffinityTerm:
+                  labelSelector:
+                    matchExpressions:
+                      - key: etcd.improbable.io/cluster-name
+                        operator: In
+                        values:
+                          - my-cluster
+                  topologyKey: kubernetes.io/hostname
+```
+
+The `spec.source` field is used to define the source of the backup `.db` file. Currently the only supported option is
+`objectURL` which can pull a restore file from Google Cloud Storage or Amazon S3. The `objectURL` field should have a
+scheme to indicate which source is being used.
+
+| Storage Type         | Bucket URL Scheme |
+| -------------------- | ----------------- |
+| Google Cloud Storage | `gs://`           |
+| Amazon S3            | `s3://`           |
+
+You can use MinIO, or similar storage with an S3-compatible API, by setting the S3 endpoint using
+[query parameters](https://gocloud.dev/howto/blob/#s3-compatible).
+
+For example to use MinIO hosted at `minio.example.com`:
+
+```yaml
+objectURL: s3://bucket-name/snapshot.db?endpoint=http://minio.example.com:9000&disableSSL=true&s3ForcePathStyle=true&region=eu-west-2
+```
+
+The MinIO endpoint should be resolvable and accessible by the proxy, and you may need to pass MinIO credentials as AWS
+credentials to the proxy.
+
+The `spec.clusterTemplate` field describes the `spec` of the cluster we will create, and supports exactly the same
+options as the `spec` field on a `EtcdCluster` resource.
 
 ## Frequently Asked Questions
 
