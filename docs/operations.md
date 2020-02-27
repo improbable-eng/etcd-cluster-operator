@@ -318,7 +318,7 @@ Backups can be scheduled to be taken at given intervals:
 
 ```bash
 $ kubectl apply -f config/samples/etcd_v1alpha1_etcdbackupschedule.yaml
-```	
+```
 
 The resource specifies a crontab-style schedule defining how often the backup should be taken.
 It includes a spec similar to the  `EtcdBackup` resource to define how the backup should be taken, and where it should be placed.
@@ -392,41 +392,53 @@ An example of a restore resource is below:
 apiVersion: etcd.improbable.io/v1alpha1
 kind: EtcdRestore
 metadata:
-  name: e2e-restore
+  name: etcdrestore-sample
 spec:
   source:
-    bucket:
-      bucketURL: gs://etcd-backup-test
-      objectPath: foo.db
-      credentials:
-        googleCloud:
-          secretKeyRef:
-            name: backup-gcs-cred
-            key: gcp.json
-            optional: false
+    # See https://gocloud.dev/howto/blob/#s3-compatible for details on how this query string works.
+    # And https://godoc.org/gocloud.dev/aws#ConfigFromURLParams
+    objectURL: s3://foo-bucket/snapshot.sb
   clusterTemplate:
-    clusterName: e2e-backup-cluster
+    clusterName: my-cluster
     spec:
       replicas: 3
+      version: 3.2.28
       storage:
         volumeClaimTemplate:
           storageClassName: standard
           resources:
             requests:
-              storage: 100Mi
+              storage: 1Mi
+      podTemplate:
+        resources:
+          requests:
+            cpu: 200m
+            memory: 200Mi
+          limits:
+            cpu: 200m
+            memory: 200Mi
+        affinity:
+          podAntiAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                podAffinityTerm:
+                  labelSelector:
+                    matchExpressions:
+                      - key: etcd.improbable.io/cluster-name
+                        operator: In
+                        values:
+                          - my-cluster
+                  topologyKey: kubernetes.io/hostname
 ```
 
 The `spec.source` field is used to define the source of the backup `.db` file. Currently the only supported option is
-`bucket` which can pull a restore file from Google Cloud Storage or Amazon S3. The `bucketURL` field should have a
+`objectURL` which can pull a restore file from Google Cloud Storage or Amazon S3. The `objectURL` field should have a
 scheme to indicate which source is being used.
 
 | Storage Type         | Bucket URL Scheme |
 | -------------------- | ----------------- |
 | Google Cloud Storage | `gs://`           |
 | Amazon S3            | `s3://`           |
-
-The `objectPath` should be the path to the backup file object inside the bucket. The `credentials` field can be used to
-provide credentials (via a Secret) to access the storage bucket in question, in a provider specific manner.
 
 The `spec.clusterTemplate` field describes the `spec` of the cluster we will create, and supports exactly the same
 options as the `spec` field on a `EtcdCluster` resource.
