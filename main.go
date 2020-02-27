@@ -66,7 +66,8 @@ func main() {
 		fmt.Println(version.Version)
 		return
 	}
-
+	// TODO: Allow users to configure JSON logging.
+	// See https://github.com/improbable-eng/etcd-cluster-operator/issues/171
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
 	setupLog.Info("Starting manager", "version", version.Version, "restore-agent-image", restoreAgentImage)
