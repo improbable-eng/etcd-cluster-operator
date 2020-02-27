@@ -431,8 +431,8 @@ func TestE2E(t *testing.T) {
 				corev1.ResourceCPU:    resource.MustParse("700m"),
 				corev1.ResourceMemory: resource.MustParse("650Mi"),
 			}
-			ns, _ := NamespaceForTest(t, kubectl, rl)
-			// defer cleanup()
+			ns, cleanup := NamespaceForTest(t, kubectl, rl)
+			defer cleanup()
 			restoreTests(t, kubectl.WithT(t).WithDefaultNamespace(ns))
 		})
 		t.Run("Version", func(t *testing.T) {
