@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -90,7 +91,9 @@ func markCluster(restore etcdv1alpha1.EtcdRestore, cluster *etcdv1alpha1.EtcdClu
 }
 
 func (r *EtcdRestoreReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	log := r.Log.WithValues("etcdrestore", req.NamespacedName)
 
 	log.Info("Begin restore reconcile")
@@ -127,7 +130,7 @@ func (r *EtcdRestoreReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	// upgraded the operator part-way through a restore things could get super fun if the way of making these changed.
 	expectedCluster := clusterForRestore(restore)
 	expectedCluster.Default()
-	// We know that the cluster will be of size one for the restore. So only consider peer zero.
+
 	expectedPeerNames := expectedPeerNamesForCluster(expectedCluster)
 	expectedPeers := make([]etcdv1alpha1.EtcdPeer, len(expectedPeerNames))
 	for i, peerName := range expectedPeerNames {
@@ -415,6 +418,9 @@ func (r *EtcdRestoreReconciler) podForRestore(restore etcdv1alpha1.EtcdRestore, 
 							MountPath: snapshotDir,
 						},
 					},
+					// TODO: Add resource requests and affinity rules which
+					// match the eventual cluster peer pod.
+					// See https://github.com/improbable-eng/etcd-cluster-operator/issues/172
 				},
 			},
 			// If we fail, we fail
