@@ -54,7 +54,7 @@ COPY --from=builder /workspace/manager .
 USER nonroot:nonroot
 ENTRYPOINT ["/manager"]
 
-FROM alpine:3.10.3 as controller-debug
+FROM alpine:3.11.3 as controller-debug
 WORKDIR /
 COPY --from=builder /workspace/manager .
 ENTRYPOINT ["/manager"]
