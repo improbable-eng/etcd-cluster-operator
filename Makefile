@@ -36,7 +36,7 @@ KIND_VERSION := 0.7.0
 KIND := ${BIN}/kind-${KIND_VERSION}
 K8S_CLUSTER_NAME := etcd-e2e
 
-E2E_ARTIFACTS_DIRECTORY := /tmp/${K8S_CLUSTER_NAME}
+E2E_ARTIFACTS_DIRECTORY ?= /tmp/${K8S_CLUSTER_NAME}
 
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
