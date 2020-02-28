@@ -133,19 +133,17 @@ controller, or directly communicate with the controller in any way.
 
 ### End to End tests
 
-#### Kind
-
-The end to end tests run, by default, using Kubernetes in Docker (KIND) and are capable of actually executing `etcd`
-pods. These tests are under `internal/test/e2e`. These tests should be limited in scope and should only focus on
+The end-to-end tests are under `internal/test/e2e`. These tests should be limited in scope and should only focus on
 externally visible changes to etcd itself. This is to avoid the tests causing the implementation becoming too rigid.
 
-For example an end to end test may create an `EtcdCluster` and assert that it can connect to it from inside the cluster
+For example an end-to-end test may create an `EtcdCluster` and assert that it can connect to it from inside the cluster
 using the expected DNS name. Elements of the Kuberentes API that a user might interact with, such as the `status` field
 on an `EtcdCluster` resource, may also be interacted with.
 
+#### Kind
+
 Here are some examples of commands which run the end-to-end tests:
- * `make e2e-kind` will create a new Kind cluster, run all the the end-to-end tests and delete the cluster when the tests are complete.
- * `make e2e-kind CLEANUP=false` will create a Kind cluster, run the tests and leave the cluster running after the tests complete.
+ * `make e2e-kind` will create a new Kind cluster, run all the the end-to-end tests.
  * `make e2e-kind 'ARGS=-run TestE2E/Parallel/Webhooks'` will run a subset of the end-to-end tests.
 
 NB If a Kind cluster with the name "etcd-e2e" already exists, that cluster will be re-used.

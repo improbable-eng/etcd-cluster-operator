@@ -67,6 +67,9 @@ CRD_OPTIONS ?= "crd:trivialVersions=true"
 # cluster at once and will require more CPU and memory.
 TEST_PARALLEL_E2E ?= 2
 
+# Prevent fancy TTY output from tools like kind
+export TERM=dumb
+
 # Stop go build tools from silently modifying go.mod and go.sum
 export GOFLAGS := -mod=readonly
 
@@ -217,7 +220,6 @@ ${KIND}: ${BIN}
 
 .PHONY: kind-cluster
 kind-cluster: ## Use Kind to create a Kubernetes cluster for E2E tests
-kind-cluster: TERM=dumb
 kind-cluster: ${KIND}
 	 ${KIND} get clusters | grep ${K8S_CLUSTER_NAME} || ${KIND} create cluster --name ${K8S_CLUSTER_NAME}
 
@@ -226,7 +228,7 @@ kind-load: ## Load all the Docker images into Kind
 kind-load: $(addprefix kind-load-,$(DOCKER_IMAGES))
 
 kind-load-%: FORCE ${KIND}
-	${KIND}	load docker-image --name ${K8S_CLUSTER_NAME} ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}$*:${DOCKER_TAG}
+	${KIND} load docker-image --name ${K8S_CLUSTER_NAME} ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}$*:${DOCKER_TAG}
 FORCE:
 
 .PHONY: kind-export-logs
