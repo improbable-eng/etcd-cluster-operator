@@ -36,6 +36,8 @@ KIND_VERSION := 0.7.0
 KIND := ${BIN}/kind-${KIND_VERSION}
 K8S_CLUSTER_NAME := etcd-e2e
 
+E2E_ARTIFACTS_DIRECTORY := /tmp/${K8S_CLUSTER_NAME}
+
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 
@@ -86,7 +88,7 @@ e2e-kind: docker-build kind-cluster kind-load deploy-e2e e2e
 e2e: ## Run the end-to-end tests - uses the current KUBE_CONFIG and context
 e2e: DEBUG=TRUE
 e2e:
-	go test -parallel ${TEST_PARALLEL_E2E} -timeout 20m ./internal/test/e2e --e2e-enabled --repo-root ${CURDIR} -v $(ARGS)
+	go test -v -parallel ${TEST_PARALLEL_E2E} -timeout 20m ./internal/test/e2e --e2e-enabled --repo-root ${CURDIR} --output-directory ${E2E_ARTIFACTS_DIRECTORY} $(ARGS)
 
 .PHONY: manager
 manager: ## Build manager binary
@@ -227,6 +229,10 @@ kind-load: $(addprefix kind-load-,$(DOCKER_IMAGES))
 kind-load-%: FORCE ${KIND}
 	${KIND}	load docker-image --name ${K8S_CLUSTER_NAME} ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}$*:${DOCKER_TAG}
 FORCE:
+
+.PHONY: kind-export-logs
+kind-export-logs:
+	${KIND} export logs --name ${K8S_CLUSTER_NAME} ${E2E_ARTIFACTS_DIRECTORY}
 
 ${BIN}:
 	mkdir -p ${BIN}
