@@ -8,8 +8,10 @@ SHELL := bash
 # and which will be used as the Docker image tag
 VERSION ?= $(shell git describe --tags)
 
-# Set DEBUG=TRUE to use debug Docker images and to show debugging output
-DEBUG ?=
+# Set DEBUG=TRUE to use debug Docker images
+# This is required by the E2E backup tests so that the test can exec `ls
+# /tmp/backup_file` in the controller-manager container.
+DEBUG ?= $(if $(filter e2e,${MAKECMDGOALS}),TRUE,)
 
 # Set ARGS to specify extra go test arguments
 ARGS ?=
@@ -21,10 +23,10 @@ DOCKER_REPO ?= quay.io/improbable-eng
 DOCKER_IMAGES ?= controller controller-debug proxy backup-agent restore-agent
 DOCKER_IMAGE_NAME_PREFIX ?= etcd-cluster-operator-
 # The Docker image for the controller-manager which will be deployed to the cluster in tests
-DOCKER_IMAGE_CONTROLLER := ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}controller$(if ${DEBUG},-debug,):${DOCKER_TAG}
-DOCKER_IMAGE_PROXY := ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}proxy:${DOCKER_TAG}
-DOCKER_IMAGE_RESTORE_AGENT := ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}restore-agent:${DOCKER_TAG}
-DOCKER_IMAGE_BACKUP_AGENT := ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}backup-agent:${DOCKER_TAG}
+DOCKER_IMAGE_CONTROLLER = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}controller$(if ${DEBUG},-debug,):${DOCKER_TAG}
+DOCKER_IMAGE_PROXY = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}proxy:${DOCKER_TAG}
+DOCKER_IMAGE_RESTORE_AGENT = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}restore-agent:${DOCKER_TAG}
+DOCKER_IMAGE_BACKUP_AGENT = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}backup-agent:${DOCKER_TAG}
 
 OS := $(shell go env GOOS)
 ARCH := $(shell go env GOARCH)
@@ -77,10 +79,12 @@ test: bin/kubebuilder
 
 .PHONY: e2e-kind
 e2e-kind: ## Run end to end tests - creates a new Kind cluster called etcd-e2e
+e2e-kind: DEBUG=TRUE
 e2e-kind: docker-build kind-cluster kind-load deploy-e2e e2e
 
 .PHONY: e2e
 e2e: ## Run the end-to-end tests - uses the current KUBE_CONFIG and context
+e2e: DEBUG=TRUE
 e2e:
 	go test -parallel ${TEST_PARALLEL_E2E} -timeout 20m ./internal/test/e2e --e2e-enabled --repo-root ${CURDIR} -v $(ARGS)
 
@@ -176,7 +180,7 @@ docker-build: ## Build the all the docker images
 docker-build: $(addprefix docker-build-,$(DOCKER_IMAGES))
 
 docker-build-%: FORCE
-	docker build . $(if ${DEBUG},,--quiet) --target $* \
+	docker build . --target $* \
 		--build-arg VERSION=$(VERSION) \
 		--build-arg RESTORE_AGENT_IMAGE=${DOCKER_IMAGE_RESTORE_AGENT} \
 		--tag ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}$*:${DOCKER_TAG}
@@ -212,6 +216,7 @@ ${KIND}: ${BIN}
 
 .PHONY: kind-cluster
 kind-cluster: ## Use Kind to create a Kubernetes cluster for E2E tests
+kind-cluster: TERM=dumb
 kind-cluster: ${KIND}
 	 ${KIND} get clusters | grep ${K8S_CLUSTER_NAME} || ${KIND} create cluster --name ${K8S_CLUSTER_NAME}
 
