@@ -82,7 +82,7 @@ e2e-kind: docker-build kind-cluster kind-load deploy-e2e e2e
 .PHONY: e2e
 e2e: ## Run the end-to-end tests - uses the current KUBE_CONFIG and context
 e2e:
-	go test -parallel ${TEST_PARALLEL_E2E} -timeout 30m ./internal/test/e2e --current-context --repo-root ${CURDIR} -v $(ARGS)
+	go test -parallel ${TEST_PARALLEL_E2E} -timeout 20m ./internal/test/e2e --e2e-enabled --repo-root ${CURDIR} -v $(ARGS)
 
 .PHONY: manager
 manager: ## Build manager binary
