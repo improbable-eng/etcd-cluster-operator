@@ -57,7 +57,6 @@ ENTRYPOINT ["/manager"]
 FROM alpine:3.10.3 as controller-debug
 WORKDIR /
 COPY --from=builder /workspace/manager .
-RUN apk update && apk add ca-certificates bash curl drill jq
 ENTRYPOINT ["/manager"]
 
 FROM gcr.io/distroless/static:nonroot as proxy
