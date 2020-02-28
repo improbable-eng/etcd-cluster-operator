@@ -7,6 +7,15 @@ SHELL := bash
 # The version which will be reported by the --version argument of each binary
 # and which will be used as the Docker image tag
 VERSION ?= $(shell git describe --tags)
+
+# Set DEBUG=TRUE to use debug Docker images
+# This is required by the E2E backup tests so that the test can exec `ls
+# /tmp/backup_file` in the controller-manager container.
+DEBUG ?= $(if $(filter e2e,${MAKECMDGOALS}),TRUE,)
+
+# Set ARGS to specify extra go test arguments
+ARGS ?=
+
 # Docker image configuration
 # Docker images are published to https://quay.io/repository/improbable-eng/etcd-cluster-operator
 DOCKER_TAG ?= ${VERSION}
@@ -14,15 +23,20 @@ DOCKER_REPO ?= quay.io/improbable-eng
 DOCKER_IMAGES ?= controller controller-debug proxy backup-agent restore-agent
 DOCKER_IMAGE_NAME_PREFIX ?= etcd-cluster-operator-
 # The Docker image for the controller-manager which will be deployed to the cluster in tests
-DOCKER_IMAGE_CONTROLLER := ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}controller$(if $DEBUG,-debug,):${DOCKER_TAG}
-DOCKER_IMAGE_PROXY := ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}proxy:${DOCKER_TAG}
-DOCKER_IMAGE_RESTORE_AGENT := ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}restore-agent:${DOCKER_TAG}
-DOCKER_IMAGE_BACKUP_AGENT := ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}backup-agent:${DOCKER_TAG}
+DOCKER_IMAGE_CONTROLLER = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}controller$(if ${DEBUG},-debug,):${DOCKER_TAG}
+DOCKER_IMAGE_PROXY = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}proxy:${DOCKER_TAG}
+DOCKER_IMAGE_RESTORE_AGENT = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}restore-agent:${DOCKER_TAG}
+DOCKER_IMAGE_BACKUP_AGENT = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}backup-agent:${DOCKER_TAG}
 
-# Set DEBUG=TRUE to use debug Docker images and to show debugging output
-DEBUG ?=
-# Set ARGS to specify extra go test arguments
-ARGS ?=
+OS := $(shell go env GOOS)
+ARCH := $(shell go env GOARCH)
+BIN := ${CURDIR}/bin
+# Kind
+KIND_VERSION := 0.7.0
+KIND := ${BIN}/kind-${KIND_VERSION}
+K8S_CLUSTER_NAME := etcd-e2e
+
+E2E_ARTIFACTS_DIRECTORY ?= /tmp/${K8S_CLUSTER_NAME}
 
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
@@ -44,12 +58,6 @@ export PATH := $(GOBIN):$(PATH)
 
 # Stop go build tools from silently modifying go.mod and go.sum
 export GOFLAGS := -mod=readonly
-
-ifeq ($(CIRCLECI),"true")
-CLEANUP="false"
-else
-CLEANUP="true"
-endif
 
 # from https://suva.sh/posts/well-documented-makefiles/
 .PHONY: help
@@ -73,23 +81,14 @@ test: bin/kubebuilder
 
 .PHONY: e2e-kind
 e2e-kind: ## Run end to end tests - creates a new Kind cluster called etcd-e2e
-	go test -v -parallel ${TEST_PARALLEL_E2E} -timeout 20m ./internal/test/e2e \
-			--kind \
-			--repo-root ${CURDIR} \
-			--cleanup=${CLEANUP} \
-			--controller-image=${DOCKER_IMAGE_CONTROLLER} \
-			--proxy-image=${DOCKER_IMAGE_PROXY} \
-			--restore-agent-image=${DOCKER_IMAGE_RESTORE_AGENT} \
-			--backup-agent-image=${DOCKER_IMAGE_BACKUP_AGENT} \
-			$(ARGS)
-# We do not clean up after running the tests to
-#  a) speed up the test run time slightly
-#  b) allow debug sessions to be attached to figure out what caused failures
+e2e-kind: DEBUG=TRUE
+e2e-kind: docker-build kind-cluster kind-load deploy-e2e e2e
 
 .PHONY: e2e
 e2e: ## Run the end-to-end tests - uses the current KUBE_CONFIG and context
+e2e: DEBUG=TRUE
 e2e:
-	go test -parallel ${TEST_PARALLEL_E2E} -timeout 30m ./internal/test/e2e --current-context --repo-root ${CURDIR} -v $(ARGS)
+	go test -v -parallel ${TEST_PARALLEL_E2E} -timeout 20m ./internal/test/e2e --e2e-enabled --repo-root ${CURDIR} --output-directory ${E2E_ARTIFACTS_DIRECTORY} $(ARGS)
 
 .PHONY: manager
 manager: ## Build manager binary
@@ -129,7 +128,11 @@ deploy-controller: ## Deploy controller in the configured Kubernetes cluster in 
 
 .PHONY: deploy
 deploy: ## Deploy the operator, including dependencies
-deploy: deploy-cert-manager deploy-controller
+deploy: deploy-controller
+
+.PHONY: deploy-e2e
+deploy-e2e: ## Deploy the operator, including all dependencies needed to run E2E tests
+deploy-e2e: deploy-cert-manager deploy-minio deploy
 
 .PHONY: protoc-docker
 protoc-docker: ## Build a Docker image which can be used for generating protobuf code (below)
@@ -179,7 +182,7 @@ docker-build: ## Build the all the docker images
 docker-build: $(addprefix docker-build-,$(DOCKER_IMAGES))
 
 docker-build-%: FORCE
-	docker build . $(if ${DEBUG},,--quiet) --target $* \
+	docker build . --target $* \
 		--build-arg VERSION=$(VERSION) \
 		--build-arg RESTORE_AGENT_IMAGE=${DOCKER_IMAGE_RESTORE_AGENT} \
 		--tag ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}$*:${DOCKER_TAG}
@@ -208,3 +211,28 @@ endif
 verify-%: FORCE
 	./hack/verify.sh make -s $*
 FORCE:
+
+${KIND}: ${BIN}
+	curl -sSL -o ${KIND} https://github.com/kubernetes-sigs/kind/releases/download/v${KIND_VERSION}/kind-${OS}-${ARCH}
+	chmod +x ${KIND}
+
+.PHONY: kind-cluster
+kind-cluster: ## Use Kind to create a Kubernetes cluster for E2E tests
+kind-cluster: TERM=dumb
+kind-cluster: ${KIND}
+	 ${KIND} get clusters | grep ${K8S_CLUSTER_NAME} || ${KIND} create cluster --name ${K8S_CLUSTER_NAME}
+
+.PHONY: kind-cluster
+kind-load: ## Load all the Docker images into Kind
+kind-load: $(addprefix kind-load-,$(DOCKER_IMAGES))
+
+kind-load-%: FORCE ${KIND}
+	${KIND}	load docker-image --name ${K8S_CLUSTER_NAME} ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}$*:${DOCKER_TAG}
+FORCE:
+
+.PHONY: kind-export-logs
+kind-export-logs:
+	${KIND} export logs --name ${K8S_CLUSTER_NAME} ${E2E_ARTIFACTS_DIRECTORY}
+
+${BIN}:
+	mkdir -p ${BIN}

@@ -1,20 +1,15 @@
 package e2e
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
-	"os/signal"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -22,18 +17,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	etcd "go.etcd.io/etcd/clientv3"
-	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/pointer"
-	kindv1alpha3 "sigs.k8s.io/kind/pkg/apis/config/v1alpha3"
-	"sigs.k8s.io/kind/pkg/cluster"
-	"sigs.k8s.io/kind/pkg/cluster/create"
-	"sigs.k8s.io/kind/pkg/container/cri"
 
 	semver "github.com/coreos/go-semver/semver"
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
@@ -46,16 +35,9 @@ const (
 )
 
 var (
-	fUseKind           = flag.Bool("kind", false, "Creates a Kind cluster to run the tests against.")
-	fOutputDirectory   = flag.String("output-directory", "/tmp/etcd-e2e", "The absolute path to a directory where E2E results logs will be saved.")
-	fKindClusterName   = flag.String("kind-cluster-name", "etcd-e2e", "The name of the Kind cluster to use or create")
-	fControllerImage   = flag.String("controller-image", "", "The name of the controller image")
-	fProxyImage        = flag.String("proxy-image", "", "The name of the proxy image")
-	fRestoreAgentImage = flag.String("restore-agent-image", "", "The name of the restore-agent image")
-	fBackupAgentImage  = flag.String("backup-agent-image", "", "The name of the backup-agent image")
-	fUseCurrentContext = flag.Bool("current-context", false, "Runs the tests against the current Kubernetes context, the path to kube config defaults to ~/.kube/config, unless overridden by the KUBECONFIG environment variable.")
-	fRepoRoot          = flag.String("repo-root", "", "The absolute path to the root of the etcd-cluster-operator git repository.")
-	fCleanup           = flag.Bool("cleanup", true, "Tears down the Kind cluster once the test is finished.")
+	fe2eEnabled      = flag.Bool("e2e-enabled", false, "Run these end-to-end tests. By default they are skipped.")
+	fRepoRoot        = flag.String("repo-root", "", "The absolute path to the root of the etcd-cluster-operator git repository.")
+	fOutputDirectory = flag.String("output-directory", "/tmp/etcd-e2e", "The absolute path to a directory where E2E results logs will be saved.")
 )
 
 func objFromYaml(objBytes []byte) (runtime.Object, error) {
@@ -89,224 +71,6 @@ func getSpec(t *testing.T, o interface{}) interface{} {
 	return nil
 }
 
-// Starts a Kind cluster on the local machine, exposing port 2379 accepting ETCD connections.
-func startKind(t *testing.T, ctx context.Context, stopped chan struct{}) (kind *cluster.Context, err error) {
-	clusterExists := true
-	// Only attempt to delete the cluster if we created it.
-	// But always ensure that the stopped channel gets closed when the context
-	// ends or is cancelled.
-	go func() {
-		defer close(stopped)
-		<-ctx.Done()
-		if kind == nil {
-			return
-		}
-		t.Log("Collecting Kind logs.")
-		err := kind.CollectLogs(path.Join(*fOutputDirectory, "kind"))
-		assert.NoError(t, err, "failed to collect Kind logs")
-		if !*fCleanup {
-			t.Log("Not deleting Kind cluster because --cleanup=false")
-			return
-		}
-		if clusterExists {
-			t.Log("Not deleting Kind cluster because this was an existing cluster.")
-			return
-		}
-		t.Log("Deleting Kind cluster.")
-		err = kind.Delete()
-		assert.NoError(t, err)
-	}()
-
-	clusters, err := cluster.List()
-	if err != nil {
-		return nil, err
-	}
-	for _, kind := range clusters {
-		if kind.Name() == *fKindClusterName {
-			t.Log("Found existing Kind cluster")
-			return &kind, nil
-		}
-	}
-	clusterExists = false
-	t.Log("Starting new Kind cluster")
-	kind = cluster.NewContext(*fKindClusterName)
-	err = kind.Create(create.WithV1Alpha3(&kindv1alpha3.Cluster{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Cluster",
-			APIVersion: "kind.sigs.k8s.io/v1alpha3",
-		},
-		Nodes: []kindv1alpha3.Node{
-			{
-				Role: "control-plane",
-				ExtraPortMappings: []cri.PortMapping{
-					{
-						ContainerPort: 32379,
-						HostPort:      2379,
-					},
-				},
-			},
-		},
-	}))
-	if err != nil {
-		return nil, fmt.Errorf("error %q from kind.Create", err)
-	}
-	return kind, nil
-}
-
-func buildImages(t *testing.T, ctx context.Context) error {
-	t.Log("Building Docker images")
-	out, err := exec.CommandContext(ctx, "make", "-C", *fRepoRoot, "docker-build").CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%w Output: %s", err, string(out))
-	}
-	return nil
-}
-
-func installOperator(t *testing.T, ctx context.Context, kubectl *kubectlContext, kind *cluster.Context) {
-	g, groupContext := errgroup.WithContext(ctx)
-	g.Go(func() error {
-		t.Log("Deleting test namespaces")
-		return DeleteAllTestNamespaces(kubectl)
-	})
-
-	g.Go(func() error {
-		t.Log("Deleting etcd-cluster-operator namespace")
-		return kubectl.Delete("namespace", "eco-system", "--ignore-not-found")
-	})
-
-	g.Go(func() error {
-		t.Log("Installing cert-manager")
-		out, err := exec.CommandContext(groupContext, "make", "-C", *fRepoRoot, "deploy-cert-manager").CombinedOutput()
-		if err != nil {
-			err = fmt.Errorf("error %q in make deploy-cert-manager with output %q", err, string(out))
-		}
-		return err
-	})
-
-	g.Go(func() error {
-		t.Log("Installing MinIO")
-		out, err := exec.CommandContext(groupContext, "make", "-C", *fRepoRoot, "deploy-minio").CombinedOutput()
-		if err != nil {
-			err = fmt.Errorf("error %q in make deploy-minio with output %q", err, string(out))
-		}
-		return err
-	})
-
-	g.Go(func() error {
-		t.Log("Applying CRDs")
-		return kubectl.Apply("--kustomize", filepath.Join(*fRepoRoot, "config", "crd"))
-	})
-
-	g.Go(func() error {
-		images := []string{*fControllerImage, *fProxyImage, *fRestoreAgentImage, *fBackupAgentImage}
-		nodes, err := kind.ListInternalNodes()
-		if err != nil {
-			return fmt.Errorf("error %q from ListInternalNodes", err)
-		}
-
-		for _, imageName := range images {
-			select {
-			case <-groupContext.Done():
-				return groupContext.Err()
-			default:
-			}
-			err := func() error {
-				t.Log("Exporting the operator image", imageName)
-				var exportFileName string
-				if exportFile, err := ioutil.TempFile("", "etcd-e2e-*"); err == nil {
-					defer os.Remove(exportFileName)
-					if err := exportFile.Close(); err != nil {
-						return fmt.Errorf("error %q closing exportFile", err)
-					}
-					exportFileName = exportFile.Name()
-				} else {
-					return fmt.Errorf("error %q creating exportFile", err)
-				}
-
-				if out, err := exec.CommandContext(groupContext, "docker", "save", "-o", exportFileName, imageName).CombinedOutput(); err != nil {
-					return fmt.Errorf("error %q from docker save with output %q", err, string(out))
-				}
-
-				t.Log("Loading image in to Kind cluster", imageName, exportFileName)
-				for _, node := range nodes {
-					select {
-					case <-groupContext.Done():
-						return groupContext.Err()
-					default:
-					}
-					err := func() error {
-						f, err := os.Open(exportFileName)
-						if err != nil {
-							return fmt.Errorf("error %q opening exportFile %q", err, exportFileName)
-						}
-						defer f.Close()
-						if err := node.LoadImageArchive(f); err != nil {
-							return fmt.Errorf("error %q loading image archive %q", err, exportFileName)
-						}
-						return nil
-					}()
-					if err != nil {
-						return fmt.Errorf("error %q loading image into node %q", err, node.Name())
-					}
-				}
-				return nil
-			}()
-			if err != nil {
-				return fmt.Errorf("error %q loading image %q", err, imageName)
-			}
-		}
-		return nil
-	})
-	require.NoError(t, g.Wait())
-
-	t.Log("Deploying controller")
-	out, err := exec.CommandContext(ctx, "make", "-C", *fRepoRoot, "deploy-controller").CombinedOutput()
-	require.NoError(t, err, string(out))
-}
-
-func setupKind(t *testing.T, ctx context.Context, stopped chan struct{}) *kubectlContext {
-	var g errgroup.Group
-	ctx, cancel := context.WithCancel(ctx)
-	t.Log("Building images and starting Kind in parallel")
-	g.Go(func() error {
-		err := buildImages(t, ctx)
-		if err != nil {
-			cancel()
-		}
-		return err
-	})
-
-	var kind *cluster.Context
-	stoppedKind := make(chan struct{})
-	go func() {
-		<-stoppedKind
-		close(stopped)
-	}()
-
-	g.Go(func() error {
-		var err error
-		kind, err = startKind(t, ctx, stoppedKind)
-		if err != nil {
-			cancel()
-		}
-		return err
-	})
-	require.NoError(t, g.Wait())
-
-	kubectl := &kubectlContext{
-		t:          t,
-		configPath: kind.KubeConfigPath(),
-	}
-
-	t.Log("Setting the environment variable KUBECONFIG", kubectl.configPath)
-	err := os.Setenv("KUBECONFIG", kubectl.configPath)
-	require.NoError(t, err)
-
-	installOperator(t, ctx, kubectl, kind)
-
-	return kubectl
-}
-
 func setupCurrentContext(t *testing.T) *kubectlContext {
 	home, err := os.UserHomeDir()
 	require.NoError(t, err)
@@ -321,26 +85,11 @@ func setupCurrentContext(t *testing.T) *kubectlContext {
 }
 
 func TestE2E(t *testing.T) {
-	var kubectl *kubectlContext
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	sigs := make(chan os.Signal)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigs
-		cancel()
-	}()
-	switch {
-	case *fUseKind:
-		stoppedKind := make(chan struct{})
-		defer func() { <-stoppedKind }()
-		defer cancel()
-		kubectl = setupKind(t, ctx, stoppedKind)
-	case *fUseCurrentContext:
-		kubectl = setupCurrentContext(t)
-	default:
-		t.Skip("Supply either --kind or --current-context to run E2E tests")
+	if !*fe2eEnabled {
+		t.Skip("Supply --e2e-enabled to run E2E tests")
 	}
+	var kubectl *kubectlContext
+	kubectl = setupCurrentContext(t)
 
 	// Delete all existing test namespaces, to free up resources before running new tests.
 	require.NoError(t, DeleteAllTestNamespaces(kubectl), "failed to delete test namespaces")

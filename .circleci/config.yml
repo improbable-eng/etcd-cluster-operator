@@ -61,7 +61,11 @@ jobs:
       - run:
          name: End to end tests
          # Limit parallelism of E2E tests to avoid overloading the CircleCI
-         command: make e2e-kind TEST_PARALLEL_E2E=1
+         command: make e2e-kind TEST_PARALLEL_E2E=1 E2E_ARTIFACTS_DIRECTORY=/tmp/etcd-e2e
+      - run:
+         name: Export Logs
+         command: make kind-export-logs E2E_ARTIFACTS_DIRECTORY=/tmp/etcd-e2e
+         when: always
       - store_artifacts:
           path: /tmp/etcd-e2e
 
