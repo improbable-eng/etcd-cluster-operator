@@ -1,6 +1,8 @@
 # Golang CircleCI 2.0 configuration file
 #
-# Check https://circleci.com/docs/2.0/language-go/ for more details
+# Check the following links for more details:
+# * https://circleci.com/docs/2.0/language-go/
+# * https://circleci.com/docs/2.0/circleci-images/#next-gen-circleci-go-image
 version: 2
 jobs:
   verify:
@@ -11,8 +13,8 @@ jobs:
           name: Install Go
           command: |
             sudo rm -rf /usr/local/go
-            curl -sSL "https://dl.google.com/go/go1.13.1.linux-amd64.tar.gz" -o /tmp/go.tar.gz
-            echo "94f874037b82ea5353f4061e543681a0e79657f787437974214629af8407d124  /tmp/go.tar.gz" | sha256sum -c
+            curl -sSL "https://dl.google.com/go/go1.14.linux-amd64.tar.gz" -o /tmp/go.tar.gz
+            echo "08df79b46b0adf498ea9f320a0f23d6ec59e9003660b4c9c1ce8e5e2c6f823ca  /tmp/go.tar.gz" | sha256sum -c
             sudo tar -xzf /tmp/go.tar.gz -C /usr/local/
             echo "export PATH=$PATH:/usr/local/go/bin" >> $BASH_ENV
             echo 'export GOPATH=$HOME/go' >> $BASH_ENV
@@ -22,7 +24,7 @@ jobs:
          command: make verify
   test:
     docker:
-      - image: circleci/golang:1.13.1
+      - image: cimg/go:1.14
     steps:
       - checkout
       - run:
@@ -37,8 +39,8 @@ jobs:
           name: Install Go
           command: |
             sudo rm -rf /usr/local/go
-            curl -sSL "https://dl.google.com/go/go1.13.1.linux-amd64.tar.gz" -o /tmp/go.tar.gz
-            echo "94f874037b82ea5353f4061e543681a0e79657f787437974214629af8407d124  /tmp/go.tar.gz" | sha256sum -c
+            curl -sSL "https://dl.google.com/go/go1.14.linux-amd64.tar.gz" -o /tmp/go.tar.gz
+            echo "08df79b46b0adf498ea9f320a0f23d6ec59e9003660b4c9c1ce8e5e2c6f823ca  /tmp/go.tar.gz" | sha256sum -c
             sudo tar -xzf /tmp/go.tar.gz -C /usr/local/
             echo "export PATH=$PATH:/usr/local/go/bin" >> $BASH_ENV
             echo 'export GOPATH=$HOME/go' >> $BASH_ENV
