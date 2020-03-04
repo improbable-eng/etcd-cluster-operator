@@ -1,4 +1,4 @@
-# etcd Cluster Operator
+# Etcd Cluster Operator
 
 ![Go Report Card](https://goreportcard.com/badge/github.com/improbable-eng/etcd-cluster-operator)
 [![Improbable Engineering](https://circleci.com/gh/improbable-eng/etcd-cluster-operator.svg?style=shield)](https://app.circleci.com/github/improbable-eng/etcd-cluster-operator/pipelines)

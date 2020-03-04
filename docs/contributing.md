@@ -10,7 +10,7 @@ You will need `make`, `docker`, `go`, `kustomize`, and `kubectl` installed.
 ### Building Docker Images
 
 ```bash
-export IMG=my.registry.address/etcd-cluster-operator:latest
+export DOCKER_REPO=example.com/my-project
 make docker-build
 make docker-push
 ```
@@ -18,11 +18,12 @@ make docker-push
 The actual build is performed inside Docker and will use the go version in the `Dockerfile`, but the `docker-build`
 target will first run the tests locally which will use your system `go`.
 
-The `IMG` environment variable is used by the `Makefile`.
+The `DOCKER_REPO` environment variable is used by the `Makefile`.
 
 ### Deploying the Operator to a cluster
 
-Make sure that your desired cluster is your default context in `kubectl`, and that `IMG` from above is still exported.
+Make sure that your desired cluster is your default context in `kubectl`, and that `DOCKER_REPO` from above is still
+exported.
 
 ```bash
 make deploy
@@ -60,10 +61,9 @@ specifying the `EtcdCluster` resource to delete.
 Use `make test` to run the tests. This will download the Kubebuilder binaries for your platform (only x86-64 Linux and
 x86-64 macOS supported) to `bin/kubebuilder` and use those to run tests.
 
-Use `make kind` to run the [Kubernetes in Docker (KIND)](https://github.com/kubernetes-sigs/kind) end to end tests. You
-don't need to have the `kind` binary installed to run these, but you do need `docker`. These tests build the controller
-Docker Image from the `Dockerfile`, push it into the KIND cluster, and then ensure that the etcd cluster actually comes
-up.
+Use `make e2e-kind` to run the [Kubernetes in Docker (KIND)](https://github.com/kubernetes-sigs/kind) end to end tests.
+You need both the `kind` and `docker` binaries installed and available. These tests build the controller Docker Images
+from the `Dockerfile`, push it into the KIND cluster, and then ensure that the etcd cluster actually comes up.
 
 ## Generated code
 
