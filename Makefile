@@ -182,7 +182,7 @@ go-get-patch: ## Update Golang dependencies to latest patch versions
 google-cloud-build: ## Build images and push to your local GCP project
 google-cloud-build:
 	gcloud builds submit \
-		--substitutions=_VERSION=${VERSION},_OS=${OS},_ARCH=${ARCH}
+		--substitutions=_VERSION=${VERSION},_OS=${OS},_ARCH=${ARCH},_DOCKER_REPO=${DOCKER_REPO},_DOCKER_IMAGE_NAME_PREFIX=${DOCKER_IMAGE_NAME_PREFIX}
 
 .PHONY: docker-build
 docker-build: ## Build the all the docker images
