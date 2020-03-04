@@ -1,14 +1,5 @@
 steps:
-- name: 'gcr.io/kaniko-project/executor:latest'
-  args:
-    - --target=builder
-    - --destination=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}builder:${_DOCKER_TAG}
-    - --build-arg=VERSION=${_VERSION}
-    - --build-arg=VERSION=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}restore-agent:${_DOCKER_TAG}
-    - --cache=true
-    - --cache-repo=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}cache
-    - --reproducible
-- name: 'gcr.io/kaniko-project/executor:latest'
+- name: 'gcr.io/kaniko-project/executor:a1af057f997316bfb1c4d2d82719d78481a02a79'
   args:
     - --target=controller
     - --destination=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}controller:${_DOCKER_TAG}
@@ -17,7 +8,7 @@ steps:
     - --cache=true
     - --cache-repo=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}cache
     - --reproducible
-- name: 'gcr.io/kaniko-project/executor:latest'
+- name: 'gcr.io/kaniko-project/executor:a1af057f997316bfb1c4d2d82719d78481a02a79'
   args:
     - --target=controller-debug
     - --destination=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}controller-debug:${_DOCKER_TAG}
@@ -26,7 +17,7 @@ steps:
     - --cache=true
     - --cache-repo=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}cache
     - --reproducible
-- name: 'gcr.io/kaniko-project/executor:latest'
+- name: 'gcr.io/kaniko-project/executor:a1af057f997316bfb1c4d2d82719d78481a02a79'
   args:
     - --target=proxy
     - --destination=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}proxy:${_DOCKER_TAG}
@@ -35,7 +26,7 @@ steps:
     - --cache=true
     - --cache-repo=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}cache
     - --reproducible
-- name: 'gcr.io/kaniko-project/executor:latest'
+- name: 'gcr.io/kaniko-project/executor:a1af057f997316bfb1c4d2d82719d78481a02a79'
   args:
     - --target=restore-agent
     - --destination=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}restore-agent:${_DOCKER_TAG}
@@ -44,7 +35,7 @@ steps:
     - --cache=true
     - --cache-repo=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}cache
     - --reproducible
-- name: 'gcr.io/kaniko-project/executor:latest'
+- name: 'gcr.io/kaniko-project/executor:a1af057f997316bfb1c4d2d82719d78481a02a79'
   args:
     - --target=backup-agent
     - --destination=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}backup-agent:${_DOCKER_TAG}
