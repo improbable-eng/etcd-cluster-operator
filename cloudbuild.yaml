@@ -1,5 +1,13 @@
 steps:
 - name: 'gcr.io/cloud-builders/docker'
+  entrypoint: 'bash'
+  args:
+    - '-o'
+    - 'xtrace'
+    - '-c'
+    - |
+      docker pull gcr.io/$PROJECT_ID/etcd-cluster-operator-builder:latest || exit 0
+- name: 'gcr.io/cloud-builders/docker'
   entrypoint: 'make'
   args:
     - 'docker-build'
@@ -8,3 +16,5 @@ steps:
     - 'VERSION=$_VERSION'
     - 'OS=$_OS'
     - 'ARCH=$_ARCH'
+images:
+  - 'gcr.io/$PROJECT_ID/etcd-cluster-operator-builder:latest'

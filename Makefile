@@ -23,10 +23,11 @@ DOCKER_REPO ?= quay.io/improbable-eng
 DOCKER_IMAGES ?= controller controller-debug proxy backup-agent restore-agent
 DOCKER_IMAGE_NAME_PREFIX ?= etcd-cluster-operator-
 # The Docker image for the controller-manager which will be deployed to the cluster in tests
-DOCKER_IMAGE_CONTROLLER = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}controller$(if ${DEBUG},-debug,):${DOCKER_TAG}
-DOCKER_IMAGE_PROXY = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}proxy:${DOCKER_TAG}
-DOCKER_IMAGE_RESTORE_AGENT = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}restore-agent:${DOCKER_TAG}
-DOCKER_IMAGE_BACKUP_AGENT = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}backup-agent:${DOCKER_TAG}
+DOCKER_IMAGE_BUILDER := ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}builder:latest
+DOCKER_IMAGE_CONTROLLER := ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}controller$(if ${DEBUG},-debug,):${DOCKER_TAG}
+DOCKER_IMAGE_PROXY := ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}proxy:${DOCKER_TAG}
+DOCKER_IMAGE_RESTORE_AGENT := ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}restore-agent:${DOCKER_TAG}
+DOCKER_IMAGE_BACKUP_AGENT := ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}backup-agent:${DOCKER_TAG}
 
 OS ?= $(shell go env GOOS)
 ARCH ?= $(shell go env GOARCH)
@@ -179,14 +180,21 @@ go-get-patch: ## Update Golang dependencies to latest patch versions
 
 .PHONY: google-cloud-build
 google-cloud-build: ## Build images and push to your local GCP project
-	gcloud builds submit --substitutions=_VERSION=${VERSION},_OS=${OS},_ARCH=${ARCH}
+google-cloud-build:
+	gcloud builds submit \
+		--substitutions=_VERSION=${VERSION},_OS=${OS},_ARCH=${ARCH}
 
 .PHONY: docker-build
 docker-build: ## Build the all the docker images
-docker-build: $(addprefix docker-build-,$(DOCKER_IMAGES))
+docker-build: .docker-build-builder $(addprefix docker-build-,$(DOCKER_IMAGES))
+
+.PHONY: .docker-build-builder
+.docker-build-builder: DOCKER_TAG=latest
+.docker-build-builder: docker-build-builder
 
 docker-build-%: FORCE
 	docker build . --target $* \
+		--cache-from ${DOCKER_IMAGE_BUILDER} \
 		--build-arg VERSION=$(VERSION) \
 		--build-arg RESTORE_AGENT_IMAGE=${DOCKER_IMAGE_RESTORE_AGENT} \
 		--tag ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}$*:${DOCKER_TAG}
