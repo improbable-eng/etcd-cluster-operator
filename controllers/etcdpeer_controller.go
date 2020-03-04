@@ -77,10 +77,9 @@ func advertiseURL(etcdPeer etcdv1alpha1.EtcdPeer, port int32) *url.URL {
 	return &url.URL{
 		Scheme: etcdScheme,
 		Host: fmt.Sprintf(
-			"%s.%s.%s.svc:%d",
+			"%s.%s:%d",
 			etcdPeer.Name,
 			etcdPeer.Spec.ClusterName,
-			etcdPeer.Namespace,
 			port,
 		),
 	}

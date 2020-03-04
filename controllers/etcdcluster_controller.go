@@ -656,7 +656,7 @@ func etcdClientConfig(cluster *etcdv1alpha1.EtcdCluster) etcdclient.Config {
 		Scheme: etcdScheme,
 		// We (the operator) are quite probably in a different namespace to the cluster, so we need to use a fully
 		// defined URL.
-		Host: fmt.Sprintf("%s.%s.svc:%d", cluster.Name, cluster.Namespace, etcdClientPort),
+		Host: fmt.Sprintf("%s.%s:%d", cluster.Name, cluster.Namespace, etcdClientPort),
 	}
 	return etcdclient.Config{
 		Endpoints:               []string{serviceURL.String()},
@@ -776,10 +776,9 @@ func expectedPeerNamesForCluster(cluster *etcdv1alpha1.EtcdCluster) (names []str
 // namespace. This does not include a port or scheme, so can be used as either a "peer" URL using the peer port or the
 // client URL using the client port.
 func expectedURLForPeer(cluster *etcdv1alpha1.EtcdCluster, peerName string) string {
-	return fmt.Sprintf("%s.%s.%s.svc",
+	return fmt.Sprintf("%s.%s",
 		peerName,
 		cluster.Name,
-		cluster.Namespace,
 	)
 }
 
