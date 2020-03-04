@@ -1,5 +1,70 @@
 # Development guide
 
+## Building Locally
+
+To build and run the images yourself, you'll need a Docker registry that you have push access to and your Kubernetes
+nodes have pull access from. First clone this git repository to your local disk.
+
+You will need `make`, `docker`, `go`, `kustomize`, and `kubectl` installed.
+
+### Building Docker Images
+
+```bash
+export DOCKER_REPO=example.com/my-project
+make docker-build
+make docker-push
+```
+
+The actual build is performed inside Docker and will use the go version in the `Dockerfile`, but the `docker-build`
+target will first run the tests locally which will use your system `go`.
+
+The `DOCKER_REPO` environment variable is used by the `Makefile`.
+
+### Deploying the Operator to a cluster
+
+Make sure that your desired cluster is your default context in `kubectl`, and that `DOCKER_REPO` from above is still
+exported.
+
+```bash
+make deploy
+```
+
+This will leave changes on disk in your `config` directory, take care not to commit them.
+
+
+### Deploying an etcd cluster
+
+```bash
+kubectl apply -f config/samples/etcd_v1alpha1_etcdcluster.yaml
+```
+
+You can check the status of the cluster by querying for the `EtcdCluster` resource.
+
+### Testing Connectivity inside Kubernetes
+
+If you launch another pod in the same namespace you can dial the cluster yourself using `my-cluster` as a DNS name.
+
+```bash
+kubectl run --image nixery.dev/shell/etcd --generator run-pod/v1 etcd-shell -- /bin/bash -c "while true; do sleep 30; done;"
+kubectl exec etcd-shell -- etcdctl --endpoints "http://my-cluster:2379" member list
+```
+
+### Cleanup
+
+You can remove the testing pod with `kubectl delete po etcd-shell`.
+
+The cluster can be removed with `kubectl delete -f config/samples/etcd_v1alpha1_etcdcluster.yaml`, or by manually
+specifying the `EtcdCluster` resource to delete.
+
+## Developing
+
+Use `make test` to run the tests. This will download the Kubebuilder binaries for your platform (only x86-64 Linux and
+x86-64 macOS supported) to `bin/kubebuilder` and use those to run tests.
+
+Use `make e2e-kind` to run the [Kubernetes in Docker (KIND)](https://github.com/kubernetes-sigs/kind) end to end tests.
+You need both the `kind` and `docker` binaries installed and available. These tests build the controller Docker Images
+from the `Dockerfile`, push it into the KIND cluster, and then ensure that the etcd cluster actually comes up.
+
 ## Generated code
 
 This repository makes use of a lot of generated code. In particular Protobuf files under `api/proxy` and Kubebuilder
