@@ -227,8 +227,16 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, log logr.Logger) appsv1.Replic
 					Namespace:   peer.Namespace,
 				},
 				Spec: corev1.PodSpec{
-					Hostname:   peer.Name,
-					Subdomain:  peer.Spec.ClusterName,
+					Hostname:  peer.Name,
+					Subdomain: peer.Spec.ClusterName,
+					HostAliases: []corev1.HostAlias{
+						{
+							IP: "127.0.0.1",
+							Hostnames: []string{
+								fmt.Sprintf("%s.%s", peer.Name, peer.Spec.ClusterName),
+							},
+						},
+					},
 					Containers: []corev1.Container{etcdContainer},
 					Volumes: []corev1.Volume{
 						{
