@@ -1,21 +1,55 @@
 steps:
-- name: 'gcr.io/cloud-builders/docker'
-  entrypoint: 'bash'
+- name: 'gcr.io/kaniko-project/executor:latest'
   args:
-    - '-o'
-    - 'xtrace'
-    - '-c'
-    - |
-      docker pull ${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}builder:latest || exit 0
-- name: 'gcr.io/cloud-builders/docker'
-  entrypoint: 'make'
+    - --target=builder
+    - --destination=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}builder:${_DOCKER_TAG}
+    - --build-arg=VERSION=${_VERSION}
+    - --build-arg=VERSION=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}restore-agent:${_DOCKER_TAG}
+    - --cache=true
+    - --cache-repo=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}cache
+    - --reproducible
+- name: 'gcr.io/kaniko-project/executor:latest'
   args:
-    - 'docker-build'
-    - 'docker-push'
-    - 'DOCKER_REPO=${_DOCKER_REPO}'
-    - 'DOCKER_IMAGE_NAME_PREFIX=${_DOCKER_IMAGE_NAME_PREFIX}'
-    - 'VERSION=${_VERSION}'
-    - 'OS=${_OS}'
-    - 'ARCH=${_ARCH}'
-images:
-  - '${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}builder:latest'
+    - --target=controller
+    - --destination=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}controller:${_DOCKER_TAG}
+    - --build-arg=VERSION=${_VERSION}
+    - --build-arg=VERSION=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}restore-agent:${_DOCKER_TAG}
+    - --cache=true
+    - --cache-repo=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}cache
+    - --reproducible
+- name: 'gcr.io/kaniko-project/executor:latest'
+  args:
+    - --target=controller-debug
+    - --destination=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}controller-debug:${_DOCKER_TAG}
+    - --build-arg=VERSION=${_VERSION}
+    - --build-arg=VERSION=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}restore-agent:${_DOCKER_TAG}
+    - --cache=true
+    - --cache-repo=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}cache
+    - --reproducible
+- name: 'gcr.io/kaniko-project/executor:latest'
+  args:
+    - --target=proxy
+    - --destination=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}proxy:${_DOCKER_TAG}
+    - --build-arg=VERSION=${_VERSION}
+    - --build-arg=VERSION=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}restore-agent:${_DOCKER_TAG}
+    - --cache=true
+    - --cache-repo=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}cache
+    - --reproducible
+- name: 'gcr.io/kaniko-project/executor:latest'
+  args:
+    - --target=restore-agent
+    - --destination=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}restore-agent:${_DOCKER_TAG}
+    - --build-arg=VERSION=${_VERSION}
+    - --build-arg=VERSION=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}restore-agent:${_DOCKER_TAG}
+    - --cache=true
+    - --cache-repo=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}cache
+    - --reproducible
+- name: 'gcr.io/kaniko-project/executor:latest'
+  args:
+    - --target=backup-agent
+    - --destination=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}backup-agent:${_DOCKER_TAG}
+    - --build-arg=VERSION=${_VERSION}
+    - --build-arg=VERSION=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}restore-agent:${_DOCKER_TAG}
+    - --cache=true
+    - --cache-repo=${_DOCKER_REPO}/${_DOCKER_IMAGE_NAME_PREFIX}cache
+    - --reproducible
