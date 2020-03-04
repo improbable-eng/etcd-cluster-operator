@@ -1,0 +1,10 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  entrypoint: 'make'
+  args:
+    - 'docker-build'
+    - 'docker-push'
+    - 'DOCKER_REPO=gcr.io/$PROJECT_ID'
+    - 'VERSION=$_VERSION'
+    - 'OS=$_OS'
+    - 'ARCH=$_ARCH'

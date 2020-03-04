@@ -28,9 +28,9 @@ DOCKER_IMAGE_PROXY = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}proxy:${DOCKER_TA
 DOCKER_IMAGE_RESTORE_AGENT = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}restore-agent:${DOCKER_TAG}
 DOCKER_IMAGE_BACKUP_AGENT = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}backup-agent:${DOCKER_TAG}
 
-OS := $(shell go env GOOS)
-ARCH := $(shell go env GOARCH)
-BIN := ${CURDIR}/bin
+OS ?= $(shell go env GOOS)
+ARCH ?= $(shell go env GOARCH)
+BIN ?= ${CURDIR}/bin
 # Kind
 KIND_VERSION := 0.7.0
 KIND := ${BIN}/kind-${KIND_VERSION}
@@ -54,7 +54,7 @@ GOBIN=$(shell go env GOBIN)
 endif
 
 # Make sure GOBIN is on the PATH
-export PATH := $(GOBIN):$(PATH)
+export PATH := ${BIN}:$(GOBIN):$(PATH)
 
 # Stop go build tools from silently modifying go.mod and go.sum
 export GOFLAGS := -mod=readonly
@@ -176,6 +176,10 @@ gomod: ## Update the go.mod and go.sum files
 .PHONY: go-get-patch
 go-get-patch: ## Update Golang dependencies to latest patch versions
 	go get -u=patch -t
+
+.PHONY: google-cloud-build
+google-cloud-build: ## Build images and push to your local GCP project
+	gcloud builds submit --substitutions=_VERSION=${VERSION},_OS=${OS},_ARCH=${ARCH}
 
 .PHONY: docker-build
 docker-build: ## Build the all the docker images
