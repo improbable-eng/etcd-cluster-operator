@@ -1,6 +1,6 @@
 module github.com/improbable-eng/etcd-cluster-operator
 
-go 1.13
+go 1.14
 
 // Pin k8s.io/* dependencies to kubernetes-1.17.0 to match controller-runtime v0.5.0
 replace (

@@ -24,7 +24,7 @@ pushd "${tmp}" >/dev/null
 
 popd >/dev/null
 
-if ! diff --new-file --text --unified --show-c-function --recursive "${projectdir}" "${tmp}"
+if ! diff --new-file --exclude=bin --unified --show-c-function --recursive "${projectdir}" "${tmp}"
 then
     echo
     echo "Project '${projectdir}' is out of date."
