@@ -77,10 +77,9 @@ func advertiseURL(etcdPeer etcdv1alpha1.EtcdPeer, port int32) *url.URL {
 	return &url.URL{
 		Scheme: etcdScheme,
 		Host: fmt.Sprintf(
-			"%s.%s.%s.svc:%d",
+			"%s.%s:%d",
 			etcdPeer.Name,
 			etcdPeer.Spec.ClusterName,
-			etcdPeer.Namespace,
 			port,
 		),
 	}
@@ -228,8 +227,16 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, log logr.Logger) appsv1.Replic
 					Namespace:   peer.Namespace,
 				},
 				Spec: corev1.PodSpec{
-					Hostname:   peer.Name,
-					Subdomain:  peer.Spec.ClusterName,
+					Hostname:  peer.Name,
+					Subdomain: peer.Spec.ClusterName,
+					HostAliases: []corev1.HostAlias{
+						{
+							IP: "127.0.0.1",
+							Hostnames: []string{
+								fmt.Sprintf("%s.%s", peer.Name, peer.Spec.ClusterName),
+							},
+						},
+					},
 					Containers: []corev1.Container{etcdContainer},
 					Volumes: []corev1.Volume{
 						{
@@ -427,7 +434,9 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr 
 		serverVersion string
 	)
 	etcdConfig := etcdclient.Config{
-		Endpoints:               []string{advertiseURL(peer, etcdClientPort).String()},
+		Endpoints: []string{
+			fmt.Sprintf("%s://%s.%s.%s:%d", etcdScheme, peer.Name, peer.Spec.ClusterName, peer.Namespace, etcdClientPort),
+		},
 		Transport:               etcdclient.DefaultTransport,
 		HeaderTimeoutPerRequest: time.Second * 1,
 	}
