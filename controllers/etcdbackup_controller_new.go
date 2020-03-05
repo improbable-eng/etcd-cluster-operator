@@ -86,7 +86,7 @@ func (r *EtcdBackupReconciler) setStateDesired(state *backupState) error {
 		return fmt.Errorf("error setting service account controller reference: %s", err)
 	}
 
-	pod, err := podForBackup(state.backup, r.BackupAgentImage, r.ProxyURL)
+	pod, err := podForBackup(state.backup, r.BackupAgentImage, r.ProxyURL, desired.serviceAccount.Name)
 	if err != nil {
 		return fmt.Errorf("error %q computing pod for backup", err)
 	}
@@ -223,7 +223,7 @@ func serviceAccountForBackup(backup *etcdv1alpha1.EtcdBackup) *corev1.ServiceAcc
 // podForBackup creates a pod for running the backup-agent image.
 // It does not need to interact with the API and should not have permissions to
 // do so.
-func podForBackup(backup *etcdv1alpha1.EtcdBackup, image, proxyURL string) (*corev1.Pod, error) {
+func podForBackup(backup *etcdv1alpha1.EtcdBackup, image, proxyURL, serviceAccount string) (*corev1.Pod, error) {
 	tmpl, err := template.New("template").Parse(backup.Spec.Destination.ObjectURL)
 	if err != nil {
 		return nil, fmt.Errorf("error %q parsing object URL template", err)
@@ -239,7 +239,7 @@ func podForBackup(backup *etcdv1alpha1.EtcdBackup, image, proxyURL string) (*cor
 			Namespace: backup.Namespace,
 		},
 		Spec: corev1.PodSpec{
-			ServiceAccountName: backup.Name,
+			ServiceAccountName: serviceAccount,
 			Containers: []corev1.Container{
 				{
 					Name:  "backup-agent",
