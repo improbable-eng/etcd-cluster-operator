@@ -354,10 +354,7 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 			for i, peer := range peers.Items {
 				expectedInitialCluster[i] = etcdv1alpha1.InitialClusterMember{
 					Name: peer.Name,
-					Host: fmt.Sprintf("%s.%s.%s.svc",
-						peer.Name,
-						etcdCluster.Name,
-						namespace),
+					Host: fmt.Sprintf("%s.%s", peer.Name, etcdCluster.Name),
 				}
 			}
 

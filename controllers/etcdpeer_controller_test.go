@@ -134,9 +134,9 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 
 		peers := strings.Split(requireEnvVar(t, etcdContainer.Env, "ETCD_INITIAL_CLUSTER"), ",")
 		require.Len(t, peers, 3)
-		require.Contains(t, peers, fmt.Sprintf("bees=http://bees.my-cluster.%s.svc:2380", namespace))
-		require.Contains(t, peers, fmt.Sprintf("goose=http://goose.my-cluster.%s.svc:2380", namespace))
-		require.Contains(t, peers, fmt.Sprintf("magic=http://magic.my-cluster.%s.svc:2380", namespace))
+		require.Contains(t, peers, "bees=http://bees.my-cluster:2380")
+		require.Contains(t, peers, "goose=http://goose.my-cluster:2380")
+		require.Contains(t, peers, "magic=http://magic.my-cluster:2380")
 
 		require.Equal(t,
 			etcdPeer.Name,
@@ -145,19 +145,13 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		)
 
 		require.Equal(t,
-			fmt.Sprintf("http://%s.%s.%s.svc:2380",
-				etcdPeer.Name,
-				etcdPeer.Spec.ClusterName,
-				etcdPeer.Namespace),
+			fmt.Sprintf("http://%s.%s:2380", etcdPeer.Name, etcdPeer.Spec.ClusterName),
 			requireEnvVar(t, etcdContainer.Env, "ETCD_INITIAL_ADVERTISE_PEER_URLS"),
 			"ETCD_INITIAL_ADVERTISE_PEER_URLS environment variable set incorrectly",
 		)
 
 		require.Equal(t,
-			fmt.Sprintf("http://%s.%s.%s.svc:2379",
-				etcdPeer.Name,
-				etcdPeer.Spec.ClusterName,
-				etcdPeer.Namespace),
+			fmt.Sprintf("http://%s.%s:2379", etcdPeer.Name, etcdPeer.Spec.ClusterName),
 			requireEnvVar(t, etcdContainer.Env, "ETCD_ADVERTISE_CLIENT_URLS"),
 			"ETCD_ADVERTISE_CLIENT_URLS environment variable set incorrectly",
 		)

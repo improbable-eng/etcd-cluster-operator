@@ -1,8 +1,6 @@
 package test
 
 import (
-	"fmt"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -66,15 +64,15 @@ func ExampleEtcdPeer(namespace string) *etcdv1alpha1.EtcdPeer {
 					InitialCluster: []etcdv1alpha1.InitialClusterMember{
 						{
 							Name: "bees",
-							Host: fmt.Sprintf("bees.my-cluster.%s.svc", namespace),
+							Host: "bees.my-cluster",
 						},
 						{
 							Name: "magic",
-							Host: fmt.Sprintf("magic.my-cluster.%s.svc", namespace),
+							Host: "magic.my-cluster",
 						},
 						{
 							Name: "goose",
-							Host: fmt.Sprintf("goose.my-cluster.%s.svc", namespace),
+							Host: "goose.my-cluster",
 						},
 					},
 				},
