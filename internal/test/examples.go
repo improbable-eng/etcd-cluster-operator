@@ -22,7 +22,7 @@ func ExampleEtcdCluster(namespace string) *etcdv1alpha1.EtcdCluster {
 		},
 		Spec: etcdv1alpha1.EtcdClusterSpec{
 			Replicas: pointer.Int32Ptr(3),
-			Version:  "3.4.999",
+			Version:  "3.2.28",
 			Storage: &etcdv1alpha1.EtcdPeerStorage{
 				VolumeClaimTemplate: &corev1.PersistentVolumeClaimSpec{
 					StorageClassName: pointer.StringPtr("standard"),
@@ -52,13 +52,17 @@ func ExampleEtcdCluster(namespace string) *etcdv1alpha1.EtcdCluster {
 // ExampleEtcdPeer returns a valid example for testing purposes.
 func ExampleEtcdPeer(namespace string) *etcdv1alpha1.EtcdPeer {
 	return &etcdv1alpha1.EtcdPeer{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "EtcdPeer",
+			APIVersion: "etcd.improbable.io/v1alpha1",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "bees",
 			Namespace: namespace,
 		},
 		Spec: etcdv1alpha1.EtcdPeerSpec{
 			ClusterName: "my-cluster",
-			Version:     "3.4.999",
+			Version:     "3.2.28",
 			Bootstrap: &etcdv1alpha1.Bootstrap{
 				Static: &etcdv1alpha1.StaticBootstrap{
 					InitialCluster: []etcdv1alpha1.InitialClusterMember{
@@ -104,17 +108,42 @@ func ExampleEtcdPeer(namespace string) *etcdv1alpha1.EtcdPeer {
 	}
 }
 
+func ExampleEtcdBackup(namespace string) *etcdv1alpha1.EtcdBackup {
+	return &etcdv1alpha1.EtcdBackup{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "EtcdBackup",
+			APIVersion: "etcd.improbable.io/v1alpha1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cluster1-backup1",
+			Namespace: namespace,
+		},
+		Spec: etcdv1alpha1.EtcdBackupSpec{
+			Source: etcdv1alpha1.EtcdBackupSource{
+				ClusterURL: "http://cluster1:2379",
+			},
+			Destination: etcdv1alpha1.EtcdBackupDestination{
+				ObjectURLTemplate: "s3://example-bucket/snapshot-{{ .UID }}.db",
+			},
+		},
+	}
+}
+
 func ExampleEtcdBackupSchedule(namespace string) *etcdv1alpha1.EtcdBackupSchedule {
 	return &etcdv1alpha1.EtcdBackupSchedule{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "EtcdBackupSchedule",
+			APIVersion: "etcd.improbable.io/v1alpha1",
+		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "backup-foo",
+			Name:      "cluster1-scheduled-backup",
 			Namespace: namespace,
 		},
 		Spec: etcdv1alpha1.EtcdBackupScheduleSpec{
 			Schedule: "* * * * *",
 			BackupTemplate: etcdv1alpha1.EtcdBackupSpec{
 				Source: etcdv1alpha1.EtcdBackupSource{
-					ClusterURL: "",
+					ClusterURL: "http://cluster1:2379",
 				},
 				Destination: etcdv1alpha1.EtcdBackupDestination{
 					ObjectURLTemplate: "s3://example-bucket/snapshot-{{ .UID }}.db",
