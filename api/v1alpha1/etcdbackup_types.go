@@ -14,9 +14,21 @@ var (
 
 // EtcdBackupDestination holds a storage location where an etcd backup will be placed.
 type EtcdBackupDestination struct {
-	// ObjectURL is a URL of a file of a backup in object storage.
+	// ObjectURLTemplate is a URL of a file of a backup in object storage.
+	//
+	// It *MAY* contain go-template style template fields.
+	// The fields *MUST* match fields the EtcdBackup resource.
+	// For example:
+	//  s3://example-bucket/snapshot.db
+	//  s3://example-bucket/{{ .Namespace }}/{{ .Name }}/{{ .CreationTimestamp }}/snapshot.db
+	//
+	// You *SHOULD* include template fields if the URL will be used in an EtcdBackupSchedule,
+	// to ensure that every backup has a unique name.
+	// For example:
+	//  s3://example-bucket/snapshot-{{ .UID }}.db
+	//
 	// The scheme of this URL should be gs:// or s3://.
-	ObjectURL string `json:"objectURL"`
+	ObjectURLTemplate string `json:"objectURLTemplate"`
 }
 
 type EtcdBackupSource struct {

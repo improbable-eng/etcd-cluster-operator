@@ -6,4 +6,4 @@ spec:
   source:
     clusterURL: http://my-cluster:2379
   destination:
-    objectURL: "s3://foo-bucket/snapshot.sb"
+    objectURL: "s3://foo-bucket/snapshot.db"

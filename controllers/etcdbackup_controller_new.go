@@ -224,7 +224,7 @@ func serviceAccountForBackup(backup *etcdv1alpha1.EtcdBackup) *corev1.ServiceAcc
 // It does not need to interact with the API and should not have permissions to
 // do so.
 func podForBackup(backup *etcdv1alpha1.EtcdBackup, image, proxyURL, serviceAccount string) (*corev1.Pod, error) {
-	tmpl, err := template.New("template").Parse(backup.Spec.Destination.ObjectURL)
+	tmpl, err := template.New("template").Parse(backup.Spec.Destination.ObjectURLTemplate)
 	if err != nil {
 		return nil, fmt.Errorf("error %q parsing object URL template", err)
 	}

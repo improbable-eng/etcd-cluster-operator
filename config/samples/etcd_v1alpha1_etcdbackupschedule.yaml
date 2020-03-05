@@ -8,4 +8,4 @@ spec:
     source:
       clusterURL: http://my-cluster:2379
     destination:
-      objectURL: "s3://foo-bucket/snapshot-{{ .UID }}.sb"
+      objectURL: "s3://foo-bucket/snapshot-{{ .UID }}.db"

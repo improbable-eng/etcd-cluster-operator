@@ -117,7 +117,7 @@ func ExampleEtcdBackupSchedule(namespace string) *etcdv1alpha1.EtcdBackupSchedul
 					ClusterURL: "",
 				},
 				Destination: etcdv1alpha1.EtcdBackupDestination{
-					ObjectURL: "",
+					ObjectURLTemplate: "s3://example-bucket/snapshot-{{ .UID }}.db",
 				},
 			},
 		},

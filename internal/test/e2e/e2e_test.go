@@ -240,7 +240,7 @@ func backupTests(t *testing.T, kubectl *kubectlContext) {
 	t.Log("A proxy backup can be taken.")
 	backupFileName := fmt.Sprintf("backup-%s.db", randomString(8))
 	backup := samples.EtcdBackup()
-	backup.Spec.Destination.ObjectURL = fmt.Sprintf("s3://backups.test.improbable.io/%s?endpoint=http://minio.minio.svc:9000&disableSSL=true&s3ForcePathStyle=true&region=eu-west-2", backupFileName)
+	backup.Spec.Destination.ObjectURLTemplate = fmt.Sprintf("s3://backups.test.improbable.io/%s?endpoint=http://minio.minio.svc:9000&disableSSL=true&s3ForcePathStyle=true&region=eu-west-2", backupFileName)
 	err = kubectl.ApplyObject(backup)
 	require.NoError(t, err)
 
