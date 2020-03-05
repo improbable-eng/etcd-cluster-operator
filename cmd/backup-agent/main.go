@@ -36,7 +36,7 @@ func loggedError(log logr.Logger, err error, message string) error {
 func main() {
 	proxyURL := pflag.String("proxy-url",
 		"",
-		"URL of the proxy server to use to download the backup from remote storage.")
+		"URL of the proxy server to use to upload the backup to remote storage.")
 
 	backupTempDir := flag.String("backup-tmp-dir",
 		os.TempDir(),
