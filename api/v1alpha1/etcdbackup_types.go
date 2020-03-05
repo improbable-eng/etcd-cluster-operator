@@ -32,7 +32,13 @@ type EtcdBackupDestination struct {
 }
 
 type EtcdBackupSource struct {
-	// ClusterURL is a URL endpoint for the Etcd cluster
+	// ClusterURL is a URL endpoint for a single Etcd server.
+	// The etcd-cluster-operator backup-agent connects to this endpoint,
+	// downloads a snapshot from remote etcd server and uploads the data to
+	// EtcdBackup.Destination.ObjectURLTemplate.
+	// The Etcd Snapshot API works with a single selected node, and the saved
+	// snapshot is the point-in-time state of that selected node.
+	// See https://github.com/etcd-io/etcd/blob/v3.4.4/clientv3/snapshot/v3_snapshot.go#L53
 	ClusterURL string `json:"clusterURL"`
 }
 
