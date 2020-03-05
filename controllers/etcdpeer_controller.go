@@ -434,7 +434,9 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr 
 		serverVersion string
 	)
 	etcdConfig := etcdclient.Config{
-		Endpoints:               []string{advertiseURL(peer, etcdClientPort).String()},
+		Endpoints: []string{
+			fmt.Sprintf("%s://%s.%s.%s:%d", etcdScheme, peer.Name, peer.Spec.ClusterName, peer.Namespace, etcdClientPort),
+		},
 		Transport:               etcdclient.DefaultTransport,
 		HeaderTimeoutPerRequest: time.Second * 1,
 	}
