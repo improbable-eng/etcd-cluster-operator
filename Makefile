@@ -39,6 +39,7 @@ DOCKER_IMAGE_CONTROLLER = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}controller:$
 DOCKER_IMAGE_PROXY = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}proxy:${DOCKER_TAG}
 DOCKER_IMAGE_RESTORE_AGENT = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}restore-agent:${DOCKER_TAG}
 DOCKER_IMAGE_BACKUP_AGENT = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}backup-agent:${DOCKER_TAG}
+DOCKER_IMAGE_NAME = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}${COMPONENT}:${DOCKER_TAG}
 
 OS := $(shell ${GO} env GOOS)
 ARCH := $(shell ${GO} env GOARCH)
@@ -51,6 +52,18 @@ K8S_CLUSTER_NAME := etcd-e2e
 # controller-tools
 CONTROLLER_GEN_VERSION := 0.2.5
 CONTROLLER_GEN := ${BIN}/controller-gen-0.2.5
+
+# Kustomize
+KUSTOMIZE_VERSION := 3.5.4
+KUSTOMIZE_DOWNLOAD_URL := https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_${OS}_${ARCH}.tar.gz
+KUSTOMIZE_LOCAL_ARCHIVE := /tmp/kustomize_v${KUSTOMIZE_VERSION}_${OS}_${ARCH}.tar.gz
+KUSTOMIZE := ${BIN}/kustomize-3.5.4
+KUSTOMIZE_DIRECTORY_TO_EDIT := "config/test/e2e"
+KUSTOMIZE_DIRECTORY_TO_DEPLOY := "config/test/e2e"
+
+# Release files
+RELEASE_NOTES := docs/release-notes/${VERSION}.md
+RELEASE_MANIFEST := "release-${VERSION}.yaml"
 
 E2E_ARTIFACTS_DIRECTORY ?= /tmp/${K8S_CLUSTER_NAME}
 
@@ -75,9 +88,6 @@ help: ## Display this help
 
 .PHONY: all
 all: verify test manager
-
-bin/kubebuilder: ## Get binary dependencies
-	hack/download-kubebuilder-local.sh
 
 .PHONY: verify
 verify: ## Run all static checks
@@ -108,9 +118,15 @@ manager: ## Build manager binary
 run: ## Run against the configured Kubernetes cluster in ~/.kube/config
 	DISABLE_WEBHOOKS=1 ${GO} run ./main.go
 
+
+# ===========================================================
+# Deploy: Set image tags in manifests and deploy the operator
+# ===========================================================
+
 .PHONY: install
 install: ## Install CRDs into a cluster
-	kustomize build config/crd | kubectl apply -f -
+install: ${KUSTOMIZE}
+	${KUSTOMIZE} build config/crd | kubectl apply -f -
 
 .PHONY: deploy-minio
 deploy-minio: ## Deploy MinIO in the cluster for backups and restores
@@ -127,9 +143,7 @@ deploy-cert-manager: ## Deploy cert-manager in the configured Kubernetes cluster
 
 .PHONY: deploy-controller
 deploy-controller: ## Deploy controller in the configured Kubernetes cluster in ~/.kube/config
-	cd config/test/e2e && kustomize edit set image controller=${DOCKER_IMAGE_CONTROLLER}
-	cd config/test/e2e && kustomize edit set image proxy=${DOCKER_IMAGE_PROXY}
-	kustomize build config/test/e2e | kubectl apply -f -
+	${KUSTOMIZE} build ${KUSTOMIZE_DIRECTORY_TO_DEPLOY} | kubectl apply -f -
 	kubectl --namespace eco-system wait --for=condition=Available --timeout=60s deploy eco-controller-manager
 	kubectl --namespace eco-system wait --for=condition=Available --timeout=60s deploy eco-proxy
 
@@ -140,6 +154,14 @@ deploy: deploy-controller
 .PHONY: deploy-e2e
 deploy-e2e: ## Deploy the operator, including all dependencies needed to run E2E tests
 deploy-e2e: deploy-cert-manager deploy-minio deploy
+
+kustomize-edit-set-image-%: COMPONENT=$*
+kustomize-edit-set-image-%: ${KUSTOMIZE} FORCE
+	cd ${KUSTOMIZE_DIRECTORY_TO_EDIT} && ${KUSTOMIZE} edit set image ${COMPONENT}=${DOCKER_IMAGE_NAME}
+FORCE:
+
+.PHONY: kustomize-edit-set-image
+kustomize-edit-set-image: $(addprefix kustomize-edit-set-image-,controller proxy)
 
 .PHONY: protoc-docker
 protoc-docker: ## Build a Docker image which can be used for generating protobuf code (below)
@@ -208,10 +230,6 @@ verify-%: FORCE
 	./hack/verify.sh ${MAKE} -s $*
 FORCE:
 
-${KIND}: ${BIN}
-	curl -sSL -o ${KIND} https://github.com/kubernetes-sigs/kind/releases/download/v${KIND_VERSION}/kind-${OS}-${ARCH}
-	chmod +x ${KIND}
-
 .PHONY: kind-cluster
 kind-cluster: ## Use Kind to create a Kubernetes cluster for E2E tests
 kind-cluster: ${KIND}
@@ -229,6 +247,37 @@ FORCE:
 kind-export-logs:
 	${KIND} export logs --name ${K8S_CLUSTER_NAME} ${E2E_ARTIFACTS_DIRECTORY}
 
+# ===================================
+# Release: Tag and Push Docker Images
+# ===================================
+
+.PHONY: .create-release-tag
+.create-release-tag: KUSTOMIZE_DIRECTORY_TO_EDIT=config/manager
+.create-release-tag: kustomize-edit-set-image
+	git add ${KUSTOMIZE_DIRECTORY_TO_EDIT}
+	git commit --message "Release ${VERSION}"
+	git tag --annotate --message "Release ${VERSION}" ${VERSION}
+
+${RELEASE_NOTES}:
+	$(error "Release notes not found: ${RELEASE_NOTES}")
+
+${RELEASE_MANIFEST}: KUSTOMIZE_DIRECTORY_TO_EDIT=config/manager
+${RELEASE_MANIFEST}: kustomize-edit-set-image
+	${KUSTOMIZE} build --output ${RELEASE_MANIFEST} ${KUSTOMIZE_DIRECTORY_TO_EDIT}
+
+.PHONY: release
+release: ## Create a tagged release
+release: KUSTOMIZE_DIRECTORY_TO_EDIT=config/manager
+release: version ${RELEASE_NOTES} docker-build docker-push ${RELEASE_MANIFEST} .create-release-tag
+
+.PHONY: version
+version:
+	@echo $(or $(filter v%, $(firstword ${VERSION})), $(error Version must begin with v. Got: ${VERSION}))
+
+
+# ==================================
+# Download: tools in ${BIN}
+# ==================================
 ${BIN}:
 	mkdir -p ${BIN}
 
@@ -237,3 +286,15 @@ ${CONTROLLER_GEN}: | ${BIN}
 # See https://github.com/kubernetes-sigs/kubebuilder/issues/909
 	cd /tmp; GOBIN=${BIN} GO111MODULE=on ${GO} get sigs.k8s.io/controller-tools/cmd/controller-gen@v${CONTROLLER_GEN_VERSION}
 	mv ${BIN}/controller-gen ${CONTROLLER_GEN}
+
+${KUSTOMIZE}: | ${BIN}
+	curl -sSL -o ${KUSTOMIZE_LOCAL_ARCHIVE} ${KUSTOMIZE_DOWNLOAD_URL}
+	tar -C ${BIN} -x -f ${KUSTOMIZE_LOCAL_ARCHIVE}
+	mv ${BIN}/kustomize ${KUSTOMIZE}
+
+${KIND}: ${BIN}
+	curl -sSL -o ${KIND} https://github.com/kubernetes-sigs/kind/releases/download/v${KIND_VERSION}/kind-${OS}-${ARCH}
+	chmod +x ${KIND}
+
+bin/kubebuilder:
+	hack/download-kubebuilder-local.sh
