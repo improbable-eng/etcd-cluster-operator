@@ -112,7 +112,7 @@ func TestEventually(t *testing.T) {
 				return errors.New("foo")
 			},
 			tick:      time.Millisecond * 1,
-			duration:  time.Millisecond * 50,
+			duration:  time.Millisecond * 100,
 			expectErr: false,
 		},
 	} {
