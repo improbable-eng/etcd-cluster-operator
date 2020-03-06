@@ -70,4 +70,6 @@ spec:
         accessModes: [ "ReadWriteOnce" ]
         resources:
           requests:
-            storage: 1Mi
+            # Minio requires at least 1Gi free space.
+            # See https://github.com/minio/minio/issues/6795
+            storage: 2Gi

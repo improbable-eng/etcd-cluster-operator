@@ -88,6 +88,7 @@ func (s *controllerSuite) setupTest(t *testing.T, etcdAPI etcd.APIBuilder) (tear
 
 	mgr, err := ctrl.NewManager(s.cfg, ctrl.Options{
 		Namespace: namespace.Name,
+		Scheme:    scheme.Scheme,
 	})
 	require.NoError(t, err, "failed to create manager")
 
@@ -108,13 +109,24 @@ func (s *controllerSuite) setupTest(t *testing.T, etcdAPI etcd.APIBuilder) (tear
 	err = clusterController.SetupWithManager(mgr)
 	require.NoError(t, err, "failed to setup EtcdCluster controller")
 
-	backupController := EtcdBackupScheduleReconciler{
+	backupController := EtcdBackupReconciler{
+		Client:           mgr.GetClient(),
+		Log:              logger.WithName("EtcdBackup"),
+		Scheme:           mgr.GetScheme(),
+		BackupAgentImage: "UNTESTED",
+		ProxyURL:         "UNTESTED",
+		Recorder:         mgr.GetEventRecorderFor("etcdbackup-reconciler"),
+	}
+	err = backupController.SetupWithManager(mgr)
+	require.NoError(t, err, "failed to setup EtcdBackup controller")
+
+	backupScheduleController := EtcdBackupScheduleReconciler{
 		Client:      mgr.GetClient(),
-		Log:         logger.WithName("EtcdCluster"),
+		Log:         logger.WithName("EtcdBackupSchedule"),
 		CronHandler: crontest.FakeCron{},
 		Schedules:   NewScheduleMap(),
 	}
-	err = backupController.SetupWithManager(mgr)
+	err = backupScheduleController.SetupWithManager(mgr)
 	require.NoError(t, err, "failed to setup EtcdBackupSchedule controller")
 
 	restoreController := EtcdRestoreReconciler{

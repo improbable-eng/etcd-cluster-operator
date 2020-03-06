@@ -3,14 +3,7 @@ kind: EtcdBackup
 metadata:
   name: etcdbackup-sample
 spec:
-  clusterEndpoints: 
-  - scheme: http
-    host: my-cluster.default.svc
-    port: 2379
+  source:
+    clusterURL: http://my-cluster:2379
   destination:
-    gcsBucket:
-      bucketName: my-cluster-backup-bucket
-      creds:
-        secretRef: 
-          name: my-cluster-backup-bucket-credentials
-          namespace: default
+    objectURL: "s3://foo-bucket/snapshot.db"

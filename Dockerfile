@@ -33,12 +33,15 @@ ENV GO111MODULE=on
 RUN go build -mod=readonly "-ldflags=-s -w" ./...
 
 ARG VERSION
+ARG BACKUP_AGENT_IMAGE
 ARG RESTORE_AGENT_IMAGE
 
 # Compile all the binaries
 RUN go build \
     -mod=readonly \
-    -ldflags="-X=github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION} -X=main.defaultRestoreAgentImage=${RESTORE_AGENT_IMAGE}" \
+    -ldflags="-X=github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}\
+              -X=main.defaultBackupAgentImage=${BACKUP_AGENT_IMAGE}\
+              -X=main.defaultRestoreAgentImage=${RESTORE_AGENT_IMAGE}" \
     -o manager main.go
 RUN go build -mod=readonly "-ldflags=-s -w -X=github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}" -o proxy cmd/proxy/main.go
 RUN go build -mod=readonly "-ldflags=-s -w -X=github.com/improbable-eng/etcd-cluster-operator/version.Version=${VERSION}" -o backup-agent cmd/backup-agent/main.go
@@ -53,11 +56,6 @@ FROM gcr.io/distroless/static:nonroot as controller
 WORKDIR /
 COPY --from=builder /workspace/manager .
 USER nonroot:nonroot
-ENTRYPOINT ["/manager"]
-
-FROM alpine:3.11.3 as controller-debug
-WORKDIR /
-COPY --from=builder /workspace/manager .
 ENTRYPOINT ["/manager"]
 
 FROM gcr.io/distroless/static:nonroot as proxy

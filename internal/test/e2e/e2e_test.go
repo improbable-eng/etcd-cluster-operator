@@ -219,41 +219,60 @@ func restoreTests(t *testing.T, kubectl *kubectlContext) {
 
 func backupTests(t *testing.T, kubectl *kubectlContext) {
 	t.Log("Given a one node cluster.")
-	err := kubectl.Apply("--filename", filepath.Join(*fRepoRoot, "config", "test", "e2e", "backup", "etcdcluster.yaml"))
+	cluster := test.ExampleEtcdCluster(*kubectl.defaultNamespace)
+	cluster.Spec.Replicas = pointer.Int32Ptr(1)
+	err := kubectl.ApplyObject(cluster)
 	require.NoError(t, err)
 
 	t.Log("Containing data.")
 	out, err := etcdctlInCluster(
 		kubectl,
 		time.Minute*2,
-		"e2e-backup-cluster",
+		cluster.Name,
 		"put", "--", "foo", "bar",
 	)
 	require.NoError(t, err, out)
 
-	t.Log("A backup can be taken to a local disk.")
-	err = kubectl.Apply("--filename", filepath.Join(*fRepoRoot, "config", "test", "e2e", "backup", "etcdbackup.yaml"))
+	t.Log("A proxy backup can be taken.")
+	backupFileName := fmt.Sprintf("backup-%s.db", randomString(8))
+	backup := test.ExampleEtcdBackup(cluster.Namespace)
+	backup.Spec.Destination.ObjectURLTemplate = fmt.Sprintf("s3://backups.test.improbable.io/%s?endpoint=http://minio.minio.svc:9000&disableSSL=true&s3ForcePathStyle=true&region=eu-west-2", backupFileName)
+	err = kubectl.ApplyObject(backup)
 	require.NoError(t, err)
 
-	kubectlSystem := kubectl.WithDefaultNamespace("eco-system")
-	var podNames string
-	err = try.Eventually(func() (err error) {
-		podNames, err = kubectlSystem.Get("pods", "--output=name", "--selector", "control-plane=controller-manager")
-		return err
-	}, time.Minute, time.Second*5)
-	require.NoError(t, err)
-	podNameList := strings.Split(strings.TrimSpace(podNames), "\n")
-	require.Len(t, podNameList, 1)
-	podName := strings.TrimPrefix(podNameList[0], "pod/")
+	t.Log("The EtcdBackup runs to completion")
+	var actualBackup etcdv1alpha1.EtcdBackup
+	err = try.Eventually(func() error {
+		out, err := kubectl.Get("etcdbackup", backup.Name, "--output", "json")
+		if err != nil {
+			return fmt.Errorf("error %q with output %q", err, out)
+		}
+		if err := json.Unmarshal([]byte(out), &actualBackup); err != nil {
+			return fmt.Errorf("error %q unmarshalling %q", err, out)
+		}
+		switch phase := actualBackup.Status.Phase; phase {
+		case etcdv1alpha1.EtcdBackupPhaseCompleted, etcdv1alpha1.EtcdBackupPhaseFailed:
+			return nil
+		default:
+			return fmt.Errorf("unexpected backup phase: %s", phase)
+		}
+	}, time.Second*10, time.Second*2)
+	require.NoError(t, err, "Backup not finished")
+	require.Equal(t, actualBackup.Status.Phase, etcdv1alpha1.EtcdBackupPhaseCompleted, "Backup failed")
 
-	t.Log("And it will be persisted in the expected location.")
+	t.Log("And the snapshot file has been uploaded")
+	minioBackupPath := fmt.Sprintf("/data/backups.test.improbable.io/%s", backupFileName)
+	kubectlMinio := kubectl.WithDefaultNamespace("minio")
 	err = try.Eventually(func() (err error) {
-		out, err = kubectlSystem.Exec(podName, "ls", "/tmp/backups", "-c", "manager")
-		return err
-	}, time.Minute*2, time.Second*10)
+		out, err = kubectlMinio.Exec(
+			"--container", "minio", "minio-0", "--", "ls", minioBackupPath,
+		)
+		if err != nil {
+			return fmt.Errorf("error %q from kubectl exec with output %q", err, out)
+		}
+		return nil
+	}, time.Minute*5, time.Second*10)
 	require.NoError(t, err)
-	t.Log(string(out))
-	require.Len(t, strings.Split(string(out), "\n"), 2)
 }
 
 func webhookTests(t *testing.T, kubectl *kubectlContext) {

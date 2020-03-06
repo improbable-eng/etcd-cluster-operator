@@ -8,12 +8,14 @@ import (
 	"net/url"
 	"os"
 
+	humanize "github.com/dustin/go-humanize"
 	"github.com/go-logr/logr"
 	flag "github.com/spf13/pflag"
 	"gocloud.dev/blob"
 	_ "gocloud.dev/blob/gcsblob"
 	_ "gocloud.dev/blob/s3blob"
 	"google.golang.org/grpc"
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -49,6 +51,44 @@ func loggedError(log logr.Logger, err error, message string) error {
 	return fmt.Errorf("%s: %s", message, err)
 }
 
+func (ps *proxyServer) Upload(ctx context.Context, req *pb.UploadRequest) (_ *pb.UploadResponse, reterr error) {
+	backupURL := req.GetBackupUrl()
+	log := ps.log.WithName("upload").WithValues("req-backup-url", backupURL)
+	log.Info("Started")
+	defer log.Info("Finished")
+
+	bucketName, objectPath, err := parseBackupURL(backupURL)
+	if err != nil {
+		return nil, loggedError(log, err, "failed to parse backup URL")
+	}
+	bucket, err := blob.OpenBucket(ctx, bucketName)
+	if err != nil {
+		return nil, loggedError(log, err, "failed to open bucket")
+	}
+
+	blobWriter, err := bucket.NewWriter(ctx, objectPath, nil)
+	if err != nil {
+		return nil, loggedError(log, err, "failed to create blob writer")
+	}
+	defer func() {
+		if err := blobWriter.Close(); err != nil {
+			err = loggedError(log, err, "failed to close blob writer")
+			reterr = kerrors.NewAggregate([]error{reterr, err})
+		}
+	}()
+	// Here we have the entire contents of the backup into memory. In theory
+	// these could be quite big (multiple gigabytes). So we're actually taking a
+	// risk that the backup could be *too big* for our available memory.
+	written, err := blobWriter.Write(req.Backup)
+	if err != nil {
+		return nil, loggedError(log, err, "failed to write blob")
+	}
+
+	log.V(2).Info("Returning response", "backup-size", humanize.Bytes(uint64(written)))
+
+	return &pb.UploadResponse{}, nil
+}
+
 func (ps *proxyServer) Download(ctx context.Context, req *pb.DownloadRequest) (*pb.DownloadResponse, error) {
 	log := ps.log.WithName("download").WithValues("req-backup-url", req.GetBackupUrl())
 
@@ -77,7 +117,7 @@ func (ps *proxyServer) Download(ctx context.Context, req *pb.DownloadRequest) (*
 		return nil, loggedError(log, err, "failed to read blob")
 	}
 
-	log.V(2).Info("Returning response", "backup-size", len(backup))
+	log.V(2).Info("Returning response", "backup-size", humanize.Bytes(uint64(len(backup))))
 	return &pb.DownloadResponse{Backup: backup}, nil
 }
 
