@@ -203,10 +203,16 @@ string will be prefixed with `v` and use semver.
 * Sanity check documentation under `docs` and `README.md`.
 * Compile and prepare release notes under `docs/release-notes/$VERSION.md`. For example versions v0.1.X would share a
 file `docs/release-notes/v0.1.md`.
+* Some of the release steps have been automated. Run `make --dry-run release VERSION=0.0.0` to see the steps that will be automatically performed.
 
 ### Process
 
-1. Tag the repository with the new version, e.g., `git tag v0.1.0` and push the tag to GitHub.
-2. Mark the tag as a release on GitHub.
-3. Build a Docker Image from the repository at that tag and push it to Docker Hub.
-4. Build a version of the deployment YAML with the image tag, attach it to the GitHub release as a YAML file.
+1. Run `make release VERSION=0.1.0`. This will:
+   1. Build Docker images with the supplied VERSION.
+   2. Push Docker images to the repo defined in DOCKER_REPO.
+   3. Create a `release-$VERSION.yaml` containing an example deployment for this version.
+   4. Create an annotated Git tag for the supplied VERSION.
+2. Push the tag to GitHub.
+3. Mark the tag as a release on GitHub.
+4. Build a Docker Image from the repository at that tag and push it to Docker Hub.
+5. Build a version of the deployment YAML with the image tag, attach it to the GitHub release as a YAML file.
