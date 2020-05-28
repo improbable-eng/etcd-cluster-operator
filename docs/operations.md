@@ -36,8 +36,8 @@ and must correspond to a tag of an [Official Etcd Docker Image](https://quay.io/
 
 The operator only supports Etcd major version 3.
 
-NOTE: Use of Docker images from other repositories is not yet supported.
-But you can load the official Docker images into a local Docker image cache if necessary.
+The repository used by the operator can be overridden to pull images from other repositories.
+This can be achieved by setting the `etcd-repository` flag on the manager, for example `--etcd-repository=gcr.io/etcd-development/etcd`.
 
 The `etcd-cluster-operator` will use the supplied `version` value to compute a Docker image name
 which is then used by the Pods for each Etcd peer.
