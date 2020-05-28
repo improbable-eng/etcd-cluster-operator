@@ -323,7 +323,7 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		})
 
 		t.Run("ReportsExpectedVersion", func(t *testing.T) {
-			expectedVersion := semver.Must(semver.NewVersion("3.2.28"))
+			expectedVersion := semver.Must(semver.NewVersion("3.2.30"))
 			staticAPI := fakeEtcdForEtcdPeer(*etcdPeer)
 			staticAPI.ServerVersion = expectedVersion.String()
 			etcdAPI.Wrap(staticAPI)
