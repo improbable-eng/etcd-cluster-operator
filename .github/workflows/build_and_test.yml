@@ -11,6 +11,9 @@ jobs:
     runs-on: ubuntu-16.04
     steps:
       - uses: actions/checkout@v2
+        with:
+          # Need all the history for git describe --tags to work
+          fetch-depth: 0
       - uses: actions/setup-go@v2
         with:
           go-version: '^1.14.3' # The Go version to download (if necessary) and use.
@@ -20,6 +23,9 @@ jobs:
     runs-on: ubuntu-16.04
     steps:
       - uses: actions/checkout@v2
+        with:
+          # Need all the history for git describe --tags to work
+          fetch-depth: 0
       - uses: actions/setup-go@v2
         with:
           go-version: '^1.14.3' # The Go version to download (if necessary) and use.
@@ -29,6 +35,9 @@ jobs:
     runs-on: ubuntu-16.04
     steps:
       - uses: actions/checkout@v2
+        with:
+          # Need all the history for git describe --tags to work
+          fetch-depth: 0
       - uses: actions/setup-go@v2
         with:
           go-version: '^1.14.3' # The Go version to download (if necessary) and use.
