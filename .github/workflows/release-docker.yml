@@ -27,4 +27,4 @@ jobs:
           username: $GITHUB_ACTOR
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and push Docker image
-        run: make docker-build docker-push DOCKER_REPO=docker.pkg.github.com/improbable-eng/etcd-cluster-operator
+        run: make docker-build docker-push DOCKER_REPO=docker.pkg.github.com/$GITHUB_REPOSITORY
