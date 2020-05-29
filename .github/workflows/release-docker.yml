@@ -10,7 +10,7 @@ on:
     branches:
       - "*"
 jobs:
-  e2e:
+  build-and-push:
     runs-on: ubuntu-16.04
     steps:
       - uses: actions/checkout@v2
@@ -20,5 +20,11 @@ jobs:
       - uses: actions/setup-go@v2
         with:
           go-version: '^1.14.3'
+      - name: Login to Docker
+        uses: azure/docker-login@v1
+        with:
+          login-server: docker.pkg.github.com
+          username: $GITHUB_ACTOR
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and push Docker image
         run: make docker-build docker-push DOCKER_REPO=docker.pkg.github.com/improbable-eng/etcd-cluster-operator
