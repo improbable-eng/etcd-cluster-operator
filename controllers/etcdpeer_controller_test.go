@@ -427,7 +427,8 @@ func TestGoMaxProcs(t *testing.T) {
 func TestDefineReplicaset(t *testing.T) {
 	logger := test.TestLogger{T: t}
 	peer := test.ExampleEtcdPeer("ns1")
-	replicaSet := defineReplicaSet(*peer, logger)
+	etcdRepository := "quay.io/coreos/etcd"
+	replicaSet := defineReplicaSet(*peer, etcdRepository, logger)
 
 	expectations := map[string]interface{}{
 		`.spec.template.spec.containers[?(@.name=="etcd")].image`: etcdRepository + ":v" + peer.Spec.Version,

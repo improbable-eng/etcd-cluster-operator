@@ -93,9 +93,10 @@ func (s *controllerSuite) setupTest(t *testing.T, etcdAPI etcd.APIBuilder) (tear
 	require.NoError(t, err, "failed to create manager")
 
 	peerController := EtcdPeerReconciler{
-		Client: mgr.GetClient(),
-		Log:    logger.WithName("EtcdPeer"),
-		Etcd:   etcdAPI,
+		Client:         mgr.GetClient(),
+		Log:            logger.WithName("EtcdPeer"),
+		Etcd:           etcdAPI,
+		EtcdRepository: "quay.io/coreos/etcd",
 	}
 	err = peerController.SetupWithManager(mgr)
 	require.NoError(t, err, "failed to set up EtcdPeer controller")

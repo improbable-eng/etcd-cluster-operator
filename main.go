@@ -22,8 +22,9 @@ import (
 )
 
 var (
-	scheme   = runtime.NewScheme()
-	setupLog = ctrl.Log.WithName("setup")
+	scheme                = runtime.NewScheme()
+	setupLog              = ctrl.Log.WithName("setup")
+	defaultEtcdRepository = "quay.io/coreos/etcd"
 	// These are replaced as part of the build so that the images match the name
 	// prefix and version of the controller image. See Dockerfile.
 	defaultBackupAgentImage  = "REPLACE_ME"
@@ -47,6 +48,7 @@ func main() {
 		metricsAddr          string
 		printVersion         bool
 		proxyURL             string
+		etcdRepository       string
 		restoreAgentImage    string
 		backupAgentImage     string
 	)
@@ -56,6 +58,7 @@ func main() {
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&leaderElectionID, "leader-election-id", "etcd-cluster-operator-controller-leader-election-helper",
 		"The name of the configmap that leader election will use for holding the leader lock.")
+	flag.StringVar(&etcdRepository, "etcd-repository", defaultEtcdRepository, "The Docker repository to use for the etcd image")
 	flag.StringVar(&backupAgentImage, "backup-agent-image", defaultBackupAgentImage, "The Docker image for the backup-agent")
 	flag.StringVar(&restoreAgentImage, "restore-agent-image", defaultRestoreAgentImage, "The Docker image to use to perform a restore")
 	flag.StringVar(&proxyURL, "proxy-url", "", "The URL of the upload/download proxy")
@@ -74,6 +77,7 @@ func main() {
 	setupLog.Info(
 		"Starting manager",
 		"version", version.Version,
+		"etcd-repository", etcdRepository,
 		"backup-agent-image", backupAgentImage,
 		"restore-agent-image", restoreAgentImage,
 		"proxy-url", proxyURL,
@@ -100,9 +104,10 @@ func main() {
 	}
 
 	if err = (&controllers.EtcdPeerReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("EtcdPeer"),
-		Etcd:   &etcd.ClientEtcdAPIBuilder{},
+		Client:         mgr.GetClient(),
+		Log:            ctrl.Log.WithName("controllers").WithName("EtcdPeer"),
+		Etcd:           &etcd.ClientEtcdAPIBuilder{},
+		EtcdRepository: etcdRepository,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "EtcdPeer")
 		os.Exit(1)

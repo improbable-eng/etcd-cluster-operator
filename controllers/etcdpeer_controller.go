@@ -35,12 +35,12 @@ import (
 // EtcdPeerReconciler reconciles a EtcdPeer object
 type EtcdPeerReconciler struct {
 	client.Client
-	Log  logr.Logger
-	Etcd etcd.APIBuilder
+	Log            logr.Logger
+	Etcd           etcd.APIBuilder
+	EtcdRepository string
 }
 
 const (
-	etcdRepository      = "quay.io/coreos/etcd"
 	etcdScheme          = "http"
 	peerLabel           = "etcd.improbable.io/peer-name"
 	pvcCleanupFinalizer = "etcdpeer.etcd.improbable.io/pvc-cleanup"
@@ -124,7 +124,7 @@ func goMaxProcs(cpuLimit resource.Quantity) *int64 {
 	return pointer.Int64Ptr(goMaxProcs)
 }
 
-func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, log logr.Logger) appsv1.ReplicaSet {
+func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, etcdRepository string, log logr.Logger) appsv1.ReplicaSet {
 	var replicas int32 = 1
 
 	// We use the same labels for the replica set itself, the selector on
@@ -488,7 +488,7 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr 
 	)
 
 	if apierrs.IsNotFound(err) {
-		replicaSet := defineReplicaSet(peer, log)
+		replicaSet := defineReplicaSet(peer, r.EtcdRepository, log)
 		log.V(1).Info("Replica set does not exist, creating",
 			"replica-set", replicaSet.Name)
 		if err := r.Create(ctx, &replicaSet); err != nil {
