@@ -23,7 +23,7 @@ metadata:
   name: my-first-etcd-cluster
 spec:
   replicas: 3
-  version: 3.2.28
+  version: 3.2.30
 ```
 
 ## Further Reading
