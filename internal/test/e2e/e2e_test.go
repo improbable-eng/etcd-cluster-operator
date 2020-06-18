@@ -38,7 +38,39 @@ var (
 	fe2eEnabled      = flag.Bool("e2e-enabled", false, "Run these end-to-end tests. By default they are skipped.")
 	fRepoRoot        = flag.String("repo-root", "", "The absolute path to the root of the etcd-cluster-operator git repository.")
 	fOutputDirectory = flag.String("output-directory", "/tmp/etcd-e2e", "The absolute path to a directory where E2E results logs will be saved.")
+
+	fEtcdVersionToTest = flag.String("etcd-version-to-test", "3.2.28", "The semver version of Etcd to use in tests.")
+
+	scheme            = runtime.NewScheme()
+	sampleClusterPath = filepath.Join("config", "samples", "etcd_v1alpha1_etcdcluster.yaml")
 )
+
+func init() {
+	if err := etcdv1alpha1.AddToScheme(scheme); err != nil {
+		panic(err)
+	}
+}
+
+func yamlPathInto(path string, obj runtime.Object) error {
+	objBytes, err := ioutil.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("error %q reading path %q", err, path)
+	}
+	return runtime.DecodeInto(
+		serializer.NewCodecFactory(scheme).UniversalDeserializer(),
+		objBytes, obj,
+	)
+}
+
+func sampleCluster() (*etcdv1alpha1.EtcdCluster, error) {
+	sampleClusterPath := filepath.Join(*fRepoRoot, sampleClusterPath)
+	var cluster etcdv1alpha1.EtcdCluster
+	if err := yamlPathInto(sampleClusterPath, &cluster); err != nil {
+		return nil, fmt.Errorf("error %q decoding sample cluster %q", err, sampleClusterPath)
+	}
+	cluster.Spec.Version = *fEtcdVersionToTest
+	return &cluster, nil
+}
 
 func objFromYaml(objBytes []byte) (runtime.Object, error) {
 	scheme := runtime.NewScheme()
@@ -94,12 +126,11 @@ func TestE2E(t *testing.T) {
 	// Delete all existing test namespaces, to free up resources before running new tests.
 	require.NoError(t, DeleteAllTestNamespaces(kubectl), "failed to delete test namespaces")
 
-	sampleClusterPath := filepath.Join(*fRepoRoot, "config", "samples", "etcd_v1alpha1_etcdcluster.yaml")
-
 	// Pre-flight check that we can submit etcd API resources, before continuing
 	// with the remaining tests.
 	// Because the Etcd mutating and validating webhook service may not
 	// immediately be responding.
+	sampleClusterPath := filepath.Join(*fRepoRoot, sampleClusterPath)
 	kubectl = kubectl.WithDefaultNamespace("default")
 	var out string
 	err := try.Eventually(func() (err error) {
@@ -123,7 +154,7 @@ func TestE2E(t *testing.T) {
 			kubectl := kubectl.WithT(t)
 			ns, cleanup := NamespaceForTest(t, kubectl, rl)
 			defer cleanup()
-			sampleClusterTests(t, kubectl.WithDefaultNamespace(ns), sampleClusterPath)
+			sampleClusterTests(t, kubectl.WithDefaultNamespace(ns))
 		})
 		t.Run("Webhooks", func(t *testing.T) {
 			t.Parallel()
@@ -348,15 +379,18 @@ func webhookTests(t *testing.T, kubectl *kubectlContext) {
 
 }
 
-func sampleClusterTests(t *testing.T, kubectl *kubectlContext, sampleClusterPath string) {
-	err := kubectl.Apply("--filename", sampleClusterPath)
+func sampleClusterTests(t *testing.T, kubectl *kubectlContext) {
+	cluster, err := sampleCluster()
+	require.NoError(t, err)
+
+	err = kubectl.ApplyObject(cluster)
 	require.NoError(t, err)
 
 	t.Run("EtcdClusterAvailability", func(t *testing.T) {
 		out, err := etcdctlInCluster(
 			kubectl,
 			time.Minute*2,
-			"my-cluster",
+			cluster.Name,
 			"put", "--", "foo", "sample-cluster-tests-value",
 		)
 		require.NoError(t, err, out)
@@ -366,7 +400,7 @@ func sampleClusterTests(t *testing.T, kubectl *kubectlContext, sampleClusterPath
 		kubectl := kubectl.WithT(t)
 		err := try.Eventually(func() error {
 			t.Log("")
-			members, err := kubectl.Get("etcdcluster", "my-cluster", "-o=jsonpath='{.status.members...name}'")
+			members, err := kubectl.Get("etcdcluster", cluster.Name, "-o=jsonpath='{.status.members...name}'")
 			if err != nil {
 				return err
 			}
@@ -385,13 +419,13 @@ func sampleClusterTests(t *testing.T, kubectl *kubectlContext, sampleClusterPath
 		// Attempt to scale up to four nodes
 
 		const expectedReplicas = 4
-		err := kubectl.Scale("etcdcluster/my-cluster", expectedReplicas)
+		err := kubectl.Scale("etcdcluster/"+cluster.Name, expectedReplicas)
 		require.NoError(t, err)
 
 		t.Log("The etcdcluster.status is updated when the cluster has been resized.")
 		err = try.Eventually(
 			func() error {
-				out, err := kubectl.Get("etcdcluster", "my-cluster", "-o=jsonpath={.status.replicas}")
+				out, err := kubectl.Get("etcdcluster", cluster.Name, "-o=jsonpath={.status.replicas}")
 				require.NoError(t, err, out)
 				statusReplicas, err := strconv.Atoi(out)
 				require.NoError(t, err, out)
@@ -408,7 +442,7 @@ func sampleClusterTests(t *testing.T, kubectl *kubectlContext, sampleClusterPath
 			out, err := etcdctlInCluster(
 				kubectl,
 				time.Minute*2,
-				"my-cluster",
+				cluster.Name,
 				"member", "list", "--write-out=json",
 			)
 			if err != nil {

@@ -4,6 +4,7 @@ SHELL := bash
 .DELETE_ON_ERROR:
 .SUFFIXES:
 .DEFAULT_GOAL := help
+
 # The version which will be reported by the --version argument of each binary
 # and which will be used as the Docker image tag
 VERSION ?= $(shell git describe --tags)
@@ -66,6 +67,7 @@ RELEASE_NOTES := docs/release-notes/${VERSION}.md
 RELEASE_MANIFEST := "release-${VERSION}.yaml"
 
 E2E_ARTIFACTS_DIRECTORY ?= /tmp/${K8S_CLUSTER_NAME}
+E2E_ETCD_VERSION ?= 3.4.4
 
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
@@ -105,7 +107,12 @@ e2e-kind: docker-build kind-cluster kind-load deploy-e2e e2e
 .PHONY: e2e
 e2e: ## Run the end-to-end tests - uses the current KUBE_CONFIG and context
 e2e:
-	${GO} test -v -parallel ${TEST_PARALLEL_E2E} -timeout 20m ./internal/test/e2e --e2e-enabled --repo-root ${CURDIR} --output-directory ${E2E_ARTIFACTS_DIRECTORY} $(ARGS)
+	${GO} test -v -parallel ${TEST_PARALLEL_E2E} -timeout 20m ./internal/test/e2e \
+		--e2e-enabled \
+		--repo-root ${CURDIR} \
+		--output-directory ${E2E_ARTIFACTS_DIRECTORY} \
+		--etcd-version-to-test ${E2E_ETCD_VERSION} \
+		$(ARGS)
 
 .PHONY: manager
 manager: ## Build manager binary
