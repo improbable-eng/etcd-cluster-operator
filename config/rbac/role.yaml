@@ -110,12 +110,9 @@ rules:
   - etcd.improbable.io
   resources:
   - etcdclusters
+  - etcdclusters/finalizers
   verbs:
-  - create
-  - get
-  - list
-  - patch
-  - watch
+  - "*"
 - apiGroups:
   - etcd.improbable.io
   resources:
@@ -128,13 +125,9 @@ rules:
   - etcd.improbable.io
   resources:
   - etcdpeers
+  - etcdpeers/finalizers
   verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - watch
+  - "*"
 - apiGroups:
   - etcd.improbable.io
   resources:
