@@ -33,5 +33,5 @@ cd config/default
 export ECO_VERSION=v0.2.0
 kustomize edit set image controller=$ECO_VERSION
 kustomize edit set image proxy=$ECO_VERSION
-kubectl apply --kustomize .
+kustomize build . | kubectl apply -f -
 ```
