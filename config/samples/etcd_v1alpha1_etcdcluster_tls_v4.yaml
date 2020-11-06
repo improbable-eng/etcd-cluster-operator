@@ -1,0 +1,35 @@
+apiVersion: etcd.improbable.io/v1alpha1
+kind: EtcdCluster
+metadata:
+  name: my-cluster
+spec:
+  replicas: 3
+  version: 3.4.13
+  tls:
+    enabled: true
+  storage:
+    volumeClaimTemplate:
+      storageClassName: standard
+      resources:
+        requests:
+          storage: 1Mi
+  podTemplate:
+    resources:
+      requests:
+        cpu: 200m
+        memory: 200Mi
+      limits:
+        cpu: 200m
+        memory: 200Mi
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: etcd.improbable.io/cluster-name
+                    operator: In
+                    values:
+                      - my-cluster
+              topologyKey: kubernetes.io/hostname

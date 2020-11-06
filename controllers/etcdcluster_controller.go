@@ -2,6 +2,8 @@ package controllers
 
 import (
 	"context"
+	cryptotls "crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"net/url"
@@ -11,7 +13,6 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	etcdclient "go.etcd.io/etcd/client"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,6 +28,7 @@ import (
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/etcd"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/reconcilerevent"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/tls"
 )
 
 const (
@@ -39,6 +41,171 @@ type EtcdClusterReconciler struct {
 	Log      logr.Logger
 	Recorder record.EventRecorder
 	Etcd     etcd.APIBuilder
+}
+
+func etcdScheme(tls *etcdv1alpha1.TLS) string {
+	if tls != nil && tls.Enabled {
+		return "https"
+	} else {
+		return "http"
+	}
+}
+
+// getCaSecret determines if the ca secret exists. Error is returned if there is some problem communicating with
+// Kubernetes.
+func (r *EtcdClusterReconciler) getCaSecret(ctx context.Context, clusterName, namespace string) (*v1.Secret, error) {
+	secret := &v1.Secret{}
+	err := r.Get(ctx, caSecretName(clusterName, namespace), secret)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			// We got the expected error, which is that it's not found
+			return nil, nil
+		}
+		// Unexpected error, some other problem?
+		return nil, err
+	}
+	// We found it because we got no error
+	return secret, nil
+}
+
+// getClientSecret determines if the client secret exists. Error is returned if there is some problem communicating with
+// Kubernetes.
+func (r *EtcdClusterReconciler) getClientSecret(ctx context.Context, clusterName, namespace string) (*v1.Secret, error) {
+	secret := &v1.Secret{}
+	err := r.Get(ctx, clientSecretName(clusterName, namespace), secret)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			// We got the expected error, which is that it's not found
+			return nil, nil
+		}
+		// Unexpected error, some other problem?
+		return nil, err
+	}
+	// We found it because we got no error
+	return secret, nil
+}
+
+func caSecretName(clusterName, namespace string) types.NamespacedName {
+	name := fmt.Sprintf("%s-ca", clusterName)
+
+	return types.NamespacedName{
+		Name:      name,
+		Namespace: namespace,
+	}
+}
+
+// createCaSecret create the etcd ca secret
+func (r *EtcdClusterReconciler) createCaSecret(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster) (*v1.Secret, error) {
+	secret, err := caSecretForCluster(cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := r.Create(ctx, secret); err != nil {
+		return nil, err
+	}
+
+	return secret, nil
+}
+
+// createClientSecret create the etcd client secret
+func (r *EtcdClusterReconciler) createClientSecret(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, caCert *v1.Secret) (*v1.Secret, error) {
+
+	secret, err := clientCertForCluster(cluster, caCert.Data["tls.crt"], caCert.Data["tls.key"])
+	if err != nil {
+		return nil, err
+	}
+
+	if err := r.Create(ctx, secret); err != nil {
+		return nil, err
+	}
+
+	return secret, nil
+}
+
+func caSecretForCluster(cluster *etcdv1alpha1.EtcdCluster) (*v1.Secret, error) {
+	name := caSecretName(cluster.Name, cluster.Namespace)
+
+	caCert, caKey, err := tls.IssueCA()
+	if err != nil {
+		return nil, err
+	}
+
+	data := make(map[string][]byte)
+	data["tls.crt"] = caCert
+	data["tls.key"] = caKey
+
+	return &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name.Name,
+			Namespace: name.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(cluster, etcdv1alpha1.GroupVersion.WithKind("EtcdCluster")),
+			},
+			Labels: map[string]string{
+				appLabel:     appName,
+				clusterLabel: cluster.Name,
+			},
+		},
+		Data: data,
+	}, nil
+}
+
+func clientSecretName(clusterName, namespace string) types.NamespacedName {
+	name := fmt.Sprintf("%s-client", clusterName)
+
+	return types.NamespacedName{
+		Name:      name,
+		Namespace: namespace,
+	}
+}
+
+func clientCertForCluster(cluster *etcdv1alpha1.EtcdCluster, caCert, caKey []byte) (*v1.Secret, error) {
+	name := clientSecretName(cluster.Name, cluster.Namespace)
+
+	clientCert, clientKey, err := tls.Issue([]string{name.Name}, caCert, caKey)
+	if err != nil {
+		return nil, err
+	}
+
+	data := make(map[string][]byte)
+	data["ca.crt"] = caCert
+	data["tls.crt"] = clientCert
+	data["tls.key"] = clientKey
+
+	return &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name.Name,
+			Namespace: name.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(cluster, etcdv1alpha1.GroupVersion.WithKind("EtcdCluster")),
+			},
+			Labels: map[string]string{
+				appLabel:     appName,
+				clusterLabel: cluster.Name,
+			},
+		},
+		Data: data,
+	}, nil
+}
+
+func createEtcdTLSConfig(clientSecret *v1.Secret) (*cryptotls.Config, error) {
+	caCertPool := x509.NewCertPool()
+	successful := caCertPool.AppendCertsFromPEM(clientSecret.Data["ca.crt"])
+	if !successful {
+		return nil, errors.New("can not add ca client certificate")
+	}
+
+	tlsCert, err := cryptotls.X509KeyPair(clientSecret.Data["tls.crt"], clientSecret.Data["tls.key"])
+	if err != nil {
+		return nil, errors.New("can not read client certificate")
+	}
+
+	return &cryptotls.Config{
+		RootCAs:      caCertPool,
+		Certificates: []cryptotls.Certificate{tlsCert},
+		ClientAuth:   cryptotls.RequireAndVerifyClientCert,
+	}, nil
 }
 
 func headlessServiceForCluster(cluster *etcdv1alpha1.EtcdCluster) *v1.Service {
@@ -122,7 +289,7 @@ func (r *EtcdClusterReconciler) createBootstrapPeer(ctx context.Context, cluster
 	return &reconcilerevent.PeerCreatedEvent{Object: cluster, PeerName: peer.Name}, nil
 }
 
-func (r *EtcdClusterReconciler) hasPeerForMember(peers *etcdv1alpha1.EtcdPeerList, member etcdclient.Member) (bool, error) {
+func (r *EtcdClusterReconciler) hasPeerForMember(peers *etcdv1alpha1.EtcdPeerList, member etcd.Member) (bool, error) {
 	expectedPeerName, err := peerNameForMember(member)
 	if err != nil {
 		return false, err
@@ -135,7 +302,7 @@ func (r *EtcdClusterReconciler) hasPeerForMember(peers *etcdv1alpha1.EtcdPeerLis
 	return false, nil
 }
 
-func (r *EtcdClusterReconciler) createPeerForMember(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, members []etcdclient.Member, member etcdclient.Member) (*reconcilerevent.PeerCreatedEvent, error) {
+func (r *EtcdClusterReconciler) createPeerForMember(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, members []etcd.Member, member etcd.Member) (*reconcilerevent.PeerCreatedEvent, error) {
 	// Use this instead of member.Name. If we've just added the peer for this member then the member might not
 	// have that field set, so instead figure it out from the peerURL.
 	expectedPeerName, err := peerNameForMember(member)
@@ -155,7 +322,7 @@ func (r *EtcdClusterReconciler) createPeerForMember(ctx context.Context, cluster
 func (r *EtcdClusterReconciler) addNewMember(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, peers *etcdv1alpha1.EtcdPeerList) (*reconcilerevent.MemberAddedEvent, error) {
 	peerName := nextAvailablePeerName(cluster, peers.Items)
 	peerURL := &url.URL{
-		Scheme: etcdScheme,
+		Scheme: etcdScheme(cluster.Spec.TLS),
 		Host:   fmt.Sprintf("%s:%d", expectedURLForPeer(cluster, peerName), etcdPeerPort),
 	}
 	member, err := r.addEtcdMember(ctx, cluster, peerURL.String())
@@ -166,7 +333,7 @@ func (r *EtcdClusterReconciler) addNewMember(ctx context.Context, cluster *etcdv
 }
 
 // MembersByName provides a sort.Sort interface for etcdClient.Member.Name
-type MembersByName []etcdclient.Member
+type MembersByName []etcd.Member
 
 func (a MembersByName) Len() int           { return len(a) }
 func (a MembersByName) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
@@ -178,7 +345,7 @@ func (a MembersByName) Less(i, j int) bool { return a[i].Name < a[j].Name }
 // TODO(wallrj) Consider removing a non-leader member to avoid disruptive
 // leader elections while scaling down.
 // See https://github.com/improbable-eng/etcd-cluster-operator/issues/97
-func (r *EtcdClusterReconciler) removeMember(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, members []etcdclient.Member) (*reconcilerevent.MemberRemovedEvent, error) {
+func (r *EtcdClusterReconciler) removeMember(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, members []etcd.Member) (*reconcilerevent.MemberRemovedEvent, error) {
 	sortedMembers := append(members[:0:0], members...)
 	sort.Sort(sort.Reverse(MembersByName(sortedMembers)))
 	member := sortedMembers[0]
@@ -192,7 +359,7 @@ func (r *EtcdClusterReconciler) removeMember(ctx context.Context, cluster *etcdv
 // updateStatus updates the EtcdCluster resource's status to be the current value of the cluster.
 func (r *EtcdClusterReconciler) updateStatus(
 	cluster *etcdv1alpha1.EtcdCluster,
-	members *[]etcdclient.Member,
+	members *[]etcd.Member,
 	peers *etcdv1alpha1.EtcdPeerList,
 	clusterVersion string) {
 
@@ -215,6 +382,11 @@ func (r *EtcdClusterReconciler) updateStatus(
 	}
 	cluster.Status.Replicas = int32(len(peers.Items))
 	cluster.Status.ClusterVersion = clusterVersion
+	if cluster.Spec.TLS != nil && cluster.Spec.TLS.Enabled {
+		cluster.Status.TLSEnabled = true
+	} else {
+		cluster.Status.TLSEnabled = false
+	}
 }
 
 // reconcile (little r) does the 'dirty work' of deciding if we wish to perform an action upon the Kubernetes cluster to
@@ -229,7 +401,7 @@ func (r *EtcdClusterReconciler) updateStatus(
 // that should describe to the rest of this codebase what we have done.
 func (r *EtcdClusterReconciler) reconcile(
 	ctx context.Context,
-	members *[]etcdclient.Member,
+	members *[]etcd.Member,
 	peers *etcdv1alpha1.EtcdPeerList,
 	cluster *etcdv1alpha1.EtcdCluster,
 ) (
@@ -501,15 +673,15 @@ func hasTooFewPeers(cluster *etcdv1alpha1.EtcdCluster, peers *etcdv1alpha1.EtcdP
 	return cluster.Spec.Replicas != nil && int32(len(peers.Items)) < *cluster.Spec.Replicas
 }
 
-func hasTooFewMembers(cluster *etcdv1alpha1.EtcdCluster, members []etcdclient.Member) bool {
+func hasTooFewMembers(cluster *etcdv1alpha1.EtcdCluster, members []etcd.Member) bool {
 	return *cluster.Spec.Replicas > int32(len(members))
 }
 
-func hasTooManyMembers(cluster *etcdv1alpha1.EtcdCluster, members []etcdclient.Member) bool {
+func hasTooManyMembers(cluster *etcdv1alpha1.EtcdCluster, members []etcd.Member) bool {
 	return *cluster.Spec.Replicas < int32(len(members))
 }
 
-func isAllMembersStable(members []etcdclient.Member) bool {
+func isAllMembersStable(members []etcd.Member) bool {
 	// We define 'stable' as 'has ever connected', which we detect by looking for the name on the member
 	for _, member := range members {
 		if member.Name == "" {
@@ -521,7 +693,7 @@ func isAllMembersStable(members []etcdclient.Member) bool {
 	return true
 }
 
-func peerNameForMember(member etcdclient.Member) (string, error) {
+func peerNameForMember(member etcd.Member) (string, error) {
 	if member.Name != "" {
 		return member.Name, nil
 	} else if len(member.PeerURLs) > 0 {
@@ -538,10 +710,11 @@ func peerNameForMember(member etcdclient.Member) (string, error) {
 }
 
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdclusters,verbs=get;list;watch
-// +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdclusters/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdclusters/status;etcdclusters/finalizers,verbs=get;update;patch
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch;create;delete;patch
 // +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=core,resources=secrets,verbs=*
 
 func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -578,19 +751,60 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rete
 
 	// Attempt to dial the etcd cluster, recording the cluster response if we can
 	var (
-		members        *[]etcdclient.Member
+		members        *[]etcd.Member
 		clusterVersion string
+		tlsConfig      *cryptotls.Config
 	)
-	if c, err := r.Etcd.New(etcdClientConfig(&cluster)); err != nil {
-		log.V(2).Info("Unable to connect to etcd", "error", err)
+
+	if cluster.Spec.TLS != nil && cluster.Spec.TLS.Enabled {
+		caSecret, err := r.getCaSecret(ctx, cluster.Name, cluster.Namespace)
+		if err != nil {
+			log.Error(err, "unable to fetch ca secret from Kubernetes API")
+			return ctrl.Result{}, err
+		}
+
+		if caSecret == nil {
+			caSecret, err = r.createCaSecret(ctx, &cluster)
+			if err != nil {
+				log.Error(err, "unable to create ca secret")
+				return ctrl.Result{}, err
+			}
+		}
+
+		clientSecret, err := r.getClientSecret(ctx, cluster.Name, cluster.Namespace)
+		if err != nil {
+			log.Error(err, "unable to fetch client secret from Kubernetes API")
+			return ctrl.Result{}, err
+		}
+
+		if clientSecret == nil {
+			clientSecret, err = r.createClientSecret(ctx, &cluster, caSecret)
+			if err != nil {
+				log.Error(err, "unable to create client secret")
+				return ctrl.Result{}, err
+			}
+		}
+
+		tlsConfig, err = createEtcdTLSConfig(clientSecret)
+		if err != nil {
+			log.Error(err, "can not create etcd transport")
+			return ctrl.Result{}, err
+		}
 	} else {
+		tlsConfig = nil
+	}
+
+	if c, err := r.Etcd.New(etcdClientConfig(&cluster, tlsConfig)); err != nil {
+		log.Error(err, "Unable to connect to etcd")
+	} else {
+		defer c.Close()
 		if memberSlice, err := c.List(ctx); err != nil {
-			log.V(2).Info("Unable to list etcd cluster members", "error", err)
+			log.Error(err, "Unable to list etcd cluster members")
 		} else {
 			members = &memberSlice
 		}
 		if version, err := c.GetVersion(ctx); err != nil {
-			log.V(2).Info("Unable to get cluster version", "error", err)
+			log.Error(err, "Unable to get cluster version")
 		} else {
 			clusterVersion = version.Cluster
 		}
@@ -622,27 +836,59 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rete
 	return result, err
 }
 
-func (r *EtcdClusterReconciler) addEtcdMember(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, peerURL string) (*etcdclient.Member, error) {
-	c, err := r.Etcd.New(etcdClientConfig(cluster))
+func (r *EtcdClusterReconciler) addEtcdMember(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, peerURL string) (*etcd.Member, error) {
+	var tlsConfig *cryptotls.Config
+	if cluster.Spec.TLS != nil && cluster.Spec.TLS.Enabled {
+		clientSecret, err := r.getClientSecret(ctx, cluster.Name, cluster.Namespace)
+		if err != nil {
+			return nil, fmt.Errorf("unable to fetch client secret from Kubernetes API: %w", err)
+		}
+
+		tlsConfig, err = createEtcdTLSConfig(clientSecret)
+		if err != nil {
+			return nil, fmt.Errorf("can not create etcd config: %w", err)
+		}
+	} else {
+		tlsConfig = nil
+	}
+
+	c, err := r.Etcd.New(etcdClientConfig(cluster, tlsConfig))
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect to etcd: %w", err)
 	}
+	defer c.Close()
 
-	members, err := c.Add(ctx, peerURL)
+	member, err := c.Add(ctx, peerURL)
 	if err != nil {
 		return nil, fmt.Errorf("unable to add member to etcd cluster: %w", err)
 	}
 
-	return members, nil
+	return member, nil
 }
 
 // removeEtcdMember performs a runtime reconfiguration of the Etcd cluster to
 // remove a member from the cluster.
 func (r *EtcdClusterReconciler) removeEtcdMember(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, memberID string) error {
-	c, err := r.Etcd.New(etcdClientConfig(cluster))
+	var tlsConfig *cryptotls.Config
+	if cluster.Spec.TLS != nil && cluster.Spec.TLS.Enabled {
+		clientSecret, err := r.getClientSecret(ctx, cluster.Name, cluster.Namespace)
+		if err != nil {
+			return fmt.Errorf("unable to fetch client secret from Kubernetes API: %w", err)
+		}
+
+		tlsConfig, err = createEtcdTLSConfig(clientSecret)
+		if err != nil {
+			return fmt.Errorf("can not create etcd transport: %w", err)
+		}
+	} else {
+		tlsConfig = nil
+	}
+	c, err := r.Etcd.New(etcdClientConfig(cluster, tlsConfig))
 	if err != nil {
 		return fmt.Errorf("unable to connect to etcd: %w", err)
 	}
+	defer c.Close()
+
 	err = c.Remove(ctx, memberID)
 	if err != nil {
 		return fmt.Errorf("unable to remove member from etcd cluster: %w", err)
@@ -651,17 +897,16 @@ func (r *EtcdClusterReconciler) removeEtcdMember(ctx context.Context, cluster *e
 	return nil
 }
 
-func etcdClientConfig(cluster *etcdv1alpha1.EtcdCluster) etcdclient.Config {
+func etcdClientConfig(cluster *etcdv1alpha1.EtcdCluster, tls *cryptotls.Config) etcd.Config {
 	serviceURL := &url.URL{
-		Scheme: etcdScheme,
+		Scheme: etcdScheme(cluster.Spec.TLS),
 		// We (the operator) are quite probably in a different namespace to the cluster, so we need to use a fully
 		// defined URL.
 		Host: fmt.Sprintf("%s.%s:%d", cluster.Name, cluster.Namespace, etcdClientPort),
 	}
-	return etcdclient.Config{
-		Endpoints:               []string{serviceURL.String()},
-		Transport:               etcdclient.DefaultTransport,
-		HeaderTimeoutPerRequest: time.Second * 1,
+	return etcd.Config{
+		Endpoints: []string{serviceURL.String()},
+		TLS:       tls,
 	}
 }
 
@@ -689,6 +934,10 @@ func peerForCluster(cluster *etcdv1alpha1.EtcdCluster, peerName string) *etcdv1a
 		peer.Spec.PodTemplate = cluster.Spec.PodTemplate
 	}
 
+	if cluster.Spec.TLS != nil {
+		peer.Spec.TLS = cluster.Spec.TLS
+	}
+
 	return peer
 }
 
@@ -702,7 +951,7 @@ func configurePeerBootstrap(peer *etcdv1alpha1.EtcdPeer, cluster *etcdv1alpha1.E
 	}
 }
 
-func configureJoinExistingCluster(peer *etcdv1alpha1.EtcdPeer, cluster *etcdv1alpha1.EtcdCluster, members []etcdclient.Member) {
+func configureJoinExistingCluster(peer *etcdv1alpha1.EtcdPeer, cluster *etcdv1alpha1.EtcdCluster, members []etcd.Member) {
 	peer.Spec.Bootstrap = &etcdv1alpha1.Bootstrap{
 		Static: &etcdv1alpha1.StaticBootstrap{
 			InitialCluster: initialClusterMembersFromMemberList(cluster, members),
@@ -727,7 +976,7 @@ func initialClusterMembers(cluster *etcdv1alpha1.EtcdCluster) []etcdv1alpha1.Ini
 	return members
 }
 
-func initialClusterMembersFromMemberList(cluster *etcdv1alpha1.EtcdCluster, members []etcdclient.Member) []etcdv1alpha1.InitialClusterMember {
+func initialClusterMembersFromMemberList(cluster *etcdv1alpha1.EtcdCluster, members []etcd.Member) []etcdv1alpha1.InitialClusterMember {
 	initialMembers := make([]etcdv1alpha1.InitialClusterMember, len(members))
 	for i, member := range members {
 		name, err := peerNameForMember(member)

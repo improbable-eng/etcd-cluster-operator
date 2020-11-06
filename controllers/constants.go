@@ -3,7 +3,8 @@ package controllers
 const (
 	etcdClientPort          = 2379
 	etcdPeerPort            = 2380
-	etcdDataMountPath       = "/var/lib/etcd"
+	EtcdDataMountPath       = "/var/lib/etcd"
+	EtcdCertPath            = "/etc/etcd/certs"
 	appName                 = "etcd"
 	appLabel                = "app.kubernetes.io/name"
 	clusterLabel            = "etcd.improbable.io/cluster-name"

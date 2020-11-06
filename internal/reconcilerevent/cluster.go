@@ -3,9 +3,10 @@ package reconcilerevent
 import (
 	"fmt"
 
-	etcdclient "go.etcd.io/etcd/client"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
+
+	"github.com/improbable-eng/etcd-cluster-operator/internal/etcd"
 )
 
 /*
@@ -50,7 +51,7 @@ func (s *PeerRemovedEvent) Record(recorder record.EventRecorder) {
 
 type MemberAddedEvent struct {
 	Object runtime.Object
-	Member *etcdclient.Member
+	Member *etcd.Member
 	Name   string
 }
 
@@ -63,7 +64,7 @@ func (s *MemberAddedEvent) Record(recorder record.EventRecorder) {
 
 type MemberRemovedEvent struct {
 	Object runtime.Object
-	Member *etcdclient.Member
+	Member *etcd.Member
 	Name   string
 }
 
