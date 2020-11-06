@@ -871,6 +871,13 @@ spec:
                       type: string
                   type: object
               type: object
+            tls:
+              description: TLS configuration
+              properties:
+                enabled:
+                  description: Enabled allows to setup a secure cluster
+                  type: boolean
+              type: object
             version:
               description: Version determines the version of Etcd that will be used
                 for this peer.
@@ -885,6 +892,9 @@ spec:
             serverVersion:
               description: ServerVersion contains the Member server version
               type: string
+            tlsEnabled:
+              description: TLS configuration
+              type: boolean
           required:
           - serverVersion
           type: object

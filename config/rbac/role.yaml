@@ -54,6 +54,12 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - secrets
+  verbs:
+  - '*'
+- apiGroups:
+  - ""
+  resources:
   - serviceaccounts
   verbs:
   - create

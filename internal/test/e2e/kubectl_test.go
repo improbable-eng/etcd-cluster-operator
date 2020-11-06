@@ -20,6 +20,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	"github.com/improbable-eng/etcd-cluster-operator/controllers"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/etcdenvvar"
 )
 
 const (
@@ -289,7 +292,7 @@ func DeleteAllTestNamespaces(kubectl *kubectlContext) error {
 }
 
 // eventuallyInCluster runs a command as a Job in the current Kubernetes cluster namespace.
-func eventuallyInCluster(kubectl *kubectlContext, name string, deadline time.Duration, image string, command ...string) (_ string, reterr error) {
+func eventuallyInCluster(kubectl *kubectlContext, name string, deadline time.Duration, image string, clusterName string, tls bool, command ...string) (_ string, reterr error) {
 	job := &batchv1.Job{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Job",
@@ -303,9 +306,8 @@ func eventuallyInCluster(kubectl *kubectlContext, name string, deadline time.Dur
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:    "container1",
-							Image:   image,
-							Command: command,
+							Name:  "container1",
+							Image: image,
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
 									"cpu":    resource.MustParse("100m"),
@@ -323,6 +325,49 @@ func eventuallyInCluster(kubectl *kubectlContext, name string, deadline time.Dur
 			},
 		},
 	}
+
+	if tls {
+		job.Spec.Template.Spec.Containers[0].Env = append(
+			job.Spec.Template.Spec.Containers[0].Env,
+			corev1.EnvVar{
+				Name:  etcdenvvar.CtlCaFile,
+				Value: fmt.Sprintf("%s/ca.crt", controllers.EtcdCertPath),
+			},
+			corev1.EnvVar{
+				Name:  etcdenvvar.CtlCertFile,
+				Value: fmt.Sprintf("%s/tls.crt", controllers.EtcdCertPath),
+			},
+			corev1.EnvVar{
+				Name:  etcdenvvar.CtlKeyFile,
+				Value: fmt.Sprintf("%s/tls.key", controllers.EtcdCertPath),
+			},
+		)
+
+		job.Spec.Template.Spec.Containers[0].VolumeMounts = append(
+			job.Spec.Template.Spec.Containers[0].VolumeMounts,
+			corev1.VolumeMount{
+				Name:      "cert-dir",
+				MountPath: controllers.EtcdCertPath,
+			},
+		)
+
+		certVolume := corev1.Volume{
+			Name: "cert-dir",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: fmt.Sprintf("%s-client", clusterName),
+				},
+			},
+		}
+		job.Spec.Template.Spec.Volumes = append(job.Spec.Template.Spec.Volumes, certVolume)
+
+		endpoint := fmt.Sprintf("https://%s:2379", clusterName)
+		command = append([]string{"/usr/bin/env", "ETCDCTL_API=3", "etcdctl", "--endpoints", endpoint}, command...)
+	} else {
+		command = append([]string{"/usr/bin/env", "ETCDCTL_API=3", "etcdctl", "--insecure-discovery", "--discovery-srv", clusterName}, command...)
+	}
+
+	job.Spec.Template.Spec.Containers[0].Command = command
 
 	f, err := ioutil.TempFile("", "e2e-job."+name+".json")
 	if err != nil {
@@ -357,12 +402,15 @@ func eventuallyInCluster(kubectl *kubectlContext, name string, deadline time.Dur
 }
 
 // etcdctlInCluster executes etcdctl as a Job in the cluster and waits for its output
-func etcdctlInCluster(kubectl *kubectlContext, deadline time.Duration, clusterName string, command ...string) (string, error) {
+func etcdctlInCluster(kubectl *kubectlContext, deadline time.Duration, clusterName string, tls bool, command ...string) (string, error) {
+
 	return eventuallyInCluster(
 		kubectl,
 		"etcdctl-"+randomString(8),
 		deadline,
 		etcdctlImage,
-		append([]string{"/usr/bin/env", "ETCDCTL_API=3", "etcdctl", "--insecure-discovery", "--discovery-srv", clusterName}, command...)...,
+		clusterName,
+		tls,
+		command...,
 	)
 }

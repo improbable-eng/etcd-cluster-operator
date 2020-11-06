@@ -900,6 +900,13 @@ spec:
                               type: string
                           type: object
                       type: object
+                    tls:
+                      description: TLS configuration
+                      properties:
+                        enabled:
+                          description: Enabled allows to setup a secure cluster
+                          type: boolean
+                      type: object
                     version:
                       description: Version determines the version of Etcd that will
                         be used for this cluster.

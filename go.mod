@@ -25,6 +25,7 @@ require (
 	github.com/imdario/mergo v0.3.8 // indirect
 	github.com/json-iterator/go v1.1.9 // indirect
 	github.com/otiai10/copy v1.0.2
+	github.com/pkg/errors v0.8.1
 	github.com/prometheus/procfs v0.0.10 // indirect
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/spf13/pflag v1.0.5

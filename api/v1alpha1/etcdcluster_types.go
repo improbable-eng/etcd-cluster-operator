@@ -26,6 +26,9 @@ type EtcdClusterSpec struct {
 	// rejected.
 	// +optional
 	PodTemplate *EtcdPodTemplateSpec `json:"podTemplate,omitempty"`
+
+	// TLS configuration
+	TLS *TLS `json:"tls,omitempty"`
 }
 
 // EtcdPodTemplateSpec supports a subset of a normal `v1/PodTemplateSpec` that the operator explicitly permits. We don't
@@ -64,6 +67,15 @@ type EtcdMember struct {
 	ID string `json:"id"`
 }
 
+// TLS configuration for a secure cluster
+type TLS struct {
+
+	// Enabled allows to setup a secure cluster
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+}
+
+
 // EtcdClusterStatus defines the observed state of EtcdCluster
 type EtcdClusterStatus struct {
 	// Replicas is the number of etcd peer resources we are managing. This doesn't mean the number of pods that exist
@@ -80,6 +92,10 @@ type EtcdClusterStatus struct {
 	// ClusterVersion contains the cluster API version
 	// +optional
 	ClusterVersion string `json:"clusterVersion"`
+
+	// TLS configuration
+	// +optional
+	TLSEnabled bool `json:"tlsEnabled"`
 }
 
 // +kubebuilder:object:root=true

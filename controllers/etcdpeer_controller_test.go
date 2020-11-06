@@ -30,7 +30,7 @@ func fakeEtcdForEtcdPeer(etcdPeer etcdv1alpha1.EtcdPeer) *StaticResponseEtcdAPI 
 	i := 1
 	name := fmt.Sprintf("%s-%d", clusterName, i)
 	peerURL := &url.URL{
-		Scheme: etcdScheme,
+		Scheme: etcdScheme(etcdPeer.Spec.TLS),
 		Host: fmt.Sprintf("%s.%s.%s.svc:%d",
 			name,
 			clusterName,
@@ -39,7 +39,7 @@ func fakeEtcdForEtcdPeer(etcdPeer etcdv1alpha1.EtcdPeer) *StaticResponseEtcdAPI 
 		),
 	}
 	clientURL := &url.URL{
-		Scheme: etcdScheme,
+		Scheme: etcdScheme(etcdPeer.Spec.TLS),
 		Host: fmt.Sprintf("%s.%s.%s.svc:%d",
 			name,
 			clusterName,
@@ -112,8 +112,8 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 
 		expectations := map[string]interface{}{
 			`.spec.template.spec.volumes[?(@.name=="etcd-data")].persistentVolumeClaim.claimName`:              etcdPeer.Name,
-			`.spec.template.spec.containers[?(@.name=="etcd")].volumeMounts[?(@.name=="etcd-data")].mountPath`: etcdDataMountPath,
-			`.spec.template.spec.containers[?(@.name=="etcd")].env[?(@.name=="ETCD_DATA_DIR")].value`:          etcdDataMountPath,
+			`.spec.template.spec.containers[?(@.name=="etcd")].volumeMounts[?(@.name=="etcd-data")].mountPath`: EtcdDataMountPath,
+			`.spec.template.spec.containers[?(@.name=="etcd")].env[?(@.name=="ETCD_DATA_DIR")].value`:          EtcdDataMountPath,
 			`.spec.template.spec.containers[?(@.name=="etcd")].env[?(@.name=="GOMAXPROCS")].value`:             expectedGoMaxProcs,
 			`.spec.template.spec.containers[?(@.name=="etcd")].image`:                                          expectedEtcdImage,
 		}

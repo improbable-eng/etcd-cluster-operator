@@ -823,6 +823,13 @@ spec:
                       type: string
                   type: object
               type: object
+            tls:
+              description: TLS configuration
+              properties:
+                enabled:
+                  description: Enabled allows to setup a secure cluster
+                  type: boolean
+              type: object
             version:
               description: Version determines the version of Etcd that will be used
                 for this cluster.
@@ -866,6 +873,9 @@ spec:
                 may mean the cluster has lost a member.
               format: int32
               type: integer
+            tlsEnabled:
+              description: TLS configuration
+              type: boolean
           type: object
       type: object
   version: v1alpha1

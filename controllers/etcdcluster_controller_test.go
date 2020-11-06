@@ -134,7 +134,7 @@ func fakeEtcdForEtcdCluster(etcdCluster etcdv1alpha1.EtcdCluster) *StaticRespons
 	for i := range members {
 		name := fmt.Sprintf("%s-%d", etcdCluster.Name, i)
 		peerURL := &url.URL{
-			Scheme: etcdScheme,
+			Scheme: etcdScheme(etcdCluster.Spec.TLS),
 			Host: fmt.Sprintf("%s.%s.%s.svc:%d",
 				name,
 				etcdCluster.Name,
@@ -143,7 +143,7 @@ func fakeEtcdForEtcdCluster(etcdCluster etcdv1alpha1.EtcdCluster) *StaticRespons
 			),
 		}
 		clientURL := &url.URL{
-			Scheme: etcdScheme,
+			Scheme: etcdScheme(etcdCluster.Spec.TLS),
 			Host: fmt.Sprintf("%s.%s.%s.svc:%d",
 				name,
 				etcdCluster.Name,
@@ -374,7 +374,7 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 			for i := range members {
 				name := fmt.Sprintf("%s-%d", etcdCluster.Name, i)
 				peerURL := &url.URL{
-					Scheme: etcdScheme,
+					Scheme: etcdScheme(etcdCluster.Spec.TLS),
 					Host: fmt.Sprintf("%s.%s.%s.svc:%d",
 						name,
 						etcdCluster.Name,
@@ -383,7 +383,7 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 					),
 				}
 				clientURL := &url.URL{
-					Scheme: etcdScheme,
+					Scheme: etcdScheme(etcdCluster.Spec.TLS),
 					Host: fmt.Sprintf("%s.%s.%s.svc:%d",
 						name,
 						etcdCluster.Name,
