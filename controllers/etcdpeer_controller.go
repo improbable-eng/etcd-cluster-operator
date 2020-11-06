@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	cryptotls "crypto/tls"
 	"fmt"
 	"net/url"
 	"reflect"
@@ -9,7 +10,6 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	etcdclient "go.etcd.io/etcd/client"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -30,28 +30,28 @@ import (
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/etcd"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/etcdenvvar"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/tls"
 )
 
 // EtcdPeerReconciler reconciles a EtcdPeer object
 type EtcdPeerReconciler struct {
 	client.Client
 	Log            logr.Logger
-	Etcd           etcd.APIBuilder
 	EtcdRepository string
+	Etcd           etcd.APIBuilder
 }
 
 const (
-	etcdScheme          = "http"
 	peerLabel           = "etcd.improbable.io/peer-name"
 	pvcCleanupFinalizer = "etcdpeer.etcd.improbable.io/pvc-cleanup"
 )
 
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch;patch
-// +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers/status;etcdpeers/finalizers,verbs=get;update;patch
 // +kubebuilder:rbac:groups=apps,resources=replicasets,verbs=list;get;create;watch
 // +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=list;get;create;watch;delete
 
-func initialMemberURL(member etcdv1alpha1.InitialClusterMember) *url.URL {
+func initialMemberURL(member etcdv1alpha1.InitialClusterMember, etcdScheme string) *url.URL {
 	return &url.URL{
 		Scheme: etcdScheme,
 		Host:   fmt.Sprintf("%s:%d", member.Host, etcdPeerPort),
@@ -60,13 +60,13 @@ func initialMemberURL(member etcdv1alpha1.InitialClusterMember) *url.URL {
 
 // staticBootstrapInitialCluster returns the value of `ETCD_INITIAL_CLUSTER`
 // environment variable.
-func staticBootstrapInitialCluster(static etcdv1alpha1.StaticBootstrap) string {
+func staticBootstrapInitialCluster(static etcdv1alpha1.StaticBootstrap, etcdScheme string) string {
 	s := make([]string, len(static.InitialCluster))
 	// Put our peers in as the other entries
 	for i, member := range static.InitialCluster {
 		s[i] = fmt.Sprintf("%s=%s",
 			member.Name,
-			initialMemberURL(member).String())
+			initialMemberURL(member, etcdScheme).String())
 	}
 	return strings.Join(s, ",")
 }
@@ -75,7 +75,7 @@ func staticBootstrapInitialCluster(static etcdv1alpha1.StaticBootstrap) string {
 // cluster name.
 func advertiseURL(etcdPeer etcdv1alpha1.EtcdPeer, port int32) *url.URL {
 	return &url.URL{
-		Scheme: etcdScheme,
+		Scheme: etcdScheme(etcdPeer.Spec.TLS),
 		Host: fmt.Sprintf(
 			"%s.%s:%d",
 			etcdPeer.Name,
@@ -85,7 +85,22 @@ func advertiseURL(etcdPeer etcdv1alpha1.EtcdPeer, port int32) *url.URL {
 	}
 }
 
-func bindAllAddress(port int) *url.URL {
+// advertiseClientURL builds the canonical URL of this peer from it's name and the
+// cluster name.
+func advertiseClientURL(etcdPeer etcdv1alpha1.EtcdPeer, port int32) *url.URL {
+	return &url.URL{
+		Scheme: etcdScheme(etcdPeer.Spec.TLS),
+		Host: fmt.Sprintf(
+			"%s.%s.%s:%d",
+			etcdPeer.Name,
+			etcdPeer.Spec.ClusterName,
+			etcdPeer.Namespace,
+			port,
+		),
+	}
+}
+
+func bindAllAddress(port int, etcdScheme string) *url.URL {
 	return &url.URL{
 		Scheme: etcdScheme,
 		Host:   fmt.Sprintf("0.0.0.0:%d", port),
@@ -123,6 +138,32 @@ func goMaxProcs(cpuLimit resource.Quantity) *int64 {
 	}
 	return pointer.Int64Ptr(goMaxProcs)
 }
+func definePeerCert(peer etcdv1alpha1.EtcdPeer, caCert, cert, key []byte) corev1.Secret {
+	// We use the same labels for the replica set itself, the selector on
+	// the replica set, and the pod template under the replica set.
+	labels := map[string]string{
+		appLabel:     appName,
+		clusterLabel: peer.Spec.ClusterName,
+		peerLabel:    peer.Name,
+	}
+
+	secret := corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels:          labels,
+			Annotations:     make(map[string]string),
+			Name:            peer.Name,
+			Namespace:       peer.Namespace,
+			OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(&peer, etcdv1alpha1.GroupVersion.WithKind("EtcdPeer"))},
+		},
+		Data: make(map[string][]byte),
+	}
+
+	secret.Data["ca.crt"] = caCert
+	secret.Data["tls.crt"] = cert
+	secret.Data["tls.key"] = key
+
+	return secret
+}
 
 func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, etcdRepository string, log logr.Logger) appsv1.ReplicaSet {
 	var replicas int32 = 1
@@ -141,7 +182,7 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, etcdRepository string, log log
 		Env: []corev1.EnvVar{
 			{
 				Name:  etcdenvvar.InitialCluster,
-				Value: staticBootstrapInitialCluster(*peer.Spec.Bootstrap.Static),
+				Value: staticBootstrapInitialCluster(*peer.Spec.Bootstrap.Static, etcdScheme(peer.Spec.TLS)),
 			},
 			{
 				Name:  etcdenvvar.Name,
@@ -157,15 +198,15 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, etcdRepository string, log log
 			},
 			{
 				Name:  etcdenvvar.AdvertiseClientURLs,
-				Value: advertiseURL(peer, etcdClientPort).String(),
+				Value: advertiseClientURL(peer, etcdClientPort).String(),
 			},
 			{
 				Name:  etcdenvvar.ListenPeerURLs,
-				Value: bindAllAddress(etcdPeerPort).String(),
+				Value: bindAllAddress(etcdPeerPort, etcdScheme(peer.Spec.TLS)).String(),
 			},
 			{
 				Name:  etcdenvvar.ListenClientURLs,
-				Value: bindAllAddress(etcdClientPort).String(),
+				Value: bindAllAddress(etcdClientPort, etcdScheme(peer.Spec.TLS)).String(),
 			},
 			{
 				Name:  etcdenvvar.InitialClusterState,
@@ -173,7 +214,7 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, etcdRepository string, log log
 			},
 			{
 				Name:  etcdenvvar.DataDir,
-				Value: etcdDataMountPath,
+				Value: EtcdDataMountPath,
 			},
 		},
 		Ports: []corev1.ContainerPort{
@@ -189,10 +230,69 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, etcdRepository string, log log
 		VolumeMounts: []corev1.VolumeMount{
 			{
 				Name:      "etcd-data",
-				MountPath: etcdDataMountPath,
+				MountPath: EtcdDataMountPath,
 			},
 		},
 	}
+
+	if peer.Spec.TLS != nil && peer.Spec.TLS.Enabled {
+		etcdContainer.Env = append(
+			etcdContainer.Env,
+			corev1.EnvVar{
+				Name:  etcdenvvar.PeerTrustedCaFile,
+				Value: fmt.Sprintf("%s/ca.crt", EtcdCertPath),
+			},
+			corev1.EnvVar{
+				Name:  etcdenvvar.PeerCertFile,
+				Value: fmt.Sprintf("%s/tls.crt", EtcdCertPath),
+			},
+			corev1.EnvVar{
+				Name:  etcdenvvar.PeerKeyFile,
+				Value: fmt.Sprintf("%s/tls.key", EtcdCertPath),
+			},
+			corev1.EnvVar{
+				Name:  etcdenvvar.PeerClientCertAuth,
+				Value: "true",
+			},
+			corev1.EnvVar{
+				Name:  etcdenvvar.TrustedCaFile,
+				Value: fmt.Sprintf("%s/ca.crt", EtcdCertPath),
+			},
+			corev1.EnvVar{
+				Name:  etcdenvvar.CertFile,
+				Value: fmt.Sprintf("%s/tls.crt", EtcdCertPath),
+			},
+			corev1.EnvVar{
+				Name:  etcdenvvar.KeyFile,
+				Value: fmt.Sprintf("%s/tls.key", EtcdCertPath),
+			},
+			corev1.EnvVar{
+				Name:  etcdenvvar.ClientCertAuth,
+				Value: "true",
+			},
+			corev1.EnvVar{
+				Name:  etcdenvvar.CtlCaFile,
+				Value: fmt.Sprintf("%s/ca.crt", EtcdCertPath),
+			},
+			corev1.EnvVar{
+				Name:  etcdenvvar.CtlCertFile,
+				Value: fmt.Sprintf("%s/tls.crt", EtcdCertPath),
+			},
+			corev1.EnvVar{
+				Name:  etcdenvvar.CtlKeyFile,
+				Value: fmt.Sprintf("%s/tls.key", EtcdCertPath),
+			},
+		)
+
+		etcdContainer.VolumeMounts = append(
+			etcdContainer.VolumeMounts,
+			corev1.VolumeMount{
+				Name:      "cert-dir",
+				MountPath: EtcdCertPath,
+			},
+		)
+	}
+
 	if peer.Spec.PodTemplate != nil {
 		if peer.Spec.PodTemplate.Resources != nil {
 			etcdContainer.Resources = *peer.Spec.PodTemplate.Resources.DeepCopy()
@@ -253,6 +353,18 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, etcdRepository string, log log
 		},
 	}
 
+	if peer.Spec.TLS != nil && peer.Spec.TLS.Enabled {
+		certVolume := corev1.Volume{
+			Name: "cert-dir",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: peer.Name,
+				},
+			},
+		}
+		replicaSet.Spec.Template.Spec.Volumes = append(replicaSet.Spec.Template.Spec.Volumes, certVolume)
+	}
+
 	if peer.Spec.PodTemplate != nil {
 		if peer.Spec.PodTemplate.Metadata != nil {
 			// Stamp annotations
@@ -275,6 +387,9 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, etcdRepository string, log log
 		}
 		if peer.Spec.PodTemplate.Affinity != nil {
 			replicaSet.Spec.Template.Spec.Affinity = peer.Spec.PodTemplate.Affinity
+		}
+		if len(peer.Spec.PodTemplate.Tolerations) > 0 {
+			replicaSet.Spec.Template.Spec.Tolerations = peer.Spec.PodTemplate.Tolerations
 		}
 	}
 
@@ -324,6 +439,36 @@ func (r *EtcdPeerReconciler) maybeCreatePvc(ctx context.Context, peer *etcdv1alp
 		return false, err
 	}
 	return true, nil
+}
+
+// getCaCertificates read the ca certificate and key
+func (r *EtcdPeerReconciler) getCaCertificates(ctx context.Context, clusterName, namespace string) ([]byte, []byte, error) {
+	secret := &corev1.Secret{}
+	err := r.Get(ctx, caSecretName(clusterName, namespace), secret)
+	if err != nil {
+		// Unexpected error, some other problem?
+		return nil, nil, err
+	}
+
+	// We found it because we got no error
+	return secret.Data["tls.crt"], secret.Data["tls.key"], nil
+}
+
+// getClientSecret determines if the client secret exists. Error is returned if there is some problem communicating with
+// Kubernetes.
+func (r *EtcdPeerReconciler) getClientSecret(ctx context.Context, clusterName, namespace string) (*corev1.Secret, error) {
+	secret := &corev1.Secret{}
+	err := r.Get(ctx, clientSecretName(clusterName, namespace), secret)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			// We got the expected error, which is that it's not found
+			return nil, nil
+		}
+		// Unexpected error, some other problem?
+		return nil, err
+	}
+	// We found it because we got no error
+	return secret, nil
 }
 
 func hasPvcDeletionFinalizer(peer etcdv1alpha1.EtcdPeer) bool {
@@ -432,20 +577,38 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr 
 	// Attempt to dial the etcd cluster, recording the cluster response if we can
 	var (
 		serverVersion string
+		tlsConfig     *cryptotls.Config
 	)
-	etcdConfig := etcdclient.Config{
+
+	if peer.Spec.TLS != nil && peer.Spec.TLS.Enabled {
+		clientSecret, err := r.getClientSecret(ctx, peer.Spec.ClusterName, peer.Namespace)
+		if err != nil {
+			log.Error(err, "can not get client certificates")
+			return ctrl.Result{}, nil
+		}
+
+		tlsConfig, err = createEtcdTLSConfig(clientSecret)
+		if err != nil {
+			log.Error(err, "can not create etcd transport")
+			return ctrl.Result{}, nil
+		}
+	} else {
+		tlsConfig = nil
+	}
+
+	etcdConfig := etcd.Config{
 		Endpoints: []string{
-			fmt.Sprintf("%s://%s.%s.%s:%d", etcdScheme, peer.Name, peer.Spec.ClusterName, peer.Namespace, etcdClientPort),
+			fmt.Sprintf("%s://%s.%s.%s:%d", etcdScheme(peer.Spec.TLS), peer.Name, peer.Spec.ClusterName, peer.Namespace, etcdClientPort),
 		},
-		Transport:               etcdclient.DefaultTransport,
-		HeaderTimeoutPerRequest: time.Second * 1,
+		TLS: tlsConfig,
 	}
 
 	if c, err := r.Etcd.New(etcdConfig); err != nil {
-		log.V(2).Info("Unable to connect to etcd", "error", err)
+		log.Error(err, "Unable to connect to etcd")
 	} else {
+		defer c.Close()
 		if version, err := c.GetVersion(ctx); err != nil {
-			log.V(2).Info("Unable to get Etcd version", "error", err)
+			log.Error(err, "Unable to get Etcd version", "error", err)
 		} else {
 			serverVersion = version.Server
 		}
@@ -475,6 +638,48 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr 
 	created, err := r.maybeCreatePvc(ctx, &peer)
 	if err != nil || created {
 		return result, err
+	}
+
+	if peer.Spec.TLS != nil && peer.Spec.TLS.Enabled {
+		var peerCert corev1.Secret
+		err = r.Get(
+			ctx,
+			client.ObjectKey{
+				Namespace: peer.Namespace,
+				Name:      peer.Name,
+			},
+			&peerCert,
+		)
+		if apierrs.IsNotFound(err) {
+			caCert, caKey, err := r.getCaCertificates(ctx, peer.Spec.ClusterName, peer.Namespace)
+			if err != nil {
+				return result, err
+			}
+
+			hostnames := []string{
+				// cluster names
+				fmt.Sprintf("%s", peer.Spec.ClusterName),
+				fmt.Sprintf("%s.%s", peer.Spec.ClusterName, peer.Namespace),
+				fmt.Sprintf("%s.%s.svc", peer.Spec.ClusterName, peer.Namespace),
+				fmt.Sprintf("%s.%s.svc.cluster.local", peer.Spec.ClusterName, peer.Namespace),
+
+				// peer names
+				fmt.Sprintf("%s.%s", peer.Name, peer.Spec.ClusterName),
+				fmt.Sprintf("%s.%s.%s", peer.Name, peer.Spec.ClusterName, peer.Namespace),
+				fmt.Sprintf("%s.%s.%s.svc", peer.Name, peer.Spec.ClusterName, peer.Namespace),
+				fmt.Sprintf("%s.%s.%s.svc.cluster.local", peer.Name, peer.Spec.ClusterName, peer.Namespace),
+			}
+			cert, key, err := tls.Issue(hostnames, caCert, caKey)
+			if err != nil {
+				return result, err
+			}
+
+			peerCert = definePeerCert(peer, caCert, cert, key)
+			if err := r.Create(ctx, &peerCert); err != nil {
+				log.Error(err, "unable to create certificate for EtcdPeer", "peer-cert", peerCert)
+				return result, err
+			}
+		}
 	}
 
 	var existingReplicaSet appsv1.ReplicaSet

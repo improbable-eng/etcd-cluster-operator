@@ -54,6 +54,12 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - secrets
+  verbs:
+  - '*'
+- apiGroups:
+  - ""
+  resources:
   - serviceaccounts
   verbs:
   - create
@@ -119,6 +125,7 @@ rules:
 - apiGroups:
   - etcd.improbable.io
   resources:
+  - etcdclusters/finalizers
   - etcdclusters/status
   verbs:
   - get
@@ -138,6 +145,7 @@ rules:
 - apiGroups:
   - etcd.improbable.io
   resources:
+  - etcdpeers/finalizers
   - etcdpeers/status
   verbs:
   - get

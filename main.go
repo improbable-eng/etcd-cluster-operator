@@ -2,6 +2,9 @@ package main
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/pprof"
+
 	"os"
 	"strings"
 
@@ -169,6 +172,19 @@ func main() {
 			setupLog.Error(err, "Unable to create webhook.", "webhook", "EtcdPeer")
 			os.Exit(1)
 		}
+	}
+
+	if os.Getenv("ENABLE_PPROF") != "" {
+		setupLog.Info("Running profiling webserver")
+		go func() {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/debug/pprof", pprof.Index)
+			err := http.ListenAndServe(":7777", mux)
+			if err != nil {
+				setupLog.Error(err, "pprof http error")
+				os.Exit(1)
+			}
+		}()
 	}
 
 	setupLog.Info("Starting cron handler")

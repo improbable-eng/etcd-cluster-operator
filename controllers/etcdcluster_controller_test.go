@@ -14,8 +14,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	etcdclient "go.etcd.io/etcd/client"
-	"go.etcd.io/etcd/version"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,12 +33,12 @@ type AlwaysFailEtcdAPI struct{}
 
 var _ etcd.APIBuilder = &AlwaysFailEtcdAPI{}
 
-func (_ *AlwaysFailEtcdAPI) New(_ etcdclient.Config) (etcd.API, error) {
+func (_ *AlwaysFailEtcdAPI) New(_ etcd.Config) (etcd.API, error) {
 	return nil, errors.New("fake etcd, nothing is here")
 }
 
 // deepCopyEtcdClientMember makes a copy of the supplied Member
-func deepCopyEtcdClientMember(in etcdclient.Member) (out etcdclient.Member, err error) {
+func deepCopyEtcdClientMember(in etcd.Member) (out etcd.Member, err error) {
 	encoded, err := json.Marshal(in)
 	if err != nil {
 		return out, err
@@ -53,23 +51,23 @@ func deepCopyEtcdClientMember(in etcdclient.Member) (out etcdclient.Member, err 
 // testing the interactions with the Etcd client API.
 type StaticResponseEtcdAPI struct {
 	sync.RWMutex
-	Members        []etcdclient.Member
+	Members        []etcd.Member
 	ClusterVersion string
 	ServerVersion  string
 }
 
 var _ etcd.APIBuilder = &StaticResponseEtcdAPI{}
 
-func (s *StaticResponseEtcdAPI) New(config etcdclient.Config) (etcd.API, error) {
+func (s *StaticResponseEtcdAPI) New(config etcd.Config) (etcd.API, error) {
 	return s, nil
 }
 
 var _ etcd.API = &StaticResponseEtcdAPI{}
 
-func (s *StaticResponseEtcdAPI) List(ctx context.Context) ([]etcdclient.Member, error) {
+func (s *StaticResponseEtcdAPI) List(ctx context.Context) ([]etcd.Member, error) {
 	s.RLock()
 	defer s.RUnlock()
-	out := make([]etcdclient.Member, len(s.Members))
+	out := make([]etcd.Member, len(s.Members))
 	for i := 0; i < len(out); i++ {
 		new, err := deepCopyEtcdClientMember(s.Members[i])
 		if err != nil {
@@ -80,7 +78,7 @@ func (s *StaticResponseEtcdAPI) List(ctx context.Context) ([]etcdclient.Member, 
 	return out, nil
 }
 
-func (s *StaticResponseEtcdAPI) Add(ctx context.Context, peerURL string) (*etcdclient.Member, error) {
+func (s *StaticResponseEtcdAPI) Add(ctx context.Context, peerURL string) (*etcd.Member, error) {
 	s.Lock()
 	defer s.Unlock()
 	panic("implement me")
@@ -98,13 +96,20 @@ func (s *StaticResponseEtcdAPI) Remove(ctx context.Context, mID string) error {
 	return fmt.Errorf("unknown member: %s", mID)
 }
 
-func (s *StaticResponseEtcdAPI) GetVersion(ctx context.Context) (*version.Versions, error) {
+func (s *StaticResponseEtcdAPI) GetVersion(ctx context.Context) (*etcd.Versions, error) {
 	s.RLock()
 	defer s.RUnlock()
-	return &version.Versions{
+	return &etcd.Versions{
 		Cluster: s.ClusterVersion,
 		Server:  s.ServerVersion,
 	}, nil
+}
+
+func (s *StaticResponseEtcdAPI) Close() error {
+	s.RLock()
+	defer s.RUnlock()
+
+	return nil
 }
 
 type WrapperEtcdAPI struct {
@@ -114,7 +119,7 @@ type WrapperEtcdAPI struct {
 
 var _ etcd.APIBuilder = &WrapperEtcdAPI{}
 
-func (o *WrapperEtcdAPI) New(config etcdclient.Config) (etcd.API, error) {
+func (o *WrapperEtcdAPI) New(config etcd.Config) (etcd.API, error) {
 	o.RLock()
 	defer o.RUnlock()
 	return o.wrapped.New(config)
@@ -130,11 +135,11 @@ func (o *WrapperEtcdAPI) Wrap(wrapped etcd.APIBuilder) {
 // which lists all the members of the cluster.
 // I.e. An established and healthy cluster rather than a cluster which is being bootstrapped.
 func fakeEtcdForEtcdCluster(etcdCluster etcdv1alpha1.EtcdCluster) *StaticResponseEtcdAPI {
-	members := make([]etcdclient.Member, *etcdCluster.Spec.Replicas)
+	members := make([]etcd.Member, *etcdCluster.Spec.Replicas)
 	for i := range members {
 		name := fmt.Sprintf("%s-%d", etcdCluster.Name, i)
 		peerURL := &url.URL{
-			Scheme: etcdScheme,
+			Scheme: etcdScheme(etcdCluster.Spec.TLS),
 			Host: fmt.Sprintf("%s.%s.%s.svc:%d",
 				name,
 				etcdCluster.Name,
@@ -143,7 +148,7 @@ func fakeEtcdForEtcdCluster(etcdCluster etcdv1alpha1.EtcdCluster) *StaticRespons
 			),
 		}
 		clientURL := &url.URL{
-			Scheme: etcdScheme,
+			Scheme: etcdScheme(etcdCluster.Spec.TLS),
 			Host: fmt.Sprintf("%s.%s.%s.svc:%d",
 				name,
 				etcdCluster.Name,
@@ -151,7 +156,7 @@ func fakeEtcdForEtcdCluster(etcdCluster etcdv1alpha1.EtcdCluster) *StaticRespons
 				etcdClientPort,
 			),
 		}
-		members[i] = etcdclient.Member{
+		members[i] = etcd.Member{
 			ID:         fmt.Sprintf("SOMEID%d", i),
 			Name:       name,
 			PeerURLs:   []string{peerURL.String()},
@@ -232,7 +237,7 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 		})
 		t.Run("EtcdMembersUpdate", func(t *testing.T) {
 			t.Log("The etcd cluster API reports the expected number of nodes")
-			membership, err := etcdAPI.New(etcdclient.Config{})
+			membership, err := etcdAPI.New(etcd.Config{})
 			require.NoError(t, err)
 			expectedMembers := expectedEtcdMembersForCluster(*etcdCluster)
 			err = try.Eventually(func() error {
@@ -370,11 +375,11 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 
 		t.Run("UpdatesStatus", func(t *testing.T) {
 			// Make our fake etcd respond
-			members := make([]etcdclient.Member, *etcdCluster.Spec.Replicas)
+			members := make([]etcd.Member, *etcdCluster.Spec.Replicas)
 			for i := range members {
 				name := fmt.Sprintf("%s-%d", etcdCluster.Name, i)
 				peerURL := &url.URL{
-					Scheme: etcdScheme,
+					Scheme: etcdScheme(etcdCluster.Spec.TLS),
 					Host: fmt.Sprintf("%s.%s.%s.svc:%d",
 						name,
 						etcdCluster.Name,
@@ -383,7 +388,7 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 					),
 				}
 				clientURL := &url.URL{
-					Scheme: etcdScheme,
+					Scheme: etcdScheme(etcdCluster.Spec.TLS),
 					Host: fmt.Sprintf("%s.%s.%s.svc:%d",
 						name,
 						etcdCluster.Name,
@@ -391,7 +396,7 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 						etcdClientPort,
 					),
 				}
-				members[i] = etcdclient.Member{
+				members[i] = etcd.Member{
 					ID:         fmt.Sprintf("SOMEID%d", i),
 					Name:       name,
 					PeerURLs:   []string{peerURL.String()},
@@ -783,11 +788,11 @@ func expectedStatusForCluster(c etcdv1alpha1.EtcdCluster) etcdv1alpha1.EtcdClust
 	}
 }
 
-func expectedEtcdMembersForCluster(c etcdv1alpha1.EtcdCluster) []etcdclient.Member {
-	members := make([]etcdclient.Member, *c.Spec.Replicas)
+func expectedEtcdMembersForCluster(c etcdv1alpha1.EtcdCluster) []etcd.Member {
+	members := make([]etcd.Member, *c.Spec.Replicas)
 	for i := range members {
 		name := fmt.Sprintf("%s-%d", c.Name, i)
-		members[i] = etcdclient.Member{
+		members[i] = etcd.Member{
 			ID:         fmt.Sprintf("SOMEID%d", i),
 			Name:       name,
 			PeerURLs:   []string{fmt.Sprintf("http://%s.%s.%s.svc:2380", name, c.Name, c.Namespace)},

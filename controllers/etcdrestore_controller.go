@@ -410,7 +410,7 @@ func (r *EtcdRestoreReconciler) podForRestore(restore etcdv1alpha1.EtcdRestore, 
 						{
 							Name:      "etcd-data",
 							ReadOnly:  false,
-							MountPath: etcdDataMountPath,
+							MountPath: EtcdDataMountPath,
 						},
 						{
 							Name:      "snapshot",
@@ -435,9 +435,9 @@ func (r *EtcdRestoreReconciler) podForRestore(restore etcdv1alpha1.EtcdRestore, 
 	}
 	stringFlag("etcd-peer-name", peer.Name)
 	stringFlag("etcd-cluster-name", restore.Spec.ClusterTemplate.ClusterName)
-	stringFlag("etcd-initial-cluster", staticBootstrapInitialCluster(*peer.Spec.Bootstrap.Static))
+	stringFlag("etcd-initial-cluster", staticBootstrapInitialCluster(*peer.Spec.Bootstrap.Static, etcdScheme(peer.Spec.TLS)))
 	stringFlag("etcd-peer-advertise-url", advertiseURL(peer, etcdPeerPort).String())
-	stringFlag("etcd-data-dir", etcdDataMountPath)
+	stringFlag("etcd-data-dir", EtcdDataMountPath)
 	stringFlag("snapshot-dir", snapshotDir)
 	stringFlag("backup-url", restore.Spec.Source.ObjectURL)
 	stringFlag("proxy-url", r.ProxyURL)

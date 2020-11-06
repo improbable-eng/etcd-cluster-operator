@@ -10,7 +10,6 @@ import (
 	"github.com/coreos/go-semver/semver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	etcdclient "go.etcd.io/etcd/client"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -18,6 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/etcd"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/test"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/test/try"
 )
@@ -30,7 +30,7 @@ func fakeEtcdForEtcdPeer(etcdPeer etcdv1alpha1.EtcdPeer) *StaticResponseEtcdAPI 
 	i := 1
 	name := fmt.Sprintf("%s-%d", clusterName, i)
 	peerURL := &url.URL{
-		Scheme: etcdScheme,
+		Scheme: etcdScheme(etcdPeer.Spec.TLS),
 		Host: fmt.Sprintf("%s.%s.%s.svc:%d",
 			name,
 			clusterName,
@@ -39,7 +39,7 @@ func fakeEtcdForEtcdPeer(etcdPeer etcdv1alpha1.EtcdPeer) *StaticResponseEtcdAPI 
 		),
 	}
 	clientURL := &url.URL{
-		Scheme: etcdScheme,
+		Scheme: etcdScheme(etcdPeer.Spec.TLS),
 		Host: fmt.Sprintf("%s.%s.%s.svc:%d",
 			name,
 			clusterName,
@@ -47,7 +47,7 @@ func fakeEtcdForEtcdPeer(etcdPeer etcdv1alpha1.EtcdPeer) *StaticResponseEtcdAPI 
 			etcdClientPort,
 		),
 	}
-	return &StaticResponseEtcdAPI{Members: []etcdclient.Member{
+	return &StaticResponseEtcdAPI{Members: []etcd.Member{
 		{
 			ID:         fmt.Sprintf("SOMEID%d", i),
 			Name:       name,
@@ -112,8 +112,8 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 
 		expectations := map[string]interface{}{
 			`.spec.template.spec.volumes[?(@.name=="etcd-data")].persistentVolumeClaim.claimName`:              etcdPeer.Name,
-			`.spec.template.spec.containers[?(@.name=="etcd")].volumeMounts[?(@.name=="etcd-data")].mountPath`: etcdDataMountPath,
-			`.spec.template.spec.containers[?(@.name=="etcd")].env[?(@.name=="ETCD_DATA_DIR")].value`:          etcdDataMountPath,
+			`.spec.template.spec.containers[?(@.name=="etcd")].volumeMounts[?(@.name=="etcd-data")].mountPath`: EtcdDataMountPath,
+			`.spec.template.spec.containers[?(@.name=="etcd")].env[?(@.name=="ETCD_DATA_DIR")].value`:          EtcdDataMountPath,
 			`.spec.template.spec.containers[?(@.name=="etcd")].env[?(@.name=="GOMAXPROCS")].value`:             expectedGoMaxProcs,
 			`.spec.template.spec.containers[?(@.name=="etcd")].image`:                                          expectedEtcdImage,
 		}
@@ -151,7 +151,7 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		)
 
 		require.Equal(t,
-			fmt.Sprintf("http://%s.%s:2379", etcdPeer.Name, etcdPeer.Spec.ClusterName),
+			fmt.Sprintf("http://%s.%s.%s:2379", etcdPeer.Name, etcdPeer.Spec.ClusterName, etcdPeer.Namespace),
 			requireEnvVar(t, etcdContainer.Env, "ETCD_ADVERTISE_CLIENT_URLS"),
 			"ETCD_ADVERTISE_CLIENT_URLS environment variable set incorrectly",
 		)

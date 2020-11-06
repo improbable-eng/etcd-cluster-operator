@@ -76,6 +76,9 @@ type EtcdPeerSpec struct {
 	// names starting with `etcd.improbable.io`, and pod templates containing these are considered invalid and will be
 	// rejected.
 	PodTemplate *EtcdPodTemplateSpec `json:"podTemplate,omitempty"`
+
+	// TLS configuration
+	TLS *TLS `json:"tls,omitempty"`
 }
 
 // EtcdPeerStorage defines the desired storage for an EtcdPeer
@@ -92,6 +95,10 @@ type EtcdPeerStorage struct {
 type EtcdPeerStatus struct {
 	// ServerVersion contains the Member server version
 	ServerVersion string `json:"serverVersion"`
+
+	// TLS configuration
+	// +optional
+	TLSEnabled bool `json:"tlsEnabled"`
 }
 
 // +kubebuilder:object:root=true

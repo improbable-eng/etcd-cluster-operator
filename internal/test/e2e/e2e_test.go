@@ -95,6 +95,8 @@ func TestE2E(t *testing.T) {
 	require.NoError(t, DeleteAllTestNamespaces(kubectl), "failed to delete test namespaces")
 
 	sampleClusterPath := filepath.Join(*fRepoRoot, "config", "samples", "etcd_v1alpha1_etcdcluster.yaml")
+	sampleClusterTLSv3Path := filepath.Join(*fRepoRoot, "config", "samples", "etcd_v1alpha1_etcdcluster_tls_v3.yaml")
+	sampleClusterTLSv4Path := filepath.Join(*fRepoRoot, "config", "samples", "etcd_v1alpha1_etcdcluster_tls_v4.yaml")
 
 	// Pre-flight check that we can submit etcd API resources, before continuing
 	// with the remaining tests.
@@ -123,7 +125,33 @@ func TestE2E(t *testing.T) {
 			kubectl := kubectl.WithT(t)
 			ns, cleanup := NamespaceForTest(t, kubectl, rl)
 			defer cleanup()
-			sampleClusterTests(t, kubectl.WithDefaultNamespace(ns), sampleClusterPath)
+			sampleClusterTests(t, kubectl.WithDefaultNamespace(ns), sampleClusterPath, false)
+		})
+		t.Run("SampleClusterTLSv3", func(t *testing.T) {
+			t.Parallel()
+			rl := corev1.ResourceList{
+				// 4 node cluster
+				// set job
+				corev1.ResourceCPU:    resource.MustParse("900m"),
+				corev1.ResourceMemory: resource.MustParse("850Mi"),
+			}
+			kubectl := kubectl.WithT(t)
+			ns, cleanup := NamespaceForTest(t, kubectl, rl)
+			defer cleanup()
+			sampleClusterTests(t, kubectl.WithDefaultNamespace(ns), sampleClusterTLSv3Path, true)
+		})
+		t.Run("SampleClusterTLSv4", func(t *testing.T) {
+			t.Parallel()
+			rl := corev1.ResourceList{
+				// 4 node cluster
+				// set job
+				corev1.ResourceCPU:    resource.MustParse("900m"),
+				corev1.ResourceMemory: resource.MustParse("850Mi"),
+			}
+			kubectl := kubectl.WithT(t)
+			ns, cleanup := NamespaceForTest(t, kubectl, rl)
+			defer cleanup()
+			sampleClusterTests(t, kubectl.WithDefaultNamespace(ns), sampleClusterTLSv4Path, true)
 		})
 		t.Run("Webhooks", func(t *testing.T) {
 			t.Parallel()
@@ -144,7 +172,7 @@ func TestE2E(t *testing.T) {
 			kubectl := kubectl.WithT(t)
 			ns, cleanup := NamespaceForTest(t, kubectl, rl)
 			defer cleanup()
-			persistenceTests(t, kubectl.WithDefaultNamespace(ns))
+			persistenceTests(t, kubectl.WithDefaultNamespace(ns), false)
 		})
 		t.Run("ScaleDown", func(t *testing.T) {
 			t.Parallel()
@@ -157,7 +185,7 @@ func TestE2E(t *testing.T) {
 			kubectl := kubectl.WithT(t)
 			ns, cleanup := NamespaceForTest(t, kubectl, rl)
 			defer cleanup()
-			scaleDownTests(t, kubectl.WithDefaultNamespace(ns))
+			scaleDownTests(t, kubectl.WithDefaultNamespace(ns), false)
 		})
 		t.Run("Backup", func(t *testing.T) {
 			t.Parallel()
@@ -169,7 +197,7 @@ func TestE2E(t *testing.T) {
 			}
 			ns, cleanup := NamespaceForTest(t, kubectl, rl)
 			defer cleanup()
-			backupTests(t, kubectl.WithT(t).WithDefaultNamespace(ns))
+			backupTests(t, kubectl.WithT(t).WithDefaultNamespace(ns), false)
 		})
 		t.Run("Restore", func(t *testing.T) {
 			t.Parallel()
@@ -181,7 +209,7 @@ func TestE2E(t *testing.T) {
 			}
 			ns, cleanup := NamespaceForTest(t, kubectl, rl)
 			defer cleanup()
-			restoreTests(t, kubectl.WithT(t).WithDefaultNamespace(ns))
+			restoreTests(t, kubectl.WithT(t).WithDefaultNamespace(ns), false)
 		})
 		t.Run("Version", func(t *testing.T) {
 			t.Parallel()
@@ -194,12 +222,12 @@ func TestE2E(t *testing.T) {
 			kubectl := kubectl.WithT(t)
 			ns, cleanup := NamespaceForTest(t, kubectl, rl)
 			defer cleanup()
-			versionTests(t, kubectl.WithDefaultNamespace(ns))
+			versionTests(t, kubectl.WithDefaultNamespace(ns), false)
 		})
 	})
 }
 
-func restoreTests(t *testing.T, kubectl *kubectlContext) {
+func restoreTests(t *testing.T, kubectl *kubectlContext, tls bool) {
 	t.Log("Create EtcdRestore from backup in MinIO")
 	err := kubectl.Apply("--filename",
 		filepath.Join(*fRepoRoot, "config", "test", "e2e", "restore", "etcdrestore.yaml"))
@@ -210,6 +238,7 @@ func restoreTests(t *testing.T, kubectl *kubectlContext) {
 		kubectl,
 		time.Minute*2,
 		"restored-cluster",
+		tls,
 		"get", "--print-value-only", "--", "foo",
 	)
 	require.NoError(t, err, out)
@@ -217,7 +246,7 @@ func restoreTests(t *testing.T, kubectl *kubectlContext) {
 	require.NoError(t, err, out)
 }
 
-func backupTests(t *testing.T, kubectl *kubectlContext) {
+func backupTests(t *testing.T, kubectl *kubectlContext, tls bool) {
 	t.Log("Given a one node cluster.")
 	cluster := test.ExampleEtcdCluster(*kubectl.defaultNamespace)
 	cluster.Spec.Replicas = pointer.Int32Ptr(1)
@@ -229,6 +258,7 @@ func backupTests(t *testing.T, kubectl *kubectlContext) {
 		kubectl,
 		time.Minute*2,
 		cluster.Name,
+		tls,
 		"put", "--", "foo", "bar",
 	)
 	require.NoError(t, err, out)
@@ -256,7 +286,7 @@ func backupTests(t *testing.T, kubectl *kubectlContext) {
 		default:
 			return fmt.Errorf("unexpected backup phase: %s", phase)
 		}
-	}, time.Second*10, time.Second*2)
+	}, time.Second*30, time.Second*2)
 	require.NoError(t, err, "Backup not finished")
 	require.Equal(t, actualBackup.Status.Phase, etcdv1alpha1.EtcdBackupPhaseCompleted, "Backup failed")
 
@@ -348,7 +378,7 @@ func webhookTests(t *testing.T, kubectl *kubectlContext) {
 
 }
 
-func sampleClusterTests(t *testing.T, kubectl *kubectlContext, sampleClusterPath string) {
+func sampleClusterTests(t *testing.T, kubectl *kubectlContext, sampleClusterPath string, tls bool) {
 	err := kubectl.Apply("--filename", sampleClusterPath)
 	require.NoError(t, err)
 
@@ -357,6 +387,7 @@ func sampleClusterTests(t *testing.T, kubectl *kubectlContext, sampleClusterPath
 			kubectl,
 			time.Minute*2,
 			"my-cluster",
+			tls,
 			"put", "--", "foo", "sample-cluster-tests-value",
 		)
 		require.NoError(t, err, out)
@@ -409,6 +440,7 @@ func sampleClusterTests(t *testing.T, kubectl *kubectlContext, sampleClusterPath
 				kubectl,
 				time.Minute*2,
 				"my-cluster",
+				tls,
 				"member", "list", "--write-out=json",
 			)
 			if err != nil {
@@ -447,7 +479,7 @@ func sampleClusterTests(t *testing.T, kubectl *kubectlContext, sampleClusterPath
 	})
 }
 
-func persistenceTests(t *testing.T, kubectl *kubectlContext) {
+func persistenceTests(t *testing.T, kubectl *kubectlContext, tls bool) {
 	t.Log("Given a 1-node cluster.")
 	configPath := filepath.Join(*fRepoRoot, "config", "test", "e2e", "persistence")
 	err := kubectl.Apply("--filename", configPath)
@@ -460,6 +492,7 @@ func persistenceTests(t *testing.T, kubectl *kubectlContext) {
 		kubectl,
 		time.Minute*2,
 		"cluster1",
+		tls,
 		"put", "--", "foo", expectedValue,
 	)
 	require.NoError(t, err, out)
@@ -494,13 +527,14 @@ func persistenceTests(t *testing.T, kubectl *kubectlContext) {
 		kubectl,
 		time.Minute*2,
 		"cluster1",
+		tls,
 		"get", "--print-value-only", "--", "foo",
 	)
 	require.NoError(t, err, out)
 	assert.Equal(t, expectedValue+"\n", out)
 }
 
-func scaleDownTests(t *testing.T, kubectl *kubectlContext) {
+func scaleDownTests(t *testing.T, kubectl *kubectlContext, tls bool) {
 	t.Log("Given a 3-node cluster.")
 	configPath := filepath.Join(*fRepoRoot, "config", "samples", "etcd_v1alpha1_etcdcluster.yaml")
 	err := kubectl.Apply("--filename", configPath)
@@ -533,6 +567,7 @@ func scaleDownTests(t *testing.T, kubectl *kubectlContext) {
 		kubectl,
 		time.Minute*2,
 		"my-cluster",
+		tls,
 		"put", "--", "foo", expectedValue,
 	)
 	require.NoError(t, err, out)
@@ -564,6 +599,7 @@ func scaleDownTests(t *testing.T, kubectl *kubectlContext) {
 		kubectl,
 		time.Minute*2,
 		"my-cluster",
+		tls,
 		"get", "--print-value-only", "--", "foo",
 	)
 	require.NoError(t, err, out)
@@ -598,13 +634,14 @@ func scaleDownTests(t *testing.T, kubectl *kubectlContext) {
 		kubectl,
 		time.Minute*2,
 		"my-cluster",
+		tls,
 		"put", "--", "foo2", expectedValue+"2",
 	)
 	require.NoError(t, err, out)
 
 }
 
-func versionTests(t *testing.T, kubectl *kubectlContext) {
+func versionTests(t *testing.T, kubectl *kubectlContext, tls bool) {
 	t.Log("Given a 3-node cluster.")
 	const originalVersion = "3.2.27"
 	const newVersion = "3.2.28"
@@ -622,6 +659,7 @@ func versionTests(t *testing.T, kubectl *kubectlContext) {
 		kubectl,
 		time.Minute*2,
 		"cluster1",
+		tls,
 		"put", "--", "foo", expectedValue,
 	)
 	require.NoError(t, err, out)
