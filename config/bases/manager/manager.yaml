@@ -20,8 +20,11 @@ spec:
         - /manager
         args:
         - --enable-leader-election
-        - --proxy-url=eco-proxy.eco-system.svc
-        image: controller:latest
+        - --proxy-url=storageos-proxy.storageos-etcd.svc
+        image: storageos/etcd-cluster-operator-controller:develop
+        env:
+        - name: DISABLE_WEBHOOKS
+          value: "true"
         name: manager
         resources:
           limits:

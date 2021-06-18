@@ -19,7 +19,7 @@ spec:
       - name: proxy
         args:
           - --api-port=8080
-        image: proxy:latest
+        image: storageos/etcd-cluster-operator-proxy:develop
         resources:
           limits:
             cpu: 100m
