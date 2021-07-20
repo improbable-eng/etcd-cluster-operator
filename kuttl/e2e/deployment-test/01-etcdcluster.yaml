@@ -1,10 +1,13 @@
 apiVersion: etcd.improbable.io/v1alpha1
 kind: EtcdCluster
 metadata:
-  name: my-cluster
+  name: storageos-etcd
+  namespace: storageos-etcd
 spec:
   replicas: 3
   version: 3.5.0
+  tls:
+    enabled: true
   storage:
     volumeClaimTemplate:
       storageClassName: standard
@@ -29,5 +32,5 @@ spec:
                   - key: etcd.improbable.io/cluster-name
                     operator: In
                     values:
-                      - my-cluster
+                      - storageos-etcd
               topologyKey: kubernetes.io/hostname

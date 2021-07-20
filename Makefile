@@ -97,14 +97,18 @@ verify: verify-gomod verify-manifests verify-generate verify-protobuf verify-fmt
 test: ## Run unit tests
 test: bin/kubebuilder
 	KUBEBUILDER_ASSETS="$(shell pwd)/bin/kubebuilder/bin" ${GO} test ./... -coverprofile cover.out $(ARGS)
-
-.PHONY: e2e-kind
-e2e-kind: ## Run end to end tests - creates a new Kind cluster called etcd-e2e
-e2e-kind: docker-build kind-cluster kind-load deploy-e2e e2e
-
 .PHONY: e2e
-e2e: ## Run the end-to-end tests - uses the current KUBE_CONFIG and context
-e2e:
+e2e: ## Run kuttl e2e tests
+	kustomize build config/default > kuttl/e2e/deployment-test/00-deploy.yaml
+	kubectl-kuttl test --config kuttl/e2e/kuttl-test.yaml	
+
+.PHONY: legacy-e2e-kind
+legacy-e2e-kind: ## Run end to end tests - creates a new Kind cluster called etcd-e2e
+legacy-e2e-kind: docker-build kind-cluster kind-load deploy-e2e e2e
+
+.PHONY: legacy-e2e
+legacy-e2e: ## Run the end-to-end tests - uses the current KUBE_CONFIG and context
+legacy-e2e:
 	${GO} test -v -parallel ${TEST_PARALLEL_E2E} -timeout 20m ./internal/test/e2e --e2e-enabled --repo-root ${CURDIR} --output-directory ${E2E_ARTIFACTS_DIRECTORY} $(ARGS)
 
 .PHONY: manager

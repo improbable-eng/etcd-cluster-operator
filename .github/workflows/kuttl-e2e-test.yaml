@@ -1,0 +1,21 @@
+name: kuttl e2e test
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    name: e2e test
+    runs-on: ubuntu-18.04
+    env:
+      KUTTL: /usr/local/bin/kubectl-kuttl
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v2
+        with:
+          go-version: '1.16'
+      - name: Install kuttl
+        run: |
+          sudo curl -Lo $KUTTL https://github.com/kudobuilder/kuttl/releases/download/v0.10.0/kubectl-kuttl_0.10.0_linux_x86_64
+          sudo chmod +x $KUTTL
+      - name: Run kuttl
+        run: make e2e 

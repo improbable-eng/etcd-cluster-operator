@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: storageos-etcd-controller-manager
+  namespace: storageos-etcd
+status:
+  replicas: 1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: storageos-etcd-proxy
+  namespace: storageos-etcd
+status:
+  replicas: 1
+---
+apiVersion: apps/v1
+kind: ReplicaSet 
+metadata:
+  name: storageos-etcd-0
+  namespace: storageos-etcd
+status:
+  replicas: 1
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: storageos-etcd-1
+  namespace: storageos-etcd
+status:
+  replicas: 1
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: storageos-etcd-2
+  namespace: storageos-etcd
+status:
+  replicas: 1
