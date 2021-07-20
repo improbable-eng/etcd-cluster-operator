@@ -13,6 +13,7 @@ import (
 	"github.com/go-logr/logr"
 	etcdclient "go.etcd.io/etcd/client"
 	v1 "k8s.io/api/core/v1"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -404,13 +405,15 @@ func (r *EtcdClusterReconciler) reconcile(
 				}
 			}
 
-			// Upgrade Etcd.
+			// Upgrade Etcd or incorporate changes.
 			// Remove EtcdPeers which  have a different version than EtcdCluster; in reverse name order, one-at-a-time.
-			// The EtcdPeers will be recreated in the next reconcile, with the correct version.
-			if peer := nextOutdatedPeer(cluster, peers); peer != nil {
-				if peer.Spec.Version == cluster.Spec.Version {
-					log.Info("Waiting for EtcdPeer to report expected server version", "etcdpeer-name", peer.Name)
-					return result, nil, nil
+			// The EtcdPeers will be recreated in the next reconcile, with the correct state.
+			if peer, reason := nextOutdatedPeer(cluster, peers); peer != nil {
+				if reason == outdatedVersion {
+					if peer.Spec.Version == cluster.Spec.Version {
+						log.Info("Waiting for EtcdPeer to report expected server version", "etcdpeer-name", peer.Name)
+						return result, nil, nil
+					}
 				}
 				if !peer.DeletionTimestamp.IsZero() {
 					log.Info("Waiting for EtcdPeer be deleted", "etcdpeer-name", peer.Name)
@@ -473,10 +476,17 @@ func (r *EtcdClusterReconciler) reconcile(
 	return result, nil, nil
 }
 
-// nextOutdatedPeer returns an EtcdPeer which has a different version than the
-// EtcdCluster.
+type outdatedReason int
+
+const (
+	outdatedVersion outdatedReason = iota + 1
+	outdatedPodTemplate
+)
+
+// nextOutdatedPeer returns an EtcdPeer which is different to the spec of the
+// EtcdCluster. It also returns the reason why it's outdated.
 // It searches EtcdPeers in reverse name order.
-func nextOutdatedPeer(cluster *etcdv1alpha1.EtcdCluster, peers *etcdv1alpha1.EtcdPeerList) *etcdv1alpha1.EtcdPeer {
+func nextOutdatedPeer(cluster *etcdv1alpha1.EtcdCluster, peers *etcdv1alpha1.EtcdPeerList) (*etcdv1alpha1.EtcdPeer, outdatedReason) {
 	peerNames := make([]string, len(peers.Items))
 	peersByName := map[string]etcdv1alpha1.EtcdPeer{}
 	for i, peer := range peers.Items {
@@ -491,10 +501,13 @@ func nextOutdatedPeer(cluster *etcdv1alpha1.EtcdCluster, peers *etcdv1alpha1.Etc
 			continue
 		}
 		if peer.Status.ServerVersion != cluster.Spec.Version {
-			return peer.DeepCopy()
+			return peer.DeepCopy(), outdatedVersion
+		}
+		if !apiequality.Semantic.DeepEqual(peer.Spec.PodTemplate, cluster.Spec.PodTemplate) {
+			return peer.DeepCopy(), outdatedPodTemplate
 		}
 	}
-	return nil
+	return nil, 0
 }
 
 func hasTooFewPeers(cluster *etcdv1alpha1.EtcdCluster, peers *etcdv1alpha1.EtcdPeerList) bool {

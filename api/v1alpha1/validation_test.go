@@ -157,20 +157,6 @@ func TestEtcdCluster_ValidateUpdate(t *testing.T) {
 			err: "^Unsupported changes:",
 		},
 		{
-			// TODO Support pod annotation modification https://github.com/improbable-eng/etcd-cluster-operator/issues/109
-			name: "ModifyPodSpecAnnotation",
-			modifier: func(o *v1alpha1.EtcdCluster) {
-				o.Spec.PodTemplate = &v1alpha1.EtcdPodTemplateSpec{
-					Metadata: &v1alpha1.EtcdPodTemplateObjectMeta{
-						Annotations: map[string]string{
-							"new-annotation": "some-value",
-						},
-					},
-				}
-			},
-			err: "^Unsupported changes:",
-		},
-		{
 			name: "UnsupportedChange/StorageClassName",
 			modifier: func(o *v1alpha1.EtcdCluster) {
 				*o.Spec.Storage.VolumeClaimTemplate.StorageClassName += "-changed"
