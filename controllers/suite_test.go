@@ -37,7 +37,7 @@ func setupSuite(t *testing.T) (suite *controllerSuite, teardownFunc func()) {
 	ctx, ctxCancel := context.WithTimeout(context.Background(), time.Minute*5)
 
 	testEnv := &envtest.Environment{
-		CRDDirectoryPaths: []string{filepath.Join("..", "config", "crd", "bases")},
+		CRDDirectoryPaths: []string{filepath.Join("..", "config", "bases", "crd", "bases")},
 	}
 
 	cfg, err := testEnv.Start()
@@ -48,7 +48,6 @@ func setupSuite(t *testing.T) (suite *controllerSuite, teardownFunc func()) {
 	require.NoError(t, err)
 
 	// Add new resources here.
-
 	k8sClient, err := client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	require.NoError(t, err)
 	require.NotNil(t, k8sClient)

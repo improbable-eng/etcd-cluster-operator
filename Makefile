@@ -95,7 +95,7 @@ verify: verify-gomod verify-manifests verify-generate verify-protobuf verify-fmt
 
 .PHONY: test
 test: ## Run unit tests
-test: bin/kubebuilder
+test: kubebuilder
 	KUBEBUILDER_ASSETS="$(shell pwd)/bin/kubebuilder/bin" ${GO} test ./... -coverprofile cover.out $(ARGS)
 .PHONY: e2e
 e2e: ## Run kuttl e2e tests
@@ -301,5 +301,6 @@ ${KIND}: ${BIN}
 	curl -sSL -o ${KIND} https://github.com/kubernetes-sigs/kind/releases/download/v${KIND_VERSION}/kind-${OS}-${ARCH}
 	chmod +x ${KIND}
 
-bin/kubebuilder:
+.PHONY: kubebuilder
+kubebuilder:
 	hack/download-kubebuilder-local.sh
