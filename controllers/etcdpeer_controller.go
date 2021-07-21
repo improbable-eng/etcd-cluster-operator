@@ -283,7 +283,6 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, etcdRepository string, log log
 				Value: fmt.Sprintf("%s/tls.key", EtcdCertPath),
 			},
 		)
-
 		etcdContainer.VolumeMounts = append(
 			etcdContainer.VolumeMounts,
 			corev1.VolumeMount{
@@ -307,6 +306,9 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, etcdRepository string, log log
 			}
 		}
 	}
+	// Append additional env vars that were passed directly to etcdcluster and overwrite any duplicates
+	etcdContainer.Env = appendClusterEnvVars(etcdContainer.Env, peer.Spec.PodTemplate.EtcdEnv)
+
 	replicaSet := appsv1.ReplicaSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels:          labels,
@@ -394,6 +396,25 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, etcdRepository string, log log
 	}
 
 	return replicaSet
+}
+
+// appendClusterEnvVars adds EnvVars passed via etcdcluster spec to EnvVars for peer etcd container.
+// Any EnvVars duplicated in the etcdcluster spec overwrite those created by default by this controller.
+func appendClusterEnvVars(peerEnvs, clusterEnvs []corev1.EnvVar) []corev1.EnvVar {
+	if len(clusterEnvs) == 0 {
+		return peerEnvs
+	}
+	for i, peerEnv := range peerEnvs {
+		for j, clusterEnv := range clusterEnvs {
+			if peerEnv.Name == clusterEnv.Name {
+				peerEnvs[i] = clusterEnv
+				clusterEnvs = append(clusterEnvs[:j], clusterEnvs[j+1:]...)
+				break
+			}
+		}
+
+	}
+	return append(peerEnvs, clusterEnvs...)
 }
 
 func pvcForPeer(peer *etcdv1alpha1.EtcdPeer) *corev1.PersistentVolumeClaim {

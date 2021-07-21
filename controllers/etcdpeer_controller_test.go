@@ -3,6 +3,7 @@ package controllers
 import (
 	"fmt"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -354,6 +355,119 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 			require.NoError(t, err)
 		})
 	})
+}
+
+func TestAppendClusterEnvVars(t *testing.T) {
+	tests := []struct {
+		peerEnvs    []corev1.EnvVar
+		clusterEnvs []corev1.EnvVar
+		expEnvs     []corev1.EnvVar
+	}{
+		{
+			peerEnvs: []corev1.EnvVar{
+				corev1.EnvVar{
+					Name:  "ETCD_TEST_ENV_1",
+					Value: "test-env-1",
+				},
+				corev1.EnvVar{
+					Name:  "ETCD_TEST_ENV_2",
+					Value: "test-env-3",
+				},
+				corev1.EnvVar{
+					Name:  "ETCD_TEST_ENV_3",
+					Value: "test-env-3",
+				},
+				corev1.EnvVar{
+					Name:  "ETCD_TEST_ENV_4",
+					Value: "test-env-4",
+				},
+			},
+			clusterEnvs: []corev1.EnvVar{},
+			expEnvs: []corev1.EnvVar{
+				corev1.EnvVar{
+					Name:  "ETCD_TEST_ENV_1",
+					Value: "test-env-1",
+				},
+				corev1.EnvVar{
+					Name:  "ETCD_TEST_ENV_2",
+					Value: "test-env-3",
+				},
+				corev1.EnvVar{
+					Name:  "ETCD_TEST_ENV_3",
+					Value: "test-env-3",
+				},
+				corev1.EnvVar{
+					Name:  "ETCD_TEST_ENV_4",
+					Value: "test-env-4",
+				},
+			},
+		},
+
+		{
+			peerEnvs: []corev1.EnvVar{
+				corev1.EnvVar{
+					Name:  "ETCD_TEST_ENV_1",
+					Value: "test-env-1",
+				},
+				corev1.EnvVar{
+					Name:  "ETCD_TEST_ENV_2",
+					Value: "test-env-3",
+				},
+				corev1.EnvVar{
+					Name:  "ETCD_TEST_ENV_3",
+					Value: "test-env-3",
+				},
+				corev1.EnvVar{
+					Name:  "ETCD_TEST_ENV_4",
+					Value: "test-env-4",
+				},
+			},
+			clusterEnvs: []corev1.EnvVar{
+				corev1.EnvVar{
+					Name:  "ETCD_TEST_ENV_2",
+					Value: "test-env-b",
+				},
+				corev1.EnvVar{
+					Name:  "ETCD_TEST_ENV_4",
+					Value: "test-env-d",
+				},
+				corev1.EnvVar{
+					Name:  "ETCD_TEST_ENV_5",
+					Value: "test-env-e",
+				},
+			},
+			expEnvs: []corev1.EnvVar{
+				corev1.EnvVar{
+					Name:  "ETCD_TEST_ENV_1",
+					Value: "test-env-1",
+				},
+				corev1.EnvVar{
+					Name:  "ETCD_TEST_ENV_2",
+					Value: "test-env-b",
+				},
+				corev1.EnvVar{
+					Name:  "ETCD_TEST_ENV_3",
+					Value: "test-env-3",
+				},
+				corev1.EnvVar{
+					Name:  "ETCD_TEST_ENV_4",
+					Value: "test-env-d",
+				},
+				corev1.EnvVar{
+					Name:  "ETCD_TEST_ENV_5",
+					Value: "test-env-e",
+				},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		envs := appendClusterEnvVars(tc.peerEnvs, tc.clusterEnvs)
+		if !reflect.DeepEqual(envs, tc.expEnvs) {
+			t.Errorf("expected %v, got %v", tc.expEnvs, envs)
+		}
+	}
+
 }
 
 func TestGoMaxProcs(t *testing.T) {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/coreos/go-semver/semver"
 	"github.com/google/go-cmp/cmp"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/etcdenvvar"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -158,6 +159,44 @@ func IsInvalidUserProvidedAnnotationName(annotationName string) bool {
 	return strings.HasPrefix(annotationName, "etcd.improbable.io/")
 }
 
+func IsInvalidUserProvidedEtcdEnv(envVar corev1.EnvVar) bool {
+	switch envVar.Name {
+	case etcdenvvar.InitialAdvertisePeerURLs:
+	case etcdenvvar.AdvertiseClientURLs:
+	case etcdenvvar.ListenPeerURLs:
+	case etcdenvvar.InitialCluster:
+	case etcdenvvar.ListenClientURLs:
+	case etcdenvvar.InitialClusterState:
+	case etcdenvvar.InitialClusterToken:
+	case etcdenvvar.Name:
+	case etcdenvvar.DataDir:
+	case etcdenvvar.CertFile:
+	case etcdenvvar.KeyFile:
+	case etcdenvvar.TrustedCaFile:
+	case etcdenvvar.ClientCertAuth:
+	case etcdenvvar.PeerCertFile:
+	case etcdenvvar.PeerKeyFile:
+	case etcdenvvar.PeerTrustedCaFile:
+	case etcdenvvar.PeerClientCertAuth:
+	case etcdenvvar.CtlCertFile:
+	case etcdenvvar.CtlKeyFile:
+	case etcdenvvar.CtlCaFile:
+	case etcdenvvar.HeartbeatInterval:
+	case etcdenvvar.ElectionTimeout:
+	case etcdenvvar.MaxSnapshots:
+	case etcdenvvar.MaxWals:
+	case etcdenvvar.QuotaBackendBytes:
+	case etcdenvvar.SnapshotCount:
+	case etcdenvvar.AutoCompactionRetention:
+	case etcdenvvar.AutoCompactionMode:
+		return false
+	default:
+		return true
+
+	}
+	return false
+}
+
 func (o *EtcdPodTemplateObjectMeta) validate(path *field.Path) field.ErrorList {
 	var allErrs field.ErrorList
 	if o != nil {
@@ -178,6 +217,13 @@ func (o *EtcdPodTemplateSpec) validate(path *field.Path) field.ErrorList {
 	var allErrs field.ErrorList
 	if o != nil {
 		allErrs = append(allErrs, o.Metadata.validate(path.Child("metadata"))...)
+		for _, envVar := range o.EtcdEnv {
+			if IsInvalidUserProvidedEtcdEnv(envVar) {
+				allErrs = append(
+					allErrs,
+					field.Invalid(path, envVar.Name, "ETCD environment variable is invalid"))
+			}
+		}
 	} else {
 		// Not mandatory, being nil is fine.
 	}

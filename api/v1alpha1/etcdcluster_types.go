@@ -51,6 +51,10 @@ type EtcdPodTemplateSpec struct {
 	// Tolerations is the allowed taints that the deployment tolerates on nodes.
 	// +optional
 	Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
+
+	// EtcdEnv is the additional env variables passed to etcd container in etcd pod..
+	// +optional
+	EtcdEnv []corev1.EnvVar `json:"etcdEnv,omitempty"`
 }
 
 // EtcdPodTemplateObjectMeta supports a subset of the features of a normal ObjectMeta. In particular the ones we allow.
@@ -78,7 +82,6 @@ type TLS struct {
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
 }
-
 
 // EtcdClusterStatus defines the observed state of EtcdCluster
 type EtcdClusterStatus struct {

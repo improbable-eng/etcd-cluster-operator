@@ -21,4 +21,12 @@ const (
 	CtlCertFile              = "ETCDCTL_CERT"
 	CtlKeyFile               = "ETCDCTL_KEY"
 	CtlCaFile                = "ETCDCTL_CACERT"
+	HeartbeatInterval        = "ETCD_HEARTBEAT_INTERVAL"
+	ElectionTimeout          = "ETCD_ELECTION_TIMEOUT"
+	MaxSnapshots             = "ETCD_MAX_SNAPSHOTS"
+	MaxWals                  = "ETCD_MAX_WALS"
+	QuotaBackendBytes        = "ETCD_QUOTA_BACKEND_BYTES"
+	SnapshotCount            = "ETCD_SNAPSHOT_COUNT"
+	AutoCompactionRetention  = "ETCD_AUTO_COMPACTION_RETENTION"
+	AutoCompactionMode       = "ETCD_AUTO_COMPACTION_MODE"
 )

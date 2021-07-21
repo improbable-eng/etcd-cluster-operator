@@ -7,6 +7,7 @@ import (
 	"k8s.io/utils/pointer"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/etcdenvvar"
 )
 
 // ExampleEtcdCluster returns a valid example for testing purposes.
@@ -42,6 +43,40 @@ func ExampleEtcdCluster(namespace string) *etcdv1alpha1.EtcdCluster {
 					Limits: corev1.ResourceList{
 						"cpu":    resource.MustParse("200m"),
 						"memory": resource.MustParse("200Mi"),
+					},
+				},
+				EtcdEnv: []corev1.EnvVar{
+					corev1.EnvVar{
+						Name:  etcdenvvar.HeartbeatInterval,
+						Value: "100",
+					},
+					corev1.EnvVar{
+						Name:  etcdenvvar.ElectionTimeout,
+						Value: "5000",
+					},
+					corev1.EnvVar{
+						Name:  etcdenvvar.MaxSnapshots,
+						Value: "10",
+					},
+					corev1.EnvVar{
+						Name:  etcdenvvar.MaxWals,
+						Value: "10",
+					},
+					corev1.EnvVar{
+						Name:  etcdenvvar.QuotaBackendBytes,
+						Value: "8589934592",
+					},
+					corev1.EnvVar{
+						Name:  etcdenvvar.SnapshotCount,
+						Value: "100000",
+					},
+					corev1.EnvVar{
+						Name:  etcdenvvar.AutoCompactionRetention,
+						Value: "20000",
+					},
+					corev1.EnvVar{
+						Name:  etcdenvvar.AutoCompactionMode,
+						Value: "revision",
 					},
 				},
 			},
@@ -101,6 +136,40 @@ func ExampleEtcdPeer(namespace string) *etcdv1alpha1.EtcdPeer {
 					Limits: corev1.ResourceList{
 						"cpu":    resource.MustParse("200m"),
 						"memory": resource.MustParse("200Mi"),
+					},
+				},
+				EtcdEnv: []corev1.EnvVar{
+					corev1.EnvVar{
+						Name:  etcdenvvar.HeartbeatInterval,
+						Value: "100",
+					},
+					corev1.EnvVar{
+						Name:  etcdenvvar.ElectionTimeout,
+						Value: "5000",
+					},
+					corev1.EnvVar{
+						Name:  etcdenvvar.MaxSnapshots,
+						Value: "10",
+					},
+					corev1.EnvVar{
+						Name:  etcdenvvar.MaxWals,
+						Value: "10",
+					},
+					corev1.EnvVar{
+						Name:  etcdenvvar.QuotaBackendBytes,
+						Value: "8589934592",
+					},
+					corev1.EnvVar{
+						Name:  etcdenvvar.SnapshotCount,
+						Value: "100000",
+					},
+					corev1.EnvVar{
+						Name:  etcdenvvar.AutoCompactionRetention,
+						Value: "20000",
+					},
+					corev1.EnvVar{
+						Name:  etcdenvvar.AutoCompactionMode,
+						Value: "revision",
 					},
 				},
 			},
