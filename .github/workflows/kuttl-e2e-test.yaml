@@ -1,6 +1,12 @@
 name: kuttl e2e test
 
-on: [push, pull_request]
+on: 
+  push:
+    branches: 
+      - main
+  pull_request:
+    branches:      
+      - main    
 
 jobs:
   test:
@@ -17,5 +23,7 @@ jobs:
         run: |
           sudo curl -Lo $KUTTL https://github.com/kudobuilder/kuttl/releases/download/v0.11.1/kubectl-kuttl_0.11.1_linux_x86_64
           sudo chmod +x $KUTTL
+      - name: Build Containers
+        run: make docker-build    
       - name: Run kuttl
         run: make e2e 

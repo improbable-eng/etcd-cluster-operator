@@ -6,8 +6,8 @@ SHELL := bash
 .DEFAULT_GOAL := help
 # The version which will be reported by the --version argument of each binary
 # and which will be used as the Docker image tag
-VERSION ?= $(shell git describe --tags)
-
+#VERSION ?= $(shell git describe --tags)
+VERSION=$(shell ./scripts/branch.sh)
 # Set ARGS to specify extra go test arguments
 ARGS ?=
 
@@ -30,7 +30,7 @@ GO := $(or $(shell which go${GO_VERSION}),$(shell which go))
 
 # Docker image configuration
 # Docker images are published to https://quay.io/repository/improbable-eng/etcd-cluster-operator
-DOCKER_TAG ?= develop
+DOCKER_TAG ?= ${VERSION}
 DOCKER_REPO ?= storageos
 DOCKER_IMAGES ?= controller proxy backup-agent restore-agent
 DOCKER_IMAGE_NAME_PREFIX ?= etcd-cluster-operator-
@@ -99,7 +99,9 @@ test: kubebuilder
 	KUBEBUILDER_ASSETS="$(shell pwd)/bin/kubebuilder/bin" ${GO} test ./... -coverprofile cover.out $(ARGS)
 .PHONY: e2e
 e2e: ## Run kuttl e2e tests
-	kustomize build config/default > kuttl/e2e/deployment-test/00-deploy.yaml
+e2e: RELEASE_MANIFEST=kuttl/e2e/deployment-test/00-deploy.yaml	
+e2e: uber
+#	kustomize build config/default > kuttl/e2e/deployment-test/00-deploy.yaml
 	kubectl-kuttl test --config kuttl/e2e/kuttl-test.yaml	
 
 .PHONY: legacy-e2e-kind
@@ -186,6 +188,11 @@ manifests: ## Generate manifests e.g. CRD, RBAC etc.
 manifests: ${CONTROLLER_GEN}
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/bases/crd/bases
 
+.PHONY: uber
+uber: KUSTOMIZE_DIRECTORY_TO_EDIT=config/bases/manager
+uber: kustomize-edit-set-image
+	${KUSTOMIZE} build --output storageos-etcd-cluster-operator.yaml config/default
+
 .PHONY: fmt
 fmt: ## Run go fmt against code
 	${GO} fmt .
@@ -257,7 +264,7 @@ kind-export-logs:
 # ===================================
 
 .PHONY: .create-release-tag
-.create-release-tag: KUSTOMIZE_DIRECTORY_TO_EDIT=config/manager
+.create-release-tag: KUSTOMIZE_DIRECTORY_TO_EDIT=config/bases/manager
 .create-release-tag: kustomize-edit-set-image
 	git add ${KUSTOMIZE_DIRECTORY_TO_EDIT}
 	git commit --message "Release ${VERSION}"
@@ -266,13 +273,13 @@ kind-export-logs:
 ${RELEASE_NOTES}:
 	$(error "Release notes not found: ${RELEASE_NOTES}")
 
-${RELEASE_MANIFEST}: KUSTOMIZE_DIRECTORY_TO_EDIT=config/manager
+${RELEASE_MANIFEST}: KUSTOMIZE_DIRECTORY_TO_EDIT=config/bases/manager
 ${RELEASE_MANIFEST}: kustomize-edit-set-image
 	${KUSTOMIZE} build --output ${RELEASE_MANIFEST} ${KUSTOMIZE_DIRECTORY_TO_EDIT}
 
 .PHONY: release
 release: ## Create a tagged release
-release: KUSTOMIZE_DIRECTORY_TO_EDIT=config/manager
+release: KUSTOMIZE_DIRECTORY_TO_EDIT=config/bases/manager
 release: version ${RELEASE_NOTES} docker-build docker-push ${RELEASE_MANIFEST} .create-release-tag
 
 .PHONY: version

@@ -11,4 +11,3 @@ bases:
 - manager
   #- webhook
   #- certmanager
-- proxy
