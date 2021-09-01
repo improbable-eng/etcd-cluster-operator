@@ -229,6 +229,22 @@ docker-build-%: FORCE
 		${CURDIR}
 FORCE:
 
+.PHONY: docker-build-quay
+docker-build-quay: ## Build the all the docker images
+docker-build-quay: $(addprefix docker-build-quay-,$(DOCKER_IMAGES))
+
+docker-build-quay-%: FORCE
+	docker build --target $* \
+		--build-arg GO_VERSION=${GO_VERSION} \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg BACKUP_AGENT_IMAGE=${DOCKER_IMAGE_BACKUP_AGENT} \
+		--build-arg RESTORE_AGENT_IMAGE=${DOCKER_IMAGE_RESTORE_AGENT} \
+		--tag quay.io/${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}$*:${DOCKER_TAG} \
+		--file Dockerfile \
+		${CURDIR}
+FORCE:
+
+
 .PHONY: docker-push
 docker-push: ## Push all the docker images
 docker-push: $(addprefix docker-push-,$(DOCKER_IMAGES))
@@ -241,6 +257,20 @@ FORCE:
 verify-%: FORCE
 	./hack/verify.sh ${MAKE} -s $*
 FORCE:
+
+.PHONY: docker-push-quay
+docker-push-quay: ## Push all the docker images
+docker-push-quay: $(addprefix docker-push-quay-,$(DOCKER_IMAGES))
+
+docker-push-quay-%: FORCE
+	docker push quay.io/${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}$*:${DOCKER_TAG}
+FORCE:
+
+# Run the supplied make target argument in a temporary workspace and diff the results.
+verify-%: FORCE
+	./hack/verify.sh ${MAKE} -s $*
+FORCE:
+
 
 .PHONY: kind-cluster
 kind-cluster: ## Use Kind to create a Kubernetes cluster for E2E tests
