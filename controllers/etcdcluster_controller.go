@@ -120,6 +120,20 @@ func (r *EtcdClusterReconciler) createClientSecret(ctx context.Context, cluster 
 		return nil, err
 	}
 
+	if cluster.Spec.StorageOSClusterNamespace == "" || cluster.Spec.StorageOSClusterNamespace == cluster.Namespace {
+		return secret, nil
+	}
+
+	// if storageos cluster namespace has been specified, create additional secret in storageos namespace
+	// with data that can be interpreted by the storageos operator.
+	stosSecret, err := clientCertForStorageOSCluster(cluster, caCert.Data["tls.crt"], caCert.Data["tls.key"])
+	if err != nil {
+		return nil, err
+	}
+	if err := r.Create(ctx, stosSecret); err != nil {
+		return nil, err
+	}
+
 	return secret, nil
 }
 
@@ -172,6 +186,35 @@ func clientCertForCluster(cluster *etcdv1alpha1.EtcdCluster, caCert, caKey []byt
 	data["ca.crt"] = caCert
 	data["tls.crt"] = clientCert
 	data["tls.key"] = clientKey
+
+	return &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name.Name,
+			Namespace: name.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(cluster, etcdv1alpha1.GroupVersion.WithKind("EtcdCluster")),
+			},
+			Labels: map[string]string{
+				appLabel:     appName,
+				clusterLabel: cluster.Name,
+			},
+		},
+		Data: data,
+	}, nil
+}
+
+func clientCertForStorageOSCluster(cluster *etcdv1alpha1.EtcdCluster, caCert, caKey []byte) (*v1.Secret, error) {
+	name := clientSecretName(cluster.Name, cluster.Spec.StorageOSClusterNamespace)
+
+	clientCert, clientKey, err := tls.Issue([]string{name.Name}, caCert, caKey)
+	if err != nil {
+		return nil, err
+	}
+
+	data := make(map[string][]byte)
+	data["etcd-client-ca.crt"] = caCert
+	data["etcd-client.crt"] = clientCert
+	data["etcd-client.key"] = clientKey
 
 	return &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{

@@ -29,6 +29,9 @@ type EtcdClusterSpec struct {
 
 	// TLS configuration
 	TLS *TLS `json:"tls,omitempty"`
+
+	// StorageOSClusterNamespace
+	StorageOSClusterNamespace string `json:"storageOSClusterNamespace,omitempty"`
 }
 
 // EtcdPodTemplateSpec supports a subset of a normal `v1/PodTemplateSpec` that the operator explicitly permits. We don't

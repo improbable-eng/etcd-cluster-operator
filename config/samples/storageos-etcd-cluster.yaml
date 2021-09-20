@@ -6,6 +6,9 @@ metadata:
 spec:
   replicas: 3
   version: 3.5.0
+  tls:
+    enabled: false
+  storageOSClusterNamespace: ""
   storage:
     volumeClaimTemplate:
       storageClassName: "standard"

@@ -1089,6 +1089,9 @@ spec:
                                 type: string
                             type: object
                         type: object
+                      storageOSClusterNamespace:
+                        description: StorageOSClusterNamespace
+                        type: string
                       tls:
                         description: TLS configuration
                         properties:
