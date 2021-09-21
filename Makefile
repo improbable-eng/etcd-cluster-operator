@@ -132,7 +132,7 @@ run: ## Run against the configured Kubernetes cluster in ~/.kube/config
 .PHONY: install
 install: ## Install CRDs into a cluster
 install: ${KUSTOMIZE}
-	${KUSTOMIZE} build config/crd | kubectl apply -f -
+	${KUSTOMIZE} build config/bases/crd | kubectl apply -f -
 
 .PHONY: deploy-minio
 deploy-minio: ## Deploy MinIO in the cluster for backups and restores
