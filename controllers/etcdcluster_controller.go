@@ -51,6 +51,29 @@ func etcdScheme(tls *etcdv1alpha1.TLS) string {
 	}
 }
 
+func (r *EtcdClusterReconciler) createNamespaceIfNotPresent(ctx context.Context, name string) error {
+	namespace := &v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+	}
+	err := r.Get(ctx, client.ObjectKey{Name: name}, namespace)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			// We got the expected error, which is that it's not found
+			err = r.Create(ctx, namespace)
+			if err != nil {
+				return err
+			}
+			return nil
+		}
+		// Unexpected error, some other problem?
+		return err
+	}
+	// We found it because we got no error
+	return nil
+}
+
 // getCaSecret determines if the ca secret exists. Error is returned if there is some problem communicating with
 // Kubernetes.
 func (r *EtcdClusterReconciler) getCaSecret(ctx context.Context, clusterName, namespace string) (*v1.Secret, error) {
@@ -85,6 +108,30 @@ func (r *EtcdClusterReconciler) getClientSecret(ctx context.Context, clusterName
 	return secret, nil
 }
 
+// getStorageOSClientSecret determines if the storageos client secret exists.
+//Error is returned if there is some problem communicating with Kubernetes.
+func (r *EtcdClusterReconciler) getStorageOSClientSecret(ctx context.Context, secretName, namespace string) (*v1.Secret, error) {
+	secret := &v1.Secret{}
+	err := r.Get(ctx, storageOSClientSecretName(secretName, namespace), secret)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			// We got the expected error, which is that it's not found
+			return nil, nil
+		}
+		// Unexpected error, some other problem?
+		return nil, err
+	}
+	// We found it because we got no error
+	return secret, nil
+}
+
+func storageOSClientSecretName(name, namespace string) types.NamespacedName {
+	return types.NamespacedName{
+		Name:      name,
+		Namespace: namespace,
+	}
+}
+
 func caSecretName(clusterName, namespace string) types.NamespacedName {
 	name := fmt.Sprintf("%s-ca", clusterName)
 
@@ -108,6 +155,17 @@ func (r *EtcdClusterReconciler) createCaSecret(ctx context.Context, cluster *etc
 	return secret, nil
 }
 
+func (r *EtcdClusterReconciler) createStorageOSClientSecret(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, caCert *v1.Secret) error {
+	stosSecret, err := clientCertForStorageOSCluster(cluster, caCert.Data["tls.crt"], caCert.Data["tls.key"])
+	if err != nil {
+		return err
+	}
+	if err := r.Create(ctx, stosSecret); err != nil {
+		return err
+	}
+	return nil
+}
+
 // createClientSecret create the etcd client secret
 func (r *EtcdClusterReconciler) createClientSecret(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, caCert *v1.Secret) (*v1.Secret, error) {
 
@@ -117,20 +175,6 @@ func (r *EtcdClusterReconciler) createClientSecret(ctx context.Context, cluster 
 	}
 
 	if err := r.Create(ctx, secret); err != nil {
-		return nil, err
-	}
-
-	if cluster.Spec.StorageOSClusterNamespace == "" || cluster.Spec.StorageOSClusterNamespace == cluster.Namespace {
-		return secret, nil
-	}
-
-	// if storageos cluster namespace has been specified, create additional secret in storageos namespace
-	// with data that can be interpreted by the storageos operator.
-	stosSecret, err := clientCertForStorageOSCluster(cluster, caCert.Data["tls.crt"], caCert.Data["tls.key"])
-	if err != nil {
-		return nil, err
-	}
-	if err := r.Create(ctx, stosSecret); err != nil {
 		return nil, err
 	}
 
@@ -204,13 +248,12 @@ func clientCertForCluster(cluster *etcdv1alpha1.EtcdCluster, caCert, caKey []byt
 }
 
 func clientCertForStorageOSCluster(cluster *etcdv1alpha1.EtcdCluster, caCert, caKey []byte) (*v1.Secret, error) {
-	name := clientSecretName(cluster.Name, cluster.Spec.StorageOSClusterNamespace)
+	name := storageOSClientSecretName(cluster.Spec.TLS.StorageOSEtcdSecretName, cluster.Spec.TLS.StorageOSClusterNamespace)
 
 	clientCert, clientKey, err := tls.Issue([]string{name.Name}, caCert, caKey)
 	if err != nil {
 		return nil, err
 	}
-
 	data := make(map[string][]byte)
 	data["etcd-client-ca.crt"] = caCert
 	data["etcd-client.crt"] = clientCert
@@ -220,9 +263,6 @@ func clientCertForStorageOSCluster(cluster *etcdv1alpha1.EtcdCluster, caCert, ca
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name.Name,
 			Namespace: name.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(cluster, etcdv1alpha1.GroupVersion.WithKind("EtcdCluster")),
-			},
 			Labels: map[string]string{
 				appLabel:     appName,
 				clusterLabel: cluster.Name,
@@ -758,6 +798,7 @@ func peerNameForMember(member etcd.Member) (string, error) {
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch;create;delete;patch
 // +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=*
+// +kubebuilder:rbac:groups=core,resources=namespaces,verbs=get;list;watch;create
 
 func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -832,6 +873,25 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rete
 		if err != nil {
 			log.Error(err, "can not create etcd transport")
 			return ctrl.Result{}, err
+		}
+		if cluster.Spec.TLS.StorageOSClusterNamespace != "" {
+			err := r.createNamespaceIfNotPresent(ctx, cluster.Spec.TLS.StorageOSClusterNamespace)
+			if err != nil {
+				log.Error(err, "unable to create new namespace for storageos client secret")
+				return ctrl.Result{}, err
+			}
+			storageOSClientSecret, err := r.getStorageOSClientSecret(ctx, cluster.Spec.TLS.StorageOSEtcdSecretName, cluster.Spec.TLS.StorageOSClusterNamespace)
+			if err != nil {
+				log.Error(err, "unable to fetch storageos client secret from Kubernetes API")
+				return ctrl.Result{}, err
+			}
+			if storageOSClientSecret == nil {
+				err = r.createStorageOSClientSecret(ctx, &cluster, caSecret)
+				if err != nil {
+					log.Error(err, "unable to create storageos client secret")
+					return ctrl.Result{}, err
+				}
+			}
 		}
 	} else {
 		tlsConfig = nil

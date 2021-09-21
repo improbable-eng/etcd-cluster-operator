@@ -8,7 +8,8 @@ spec:
   version: 3.5.0
   tls:
     enabled: false
-  storageOSClusterNamespace: ""
+    storageOSClusterNamespace: "storageos"
+    storageOSEtcdSecretName: "storageos-etcd-secret"
   storage:
     volumeClaimTemplate:
       storageClassName: "standard"

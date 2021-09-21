@@ -29,9 +29,6 @@ type EtcdClusterSpec struct {
 
 	// TLS configuration
 	TLS *TLS `json:"tls,omitempty"`
-
-	// StorageOSClusterNamespace
-	StorageOSClusterNamespace string `json:"storageOSClusterNamespace,omitempty"`
 }
 
 // EtcdPodTemplateSpec supports a subset of a normal `v1/PodTemplateSpec` that the operator explicitly permits. We don't
@@ -84,6 +81,10 @@ type TLS struct {
 	// Enabled allows to setup a secure cluster
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
+	// StorageOSClusterNamespace namespace of storageos cluster
+	StorageOSClusterNamespace string `json:"storageOSClusterNamespace,omitempty"`
+	// StorageOSEtcdSecretName name of the secret to be created and used by storageos to access etcd
+	StorageOSEtcdSecretName string `json:"storageOSEtcdSecretName,omitempty"`
 }
 
 // EtcdClusterStatus defines the observed state of EtcdCluster

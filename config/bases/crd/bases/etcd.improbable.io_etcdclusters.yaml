@@ -991,15 +991,20 @@ spec:
                         type: string
                     type: object
                 type: object
-              storageOSClusterNamespace:
-                description: StorageOSClusterNamespace
-                type: string
               tls:
                 description: TLS configuration
                 properties:
                   enabled:
                     description: Enabled allows to setup a secure cluster
                     type: boolean
+                  storageOSClusterNamespace:
+                    description: StorageOSClusterNamespace namespace of storageos
+                      cluster
+                    type: string
+                  storageOSEtcdSecretName:
+                    description: StorageOSEtcdSecretName name of the secret to be
+                      created and used by storageos to access etcd
+                    type: string
                 type: object
               version:
                 description: Version determines the version of Etcd that will be used
