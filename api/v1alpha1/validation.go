@@ -67,6 +67,7 @@ func (o *EtcdCluster) ValidateUpdate(old runtime.Object) error {
 	// Overwrite the fields which are allowed to change
 	oldO.Spec.Replicas = o.Spec.Replicas
 	oldO.Spec.Version = o.Spec.Version
+	oldO.Spec.PodTemplate = o.Spec.PodTemplate
 
 	if diff := cmp.Diff(oldO.Spec, o.Spec); diff != "" {
 		return fmt.Errorf("Unsupported changes: (- current, + new) %s", diff)
