@@ -365,7 +365,7 @@ func (r *EtcdClusterReconciler) reconcile(
 		if isAllMembersStable(*members) {
 			// The remaining operations can now be performed. In order:
 			// * Remove surplus EtcdPeers
-			// * Upgrade Etcd
+			// * Upgrade Etcd or make changes that need rolling deployment
 			// * Scale-up
 			// * Scale-down
 			//
@@ -406,11 +406,15 @@ func (r *EtcdClusterReconciler) reconcile(
 			}
 
 			// Upgrade Etcd or incorporate changes.
-			// Remove EtcdPeers which  have a different version than EtcdCluster; in reverse name order, one-at-a-time.
+			// Remove EtcdPeers which have a different version than EtcdCluster; in reverse name order, one-at-a-time.
 			// The EtcdPeers will be recreated in the next reconcile, with the correct state.
 			if peer, reason := nextOutdatedPeer(cluster, peers); peer != nil {
 				if reason == outdatedVersion {
 					if peer.Spec.Version == cluster.Spec.Version {
+						// The peer returned by nextOutdatedPeer is outdated based on the status.Version but the version
+						// in the spec is already matching the desired cluster version. This means the peer spec is
+						// already up to date and we need to wait until the status is updated. Once the status is up to date
+						// nextOutdatedPeer will return the next outdated peer.
 						log.Info("Waiting for EtcdPeer to report expected server version", "etcdpeer-name", peer.Name)
 						return result, nil, nil
 					}
