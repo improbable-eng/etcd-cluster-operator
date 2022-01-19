@@ -7,7 +7,7 @@ SHELL := bash
 # The version which will be reported by the --version argument of each binary
 # and which will be used as the Docker image tag
 #VERSION ?= $(shell git describe --tags)
-VERSION=$(shell ./scripts/branch.sh)
+VERSION ?= $(shell ./scripts/branch.sh)
 # Set ARGS to specify extra go test arguments
 ARGS ?=
 
@@ -40,6 +40,7 @@ DOCKER_IMAGE_PROXY = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}proxy:${DOCKER_TA
 DOCKER_IMAGE_RESTORE_AGENT = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}restore-agent:${DOCKER_TAG}
 DOCKER_IMAGE_BACKUP_AGENT = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}backup-agent:${DOCKER_TAG}
 DOCKER_IMAGE_NAME = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}${COMPONENT}:${DOCKER_TAG}
+DOCKER_IMAGE_MANIFESTS = ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}manifests:${DOCKER_TAG}
 
 OS := $(shell ${GO} env GOOS)
 ARCH := $(shell ${GO} env GOARCH)
@@ -50,8 +51,8 @@ KIND := ${BIN}/kind-${KIND_VERSION}
 K8S_CLUSTER_NAME := etcd-e2e
 
 # controller-tools
-CONTROLLER_GEN_VERSION := 0.4.0
-CONTROLLER_GEN := ${BIN}/controller-gen-0.4.0
+CONTROLLER_GEN_VERSION := 0.4.1
+CONTROLLER_GEN := ${BIN}/controller-gen-${CONTROLLER_GEN_VERSION}
 
 # Kustomize
 KUSTOMIZE_VERSION := 3.5.4
@@ -101,7 +102,6 @@ test: kubebuilder
 e2e: ## Run kuttl e2e tests
 e2e: RELEASE_MANIFEST=kuttl/e2e/deployment-test/00-deploy.yaml	
 e2e: uber
-#	kustomize build config/default > kuttl/e2e/deployment-test/00-deploy.yaml
 	kubectl-kuttl test --config kuttl/e2e/kuttl-test.yaml	
 
 .PHONY: legacy-e2e-kind
@@ -214,6 +214,10 @@ gomod: ## Update the go.mod and go.sum files
 go-get-patch: ## Update Golang dependencies to latest patch versions
 	${GO} get -u=patch -t
 
+.PHONY: manifests-image
+manifests-image:  # Build the manifests docker image.
+	docker build -t $(DOCKER_IMAGE_MANIFESTS) -f manifests.Dockerfile .
+
 .PHONY: docker-build
 docker-build: ## Build the all the docker images
 docker-build: $(addprefix docker-build-,$(DOCKER_IMAGES))
@@ -270,7 +274,6 @@ FORCE:
 verify-%: FORCE
 	./hack/verify.sh ${MAKE} -s $*
 FORCE:
-
 
 .PHONY: kind-cluster
 kind-cluster: ## Use Kind to create a Kubernetes cluster for E2E tests
