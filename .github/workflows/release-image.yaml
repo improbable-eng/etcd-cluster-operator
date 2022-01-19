@@ -1,0 +1,58 @@
+name: Publish release image
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish-image:
+
+    runs-on: ubuntu-latest
+    name: Publish container image
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Set image tag env var
+        # Refer https://stackoverflow.com/a/58178121 for git tag extraction.
+        run: echo "VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+
+      - name: Login to docker container registry
+        uses: docker/login-action@v1
+        with:
+          registry: docker.io
+          username: ${{ secrets.DH_USERNAME }}
+          password: ${{ secrets.DH_PASSWORD }}
+      - name: Build container image
+        run: make docker-build
+      - name: Push container image to dockerhub
+        run: make docker-push
+
+      - name: Login to quay container registry
+        uses: docker/login-action@v1
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_USERNAME }}
+          password: ${{ secrets.QUAY_TOKEN }}
+      - name: Push container image to quay container registry
+        run: make docker-push-quay
+
+  publish-manifests-image:
+    runs-on: ubuntu-latest
+    name: Publish manifests container image
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Login to container registry
+        uses: docker/login-action@v1
+        with:
+          registry: docker.io
+          username: ${{ secrets.DH_USERNAME }}
+          password: ${{ secrets.DH_PASSWORD }}
+      - name: Set image tag env var
+        # Refer https://stackoverflow.com/a/58178121 for git tag extraction.
+        run: echo "VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+      - name: Run manifests image build
+        run: make manifests-image
+      - name: Push manifests container image
+        run: make manifests-image-push

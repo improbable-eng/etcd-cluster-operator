@@ -1,0 +1,56 @@
+name: Publish develop image
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  publish-image:
+    runs-on: ubuntu-latest
+    name: Publish container image
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Setup Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.14.3
+      - name: Login to Docker
+        uses: docker/login-action@v1
+        with:
+          registry: docker.io
+          username: ${{ secrets.DH_USERNAME }}
+          password: ${{ secrets.DH_PASSWORD }}
+      - name: Build container images for docker
+        run: make docker-build
+      - name: Push container images to docker
+        run: make docker-push
+
+      - name: Login to Quay 
+        uses: docker/login-action@v1
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_USERNAME }}
+          password: ${{ secrets.QUAY_PASSWORD }}
+      - name: Build container images for quay
+        run: make docker-build-quay 
+      - name: Push container images to quay
+        run: make docker-push-quay
+
+  publish-manifests-image:
+    runs-on: ubuntu-latest
+    name: Publish manifests container image
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Login to container registry
+        uses: docker/login-action@v1
+        with:
+          registry: docker.io
+          username: ${{ secrets.DH_USERNAME }}
+          password: ${{ secrets.DH_PASSWORD }}
+      - name: Build manifests image 
+        run: make manifests-image
+      - name: Push manifests image
+        run: make manifests-image-push 
