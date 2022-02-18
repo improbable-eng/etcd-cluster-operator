@@ -307,7 +307,9 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, etcdRepository string, log log
 		}
 	}
 	// Append additional env vars that were passed directly to etcdcluster and overwrite any duplicates
-	etcdContainer.Env = appendClusterEnvVars(etcdContainer.Env, peer.Spec.PodTemplate.EtcdEnv)
+	if peer.Spec.PodTemplate != nil {
+		etcdContainer.Env = appendClusterEnvVars(etcdContainer.Env, peer.Spec.PodTemplate.EtcdEnv)
+	}
 
 	replicaSet := appsv1.ReplicaSet{
 		ObjectMeta: metav1.ObjectMeta{
