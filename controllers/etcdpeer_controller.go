@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -232,6 +233,17 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, etcdRepository string, log log
 				Name:      "etcd-data",
 				MountPath: EtcdDataMountPath,
 			},
+		},
+		ReadinessProbe: &corev1.Probe{
+			Handler: corev1.Handler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Path: "/health",
+					Port: intstr.FromInt(etcdClientPort),
+				},
+			},
+			TimeoutSeconds:      5,
+			InitialDelaySeconds: 5,
+			PeriodSeconds:       10,
 		},
 	}
 

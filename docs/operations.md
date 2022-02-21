@@ -498,18 +498,3 @@ This caused Etcd containers to be restarted, which made the situation even worse
 
 If you disagree with this or if you find a valid use-case for Liveness Probes,
 please [create an issue](https://github.com/improbable-eng/etcd-cluster-operator/issues).
-
-### Why aren't there Readiness Probes for the Etcd Pods?
-
-Our current thinking is that Readiness Probes are unnecessary
-because we assume that clients will connect to multiple Etcd nodes via a Headless Service
-and perform their own health checks.
-
-Additionally, it's not clear how to configure the Readiness Probe.
-An HTTP Readiness Probe, configured to GET the Etcd health endpoint would fail whenever the cluster was unhealthy,
-and all Etcd Pod Readiness Probes would fail at the same time.
-A client connecting to the Service for these pods would have to deal with empty DNS responses
-because all the Endpoints for the service would be removed when the Readiness Probe failed.
-
-If you disagree with this or if you find a valid use-case for Readiness Probes,
-please [create an issue](https://github.com/improbable-eng/etcd-cluster-operator/issues).

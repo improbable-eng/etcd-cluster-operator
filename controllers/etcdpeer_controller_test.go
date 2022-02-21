@@ -129,6 +129,7 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 			}
 		}
 		require.NotNil(t, etcdContainer, "Failed to find an etcd container")
+		require.NotNil(t, etcdContainer.ReadinessProbe, "expected readiness probe to be added to etcd container")
 
 		image := strings.Split(etcdContainer.Image, ":")[0]
 		require.Equal(t, "quay.io/coreos/etcd", image, "etcd Image was not the CoreOS one")
