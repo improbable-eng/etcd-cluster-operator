@@ -216,7 +216,7 @@ go-get-patch: ## Update Golang dependencies to latest patch versions
 
 .PHONY: manifests-image
 manifests-image:  # Build the manifests docker image.
-	docker build -t $(DOCKER_IMAGE_MANIFESTS) -f manifests.Dockerfile .
+	docker build -t $(DOCKER_IMAGE_MANIFESTS) --build-arg OPERATOR_IMAGE=$(DOCKER_IMAGE_CONTROLLER) --build-arg PROXY_IMAGE=$(DOCKER_IMAGE_PROXY) -f manifests.Dockerfile .
 
 .PHONY: manifests-image-push
 manifests-image-push:  # Build the manifests docker image.
