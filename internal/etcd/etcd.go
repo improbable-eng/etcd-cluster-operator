@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/blang/semver"
@@ -149,6 +151,81 @@ func (c *ClientEtcdAPI) Close() error {
 	return nil
 }
 
+func (c *ClientEtcdAPI) GetMetrics(ctx context.Context, member Member) (map[string]string, error) {
+	if len(member.ClientURLs) < 1 {
+		return nil, fmt.Errorf("unable to get metrics, etcd member has no client urls")
+	}
+
+	url := member.ClientURLs[0] + "/metrics"
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get metrics from etcd: %w", err)
+	}
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read metrics returned from etcd: %w", err)
+	}
+	defer resp.Body.Close()
+
+	strs := strings.Split(string(b), "\n")
+	metrics := make(map[string]string)
+	for _, str := range strs {
+
+		if !strings.HasPrefix(str, "TYPE") ||
+			!strings.HasPrefix(str, "HELP") {
+
+			// Metrics are of the form <metric key> <metric>, for example "etcd_server_has_leader 1"
+			str := strings.Split(str, " ")
+			if len(str) < 2 {
+				continue
+			}
+
+			metrics[str[0]] = str[1]
+		}
+	}
+	return metrics, nil
+
+}
+
+// UsedSpacePercentage returns the used space as a percentage of the storage quota
+func (c *ClientEtcdAPI) UsedSpacePercentage(ctx context.Context, member Member) (int, error) {
+	metrics, err := c.GetMetrics(ctx, member)
+	if err != nil {
+		return 0, err
+	}
+	const (
+		storageQuotaKey = "etcd_server_quota_backend_bytes"
+		storageSizeKey  = "etcd_mvcc_db_total_size_in_bytes"
+	)
+
+	storageQuota, err := strconv.ParseFloat(metrics[storageQuotaKey], 32)
+	if err != nil {
+		return 0, fmt.Errorf("failed to convert storage quota to float: %w", err)
+	}
+
+	storageSize, err := strconv.ParseFloat(metrics[storageSizeKey], 32)
+	if err != nil {
+		return 0, fmt.Errorf("failed to convert storage size to int: %w", err)
+	}
+
+	usedSpace := storageSize / storageQuota * 100.0
+	return int(usedSpace), nil
+}
+
+func (c *ClientEtcdAPI) Defragment(ctx context.Context, member Member) error {
+	if c.ClientV3 == nil {
+		return errors.New("unsupported")
+
+	}
+	if len(member.ClientURLs) < 1 {
+		return errors.New("member needs at least 1 client url to be defragged")
+	}
+
+	_, err := c.ClientV3.Defragment(ctx, member.ClientURLs[0])
+	return err
+}
+
 func checkVersion(config Config) (*Versions, error) {
 	tr := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
@@ -212,6 +289,12 @@ type API interface {
 
 	// GetVersion retrieves the current etcd server and cluster version
 	GetVersion(ctx context.Context) (*Versions, error)
+
+	// UsedSpacePercentage retrieves the percentage of used space from the etcd cluster
+	UsedSpacePercentage(ctx context.Context, member Member) (int, error)
+
+	// Defragment defrags the etcd server
+	Defragment(ctx context.Context, m Member) error
 
 	// Close the client
 	Close() error

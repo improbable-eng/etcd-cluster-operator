@@ -13,7 +13,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -24,20 +23,24 @@ import (
 	"github.com/improbable-eng/etcd-cluster-operator/internal/etcd"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/test"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/test/crontest"
+	monitorv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 )
 
 type controllerSuite struct {
-	ctx       context.Context
-	cfg       *rest.Config
-	k8sClient client.Client
-	testEnv   *envtest.Environment
+	ctx                        context.Context
+	cfg                        *rest.Config
+	k8sClient                  client.Client
+	testEnv                    *envtest.Environment
+	clusterControllerSchedules *ScheduleMap
 }
 
 func setupSuite(t *testing.T) (suite *controllerSuite, teardownFunc func()) {
 	ctx, ctxCancel := context.WithTimeout(context.Background(), time.Minute*5)
 
 	testEnv := &envtest.Environment{
-		CRDDirectoryPaths: []string{filepath.Join("..", "config", "bases", "crd", "bases")},
+		CRDDirectoryPaths: []string{
+			filepath.Join("..", "config", "bases", "crd", "bases")},
+		ErrorIfCRDPathMissing: true,
 	}
 
 	cfg, err := testEnv.Start()
@@ -45,6 +48,9 @@ func setupSuite(t *testing.T) (suite *controllerSuite, teardownFunc func()) {
 	require.NotNil(t, cfg)
 
 	err = etcdv1alpha1.AddToScheme(scheme.Scheme)
+	require.NoError(t, err)
+
+	err = monitorv1.AddToScheme(scheme.Scheme)
 	require.NoError(t, err)
 
 	// Add new resources here.
@@ -68,7 +74,7 @@ func setupSuite(t *testing.T) (suite *controllerSuite, teardownFunc func()) {
 }
 
 func (s *controllerSuite) setupTest(t *testing.T, etcdAPI etcd.APIBuilder) (teardownFunc func(), namespaceName string) {
-	stopCh := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
 	logger := test.TestLogger{
 		T: t,
 	}
@@ -100,11 +106,15 @@ func (s *controllerSuite) setupTest(t *testing.T, etcdAPI etcd.APIBuilder) (tear
 	err = peerController.SetupWithManager(mgr)
 	require.NoError(t, err, "failed to set up EtcdPeer controller")
 
+	s.clusterControllerSchedules = NewScheduleMap()
 	clusterController := EtcdClusterReconciler{
-		Client:   mgr.GetClient(),
-		Log:      logger.WithName("EtcdCluster"),
-		Recorder: mgr.GetEventRecorderFor("etcdcluster-reconciler"),
-		Etcd:     etcdAPI,
+		Client:          mgr.GetClient(),
+		Log:             logger.WithName("EtcdCluster"),
+		Recorder:        mgr.GetEventRecorderFor("etcdcluster-reconciler"),
+		Etcd:            etcdAPI,
+		CronHandler:     crontest.FakeCron{},
+		Schedules:       s.clusterControllerSchedules,
+		DefragThreshold: 80,
 	}
 	err = clusterController.SetupWithManager(mgr)
 	require.NoError(t, err, "failed to setup EtcdCluster controller")
@@ -141,13 +151,13 @@ func (s *controllerSuite) setupTest(t *testing.T, etcdAPI etcd.APIBuilder) (tear
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err := mgr.Start(stopCh)
+		err := mgr.Start(ctx)
 		require.NoError(t, err, "failed to start manager")
 	}()
 
 	return func() {
 		defer func() {
-			close(stopCh)
+			cancel()
 			wg.Wait()
 		}()
 		err := s.k8sClient.Delete(s.ctx, namespace)
@@ -158,7 +168,7 @@ func (s *controllerSuite) setupTest(t *testing.T, etcdAPI etcd.APIBuilder) (tear
 // triggerReconcile forces a Reconcile by making a trivial change to the annotations
 // of the supplied object.
 // A work around for https://github.com/improbable-eng/etcd-cluster-operator/issues/76
-func (s *controllerSuite) triggerReconcile(obj runtime.Object) error {
+func (s *controllerSuite) triggerReconcile(obj client.Object) error {
 	m := meta.NewAccessor()
 	updated := obj.DeepCopyObject()
 	annotations, err := m.Annotations(updated)
@@ -182,7 +192,12 @@ func (s *controllerSuite) triggerReconcile(obj runtime.Object) error {
 	if err != nil {
 		return err
 	}
-	return s.k8sClient.Patch(s.ctx, updated, client.MergeFrom(obj))
+	clientObj, ok := updated.(client.Object)
+	if !ok {
+		panic("failed to typecast")
+	}
+
+	return s.k8sClient.Patch(s.ctx, clientObj, client.MergeFrom(obj))
 }
 
 func TestAPIs(t *testing.T) {

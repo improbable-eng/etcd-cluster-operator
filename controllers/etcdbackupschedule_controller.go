@@ -72,8 +72,8 @@ func (s *ScheduleMap) Delete(key string) {
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdbackupschedules/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdbackups,verbs=create
 
-func (r *EtcdBackupScheduleReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+func (r *EtcdBackupScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
 	defer cancel()
 
 	log := r.Log.WithValues("etcdbackupschedule", req.NamespacedName)

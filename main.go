@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	monitorv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	flag "github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -41,6 +42,7 @@ const (
 func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 	_ = etcdv1alpha1.AddToScheme(scheme)
+	_ = monitorv1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -54,6 +56,7 @@ func main() {
 		etcdRepository       string
 		restoreAgentImage    string
 		backupAgentImage     string
+		defragThreshold      uint
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
@@ -67,6 +70,7 @@ func main() {
 	flag.StringVar(&proxyURL, "proxy-url", "", "The URL of the upload/download proxy")
 	flag.BoolVar(&printVersion, "version", false,
 		"Print version to stdout and exit")
+	flag.UintVar(&defragThreshold, "defrag-threshold", 80, "The percentage of used space at which the operator will defrag an etcd member")
 	flag.Parse()
 
 	if printVersion {
@@ -105,6 +109,9 @@ func main() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
+	cronHandler := cron.New(cron.WithChain(
+		cron.SkipIfStillRunning(ctrl.Log),
+	))
 
 	if err = (&controllers.EtcdPeerReconciler{
 		Client:         mgr.GetClient(),
@@ -116,10 +123,13 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&controllers.EtcdClusterReconciler{
-		Client:   mgr.GetClient(),
-		Log:      ctrl.Log.WithName("controllers").WithName("EtcdCluster"),
-		Recorder: mgr.GetEventRecorderFor("etcdcluster-reconciler"),
-		Etcd:     &etcd.ClientEtcdAPIBuilder{},
+		Client:          mgr.GetClient(),
+		Log:             ctrl.Log.WithName("controllers").WithName("EtcdCluster"),
+		Recorder:        mgr.GetEventRecorderFor("etcdcluster-reconciler"),
+		Etcd:            &etcd.ClientEtcdAPIBuilder{},
+		CronHandler:     cronHandler,
+		Schedules:       controllers.NewScheduleMap(),
+		DefragThreshold: defragThreshold,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "EtcdCluster")
 		os.Exit(1)
@@ -135,11 +145,10 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "EtcdBackup")
 		os.Exit(1)
 	}
-	cronHandler := cron.New()
 	if err = (&controllers.EtcdBackupScheduleReconciler{
 		Client:      mgr.GetClient(),
 		Log:         ctrl.Log.WithName("controllers").WithName("EtcdBackupSchedule"),
-		CronHandler: cronHandler,
+		CronHandler: cron.New(),
 		Schedules:   controllers.NewScheduleMap(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "EtcdBackupSchedule")

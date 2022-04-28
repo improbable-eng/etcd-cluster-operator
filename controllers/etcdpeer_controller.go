@@ -343,8 +343,9 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, etcdRepository string, log log
 					Namespace:   peer.Namespace,
 				},
 				Spec: corev1.PodSpec{
-					Hostname:  peer.Name,
-					Subdomain: peer.Spec.ClusterName,
+					Hostname:          peer.Name,
+					Subdomain:         peer.Spec.ClusterName,
+					PriorityClassName: "system-cluster-critical",
 					HostAliases: []corev1.HostAlias{
 						{
 							IP: "127.0.0.1",
@@ -522,12 +523,10 @@ type PeerPVCDeleter struct {
 func (o *PeerPVCDeleter) Execute(ctx context.Context) error {
 	o.log.V(2).Info("Deleting PVC for peer prior to deletion")
 	expectedPvc := pvcForPeer(o.peer)
-	expectedPvcNamespacedName, err := client.ObjectKeyFromObject(expectedPvc)
-	if err != nil {
-		return fmt.Errorf("unable to get ObjectKey from PVC: %s", err)
-	}
+	expectedPvcNamespacedName := client.ObjectKeyFromObject(expectedPvc)
+
 	var actualPvc corev1.PersistentVolumeClaim
-	err = o.client.Get(ctx, expectedPvcNamespacedName, &actualPvc)
+	err := o.client.Get(ctx, expectedPvcNamespacedName, &actualPvc)
 	switch {
 	case err == nil:
 		// PVC exists.
@@ -572,8 +571,8 @@ func (r *EtcdPeerReconciler) updateStatus(peer *etcdv1alpha1.EtcdPeer, serverVer
 	peer.Status.ServerVersion = serverVersion
 }
 
-func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+func (r *EtcdPeerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	log := r.Log.WithValues("peer", req.NamespacedName)
 
@@ -749,10 +748,6 @@ func (r *EtcdPeerReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr 
 	return result, nil
 }
 
-type pvcMapper struct{}
-
-var _ handler.Mapper = &pvcMapper{}
-
 // Map looks up the peer name label from the PVC and generates a reconcile
 // request for *that* name in the namespace of the pvc.
 // This mapper ensures that we only wake up the Reconcile function for changes
@@ -760,16 +755,16 @@ var _ handler.Mapper = &pvcMapper{}
 // PVCs are deliberately not owned by the peer, to ensure that they are not
 // garbage collected along with the peer.
 // So we can't use OwnerReference handler here.
-func (m *pvcMapper) Map(o handler.MapObject) []reconcile.Request {
+func pvcMapper(o client.Object) []reconcile.Request {
 	requests := []reconcile.Request{}
-	labels := o.Meta.GetLabels()
+	labels := o.GetLabels()
 	if peerName, found := labels[peerLabel]; found {
 		requests = append(
 			requests,
 			reconcile.Request{
 				NamespacedName: types.NamespacedName{
 					Name:      peerName,
-					Namespace: o.Meta.GetNamespace(),
+					Namespace: o.GetNamespace(),
 				},
 			},
 		)
@@ -784,8 +779,8 @@ func (r *EtcdPeerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&appsv1.ReplicaSet{}).
 		// We can use a simple EnqueueRequestForObject handler here as the PVC
 		// has the same name as the EtcdPeer resource that needs to be enqueued
-		Watches(&source.Kind{Type: &corev1.PersistentVolumeClaim{}}, &handler.EnqueueRequestsFromMapFunc{
-			ToRequests: &pvcMapper{},
-		}).
+		Watches(&source.Kind{Type: &corev1.PersistentVolumeClaim{}},
+			handler.EnqueueRequestsFromMapFunc(pvcMapper),
+		).
 		Complete(r)
 }

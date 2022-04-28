@@ -26,7 +26,7 @@ spec:
         memory: 200Mi
     etcdEnv:
       - name: "ETCD_HEARTBEAT_INTERVAL"
-        value: "100"
+        value: "500"
       - name: "ETCD_ELECTION_TIMEOUT"
         value: "5000"
       - name: "ETCD_MAX_SNAPSHOTS"

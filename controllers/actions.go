@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"reflect"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -17,7 +16,7 @@ type Action interface {
 // CreateRuntimeObject is an Action which creates the supplied API object
 type CreateRuntimeObject struct {
 	client client.Client
-	obj    runtime.Object
+	obj    client.Object
 }
 
 func (o *CreateRuntimeObject) Execute(ctx context.Context) error {
@@ -31,8 +30,8 @@ func (o *CreateRuntimeObject) Execute(ctx context.Context) error {
 // changed status fields of new.
 type PatchStatus struct {
 	client   client.Client
-	original runtime.Object
-	new      runtime.Object
+	original client.Object
+	new      client.Object
 }
 
 func (o *PatchStatus) Execute(ctx context.Context) error {

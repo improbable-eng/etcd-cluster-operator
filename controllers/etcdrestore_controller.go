@@ -90,8 +90,8 @@ func markCluster(restore etcdv1alpha1.EtcdRestore, cluster *etcdv1alpha1.EtcdClu
 	cluster.Labels[restoredFromLabel] = restore.Name
 }
 
-func (r *EtcdRestoreReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+func (r *EtcdRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	log := r.Log.WithValues("etcdrestore", req.NamespacedName)
@@ -459,10 +459,6 @@ func clusterForRestore(restore etcdv1alpha1.EtcdRestore) *etcdv1alpha1.EtcdClust
 	return cluster
 }
 
-type restoredFromMapper struct{}
-
-var _ handler.Mapper = &restoredFromMapper{}
-
 // Map looks up the peer name label from the PVC and generates a reconcile
 // request for *that* name in the namespace of the pvc.
 // This mapper ensures that we only wake up the Reconcile function for changes
@@ -470,16 +466,16 @@ var _ handler.Mapper = &restoredFromMapper{}
 // PVCs are deliberately not owned by the peer, to ensure that they are not
 // garbage collected along with the peer.
 // So we can't use OwnerReference handler here.
-func (m *restoredFromMapper) Map(o handler.MapObject) []reconcile.Request {
+func restoreFromMap(o client.Object) []reconcile.Request {
 	var requests []reconcile.Request
-	labels := o.Meta.GetLabels()
+	labels := o.GetLabels()
 	if restoreName, found := labels[restoredFromLabel]; found {
 		requests = append(
 			requests,
 			reconcile.Request{
 				NamespacedName: types.NamespacedName{
 					Name:      restoreName,
-					Namespace: o.Meta.GetNamespace(),
+					Namespace: o.GetNamespace(),
 				},
 			},
 		)
@@ -493,11 +489,7 @@ func (r *EtcdRestoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		// Watch for changes to Pod resources that an EtcdRestore owns.
 		Owns(&corev1.Pod{}).
 		// Watch for changes to PVCs with a 'restored-from' label.
-		Watches(&source.Kind{Type: &corev1.PersistentVolumeClaim{}}, &handler.EnqueueRequestsFromMapFunc{
-			ToRequests: &restoredFromMapper{},
-		}).
-		Watches(&source.Kind{Type: &etcdv1alpha1.EtcdCluster{}}, &handler.EnqueueRequestsFromMapFunc{
-			ToRequests: &restoredFromMapper{},
-		}).
+		Watches(&source.Kind{Type: &corev1.PersistentVolumeClaim{}}, handler.EnqueueRequestsFromMapFunc(restoreFromMap)).
+		Watches(&source.Kind{Type: &etcdv1alpha1.EtcdCluster{}}, handler.EnqueueRequestsFromMapFunc(restoreFromMap)).
 		Complete(r)
 }

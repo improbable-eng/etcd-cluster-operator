@@ -207,9 +207,8 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 
 		t.Log("Given an EtcdPeer with a PVC")
 		peer := exampleEtcdPeer(namespace)
-		peerKey, err := client.ObjectKeyFromObject(peer)
-		require.NoError(t, err)
-		err = s.k8sClient.Create(s.ctx, peer)
+		peerKey := client.ObjectKeyFromObject(peer)
+		err := s.k8sClient.Create(s.ctx, peer)
 		require.NoError(t, err, "failed to create EtcdPeer resource")
 		actualPvc := corev1.PersistentVolumeClaim{}
 		err = try.Eventually(
@@ -249,9 +248,8 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 			peer.ObjectMeta.Finalizers,
 			"etcdpeer.etcd.improbable.io/pvc-cleanup",
 		)
-		peerKey, err := client.ObjectKeyFromObject(peer)
-		require.NoError(t, err)
-		err = s.k8sClient.Create(s.ctx, peer)
+		peerKey := client.ObjectKeyFromObject(peer)
+		err := s.k8sClient.Create(s.ctx, peer)
 		require.NoError(t, err, "failed to create EtcdPeer resource")
 		actualPvc := corev1.PersistentVolumeClaim{}
 		err = try.Eventually(
@@ -279,7 +277,17 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 		t.Log("The PVC is deleted")
 		err = s.k8sClient.Get(s.ctx, peerKey, &actualPvc)
 		require.NoError(t, client.IgnoreNotFound(err), "unexpected error")
-		assert.Error(t, err, "expected a NotFound error for deleted PVC")
+
+		// Either the PVC gets deleted or it's held up by the pvc-protection finalizer
+		if err != nil {
+			assert.Error(t, err, "expected a NotFound error for deleted PVC")
+		} else {
+			require.NotNil(t, actualPvc)
+			assert.NotNil(t, actualPvc.DeletionTimestamp, "pvc should be deleted, deletion timestamp doesn't exist")
+			require.Len(t, actualPvc.Finalizers, 1, "there should only be one finalizer")
+			assert.Equal(t, actualPvc.Finalizers[0], "kubernetes.io/pvc-protection")
+		}
+
 	})
 
 	t.Run("StatusVersion", func(t *testing.T) {
@@ -295,8 +303,7 @@ func (s *controllerSuite) testPeerController(t *testing.T) {
 
 		etcdPeer.Default()
 
-		etcdPeerKey, err := client.ObjectKeyFromObject(etcdPeer)
-		require.NoError(t, err)
+		etcdPeerKey := client.ObjectKeyFromObject(etcdPeer)
 
 		t.Run("ReportsEmptyVersion", func(t *testing.T) {
 			etcdAPI.Wrap(&AlwaysFailEtcdAPI{})

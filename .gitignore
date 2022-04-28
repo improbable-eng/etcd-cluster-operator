@@ -18,3 +18,4 @@ bin/
 # Kind logs and kubeconfig
 kind-logs*
 kubeconfig
+storageos-etcd-cluster-operator.yaml

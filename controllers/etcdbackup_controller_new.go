@@ -128,8 +128,8 @@ func (r EtcdBackupReconciler) getState(ctx context.Context, req ctrl.Request) (*
 // +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create
 
-func (r *EtcdBackupReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+func (r *EtcdBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	log := r.Log.WithValues("etcdbackup-name", req.NamespacedName)

@@ -25,6 +25,44 @@ func (s *ServiceCreatedEvent) Record(recorder record.EventRecorder) {
 		fmt.Sprintf("Created service with name %q", s.ServiceName))
 }
 
+type ServiceMonitorCreatedEvent struct {
+	Object             runtime.Object
+	ServiceMonitorName string
+}
+
+func (s *ServiceMonitorCreatedEvent) Record(recorder record.EventRecorder) {
+	recorder.Event(s.Object,
+		K8sEventTypeNormal,
+		"ServiceMonitorCreated",
+		fmt.Sprintf("Created service monitor with name %q", s.ServiceMonitorName))
+}
+
+type PDBPatchedEvent struct {
+	Object       runtime.Object
+	PDBName      string
+	MinAvailable int
+}
+
+func (s *PDBPatchedEvent) Record(recorder record.EventRecorder) {
+	recorder.Event(s.Object,
+		K8sEventTypeNormal,
+		"PDBPatched",
+		fmt.Sprintf("Patched pdb with name %q, MinAvailable: %d", s.PDBName, s.MinAvailable))
+}
+
+type PDBCreatedEvent struct {
+	Object       runtime.Object
+	PDBName      string
+	MinAvailable int
+}
+
+func (s *PDBCreatedEvent) Record(recorder record.EventRecorder) {
+	recorder.Event(s.Object,
+		K8sEventTypeNormal,
+		"PDBCreated",
+		fmt.Sprintf("Created pdb with name %q, MinAvailable: %d", s.PDBName, s.MinAvailable))
+}
+
 type PeerCreatedEvent struct {
 	Object   runtime.Object
 	PeerName string

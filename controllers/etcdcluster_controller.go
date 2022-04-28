@@ -13,12 +13,18 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+
 	v1 "k8s.io/api/core/v1"
+	policyv1beta1 "k8s.io/api/policy/v1beta1"
+
+	monitorv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	merrors "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+
 	"k8s.io/apimachinery/pkg/types"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -26,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/defragger"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/etcd"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/reconcilerevent"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/tls"
@@ -41,6 +48,15 @@ type EtcdClusterReconciler struct {
 	Log      logr.Logger
 	Recorder record.EventRecorder
 	Etcd     etcd.APIBuilder
+
+	// DefragThreshold is the percentage of used space at which we defrag the etcd cluster
+	DefragThreshold uint
+
+	// CronHandler is able to schedule cronjobs to occur at given times.
+	CronHandler CronScheduler
+
+	// Schedules holds a mapping of resources to the object responsible for scheduling the defrag to be taken.
+	Schedules *ScheduleMap
 }
 
 func etcdScheme(tls *etcdv1alpha1.TLS) string {
@@ -272,6 +288,25 @@ func clientCertForStorageOSCluster(cluster *etcdv1alpha1.EtcdCluster, caCert, ca
 	}, nil
 }
 
+func (r *EtcdClusterReconciler) getTLSConfig(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster) (*cryptotls.Config, error) {
+	var tlsConfig *cryptotls.Config
+
+	if cluster.Spec.TLS == nil || !cluster.Spec.TLS.Enabled {
+		return tlsConfig, nil
+	}
+
+	clientSecret, err := r.getClientSecret(ctx, cluster.Name, cluster.Namespace)
+	if err != nil {
+		return nil, fmt.Errorf("unable to fetch client secret from Kubernetes API: %w", err)
+	}
+
+	tlsConfig, err = createEtcdTLSConfig(clientSecret)
+	if err != nil {
+		return nil, fmt.Errorf("can not create etcd transport: %w", err)
+	}
+	return tlsConfig, nil
+}
+
 func createEtcdTLSConfig(clientSecret *v1.Secret) (*cryptotls.Config, error) {
 	caCertPool := x509.NewCertPool()
 	successful := caCertPool.AppendCertsFromPEM(clientSecret.Data["ca.crt"])
@@ -359,6 +394,167 @@ func (r *EtcdClusterReconciler) createService(ctx context.Context, cluster *etcd
 		return nil, err
 	}
 	return &reconcilerevent.ServiceCreatedEvent{Object: cluster, ServiceName: service.Name}, nil
+}
+
+// minAvailableForETCDQuorum will calculate the minimum amount of pods required to maintain quorum
+func minAvailableForETCDQuorum(cluster *etcdv1alpha1.EtcdCluster) int {
+	// defined in https://etcd.io/docs/v3.3/faq/
+	return int((*cluster.Spec.Replicas / 2) + 1)
+}
+
+func pdbForCluster(cluster *etcdv1alpha1.EtcdCluster) *policyv1beta1.PodDisruptionBudget {
+	minAvailable := intstr.FromInt(minAvailableForETCDQuorum(cluster))
+	name := pdbName(cluster)
+	return &policyv1beta1.PodDisruptionBudget{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name.Name,
+			Namespace: name.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(cluster, etcdv1alpha1.GroupVersion.WithKind("EtcdCluster")),
+			},
+			Labels: map[string]string{
+				appLabel:     appName,
+				clusterLabel: cluster.Name,
+			},
+		},
+		Spec: policyv1beta1.PodDisruptionBudgetSpec{
+			MinAvailable: &minAvailable,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					appLabel: appName,
+				},
+			},
+		},
+	}
+}
+
+func pdbName(cluster *etcdv1alpha1.EtcdCluster) types.NamespacedName {
+	return types.NamespacedName{
+		Name:      cluster.Name,
+		Namespace: cluster.Namespace,
+	}
+}
+
+// hasPDB determines if the pod disruption budget exists for our etcd pods
+// An error is returned if there is some problem communicating with Kubernetes.
+func (r *EtcdClusterReconciler) hasPDB(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster) (bool, *policyv1beta1.PodDisruptionBudget, error) {
+	pdb := &policyv1beta1.PodDisruptionBudget{}
+	err := r.Get(ctx, pdbName(cluster), pdb)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			// We got the expected error, which is that it's not found
+			return false, nil, nil
+		}
+		// Unexpected error, some other problem?
+		return false, nil, err
+	}
+	// We found it because we got no error check its valid for etcd quorum
+	return true, pdb, nil
+}
+
+// pdbIsValid checks if a pdb will ensure etcd maintains quorum
+func (r *EtcdClusterReconciler) pdbIsValid(ctx context.Context, pdb *policyv1beta1.PodDisruptionBudget, cluster *etcdv1alpha1.EtcdCluster) bool {
+	if pdb == nil {
+		return false
+	}
+	// MinAvailable must be set or our PDB will not maintain quorum
+	if pdb.Spec.MinAvailable == nil {
+		return false
+	}
+	// check how many replicas we need to maintain quorum
+	want := minAvailableForETCDQuorum(cluster)
+	if pdb.Spec.MinAvailable.IntValue() != want {
+		r.Log.Info("want pdb with", "want", want, "got", pdb.Spec.MinAvailable.IntValue())
+		return false
+	}
+	// if the PDB will ensure quorum it's valid
+	return true
+}
+
+// createOrPatchPDB creates a pod disruption budget in Kubernetes
+func (r *EtcdClusterReconciler) createOrPatchPDB(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster) (reconcilerevent.ReconcilerEvent, error) {
+	pdb := pdbForCluster(cluster)
+	desiredMinAvailable := pdb.Spec.MinAvailable
+	res, err := controllerutil.CreateOrPatch(ctx, r.Client, pdb, func() error {
+		pdb.Spec.MinAvailable = desiredMinAvailable
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	switch res {
+	case controllerutil.OperationResultCreated:
+		return &reconcilerevent.PDBCreatedEvent{
+			Object: cluster, PDBName: pdb.Name, MinAvailable: pdb.Spec.MinAvailable.IntValue(),
+		}, nil
+	case controllerutil.OperationResultUpdated, controllerutil.OperationResultUpdatedStatus:
+		return &reconcilerevent.PDBPatchedEvent{
+			Object: cluster, PDBName: pdb.Name, MinAvailable: pdb.Spec.MinAvailable.IntValue(),
+		}, nil
+	default:
+		return nil, errors.New("no changes made")
+	}
+}
+
+func serviceMonitorForCluster(cluster *etcdv1alpha1.EtcdCluster) *monitorv1.ServiceMonitor {
+	return &monitorv1.ServiceMonitor{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name,
+			Namespace: cluster.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(cluster, etcdv1alpha1.GroupVersion.WithKind("EtcdCluster")),
+			},
+			Labels: map[string]string{
+				appLabel:     appName,
+				clusterLabel: cluster.Name,
+			},
+		},
+		Spec: monitorv1.ServiceMonitorSpec{
+			Endpoints: []monitorv1.Endpoint{
+				{
+					Port:     fmt.Sprintf("%d", etcdClientPort),
+					Interval: "10s",
+				}},
+			NamespaceSelector: monitorv1.NamespaceSelector{
+				MatchNames: []string{cluster.Namespace},
+			},
+			Selector: metav1.LabelSelector{
+				MatchLabels: map[string]string{appLabel: appName},
+			},
+		},
+	}
+}
+
+func serviceMonitorName(cluster *etcdv1alpha1.EtcdCluster) types.NamespacedName {
+	return types.NamespacedName{
+		Name:      cluster.Name,
+		Namespace: cluster.Namespace,
+	}
+}
+
+// hasServiceMonitor determines if a service monitor exists for our etcd pods
+// An error is returned if there is some problem communicating with Kubernetes.
+func (r *EtcdClusterReconciler) hasServiceMonitor(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster) (bool, error) {
+	sm := &monitorv1.ServiceMonitor{}
+	err := r.Get(ctx, serviceMonitorName(cluster), sm)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			// We got the expected error, which is that it's not found
+			return false, nil
+		}
+		// Unexpected error, some other problem?
+		return false, err
+	}
+	// We found it because we got no error
+	return true, nil
+}
+
+func (r *EtcdClusterReconciler) createServiceMonitor(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster) (*reconcilerevent.ServiceMonitorCreatedEvent, error) {
+	sm := serviceMonitorForCluster(cluster)
+	if err := r.Create(ctx, sm); err != nil {
+		return nil, err
+	}
+	return &reconcilerevent.ServiceMonitorCreatedEvent{Object: cluster, ServiceMonitorName: sm.Name}, nil
 }
 
 func (r *EtcdClusterReconciler) createBootstrapPeer(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, peers *etcdv1alpha1.EtcdPeerList) (*reconcilerevent.PeerCreatedEvent, error) {
@@ -522,6 +718,62 @@ func (r *EtcdClusterReconciler) reconcile(
 		return result, serviceCreatedEvent, nil
 	}
 
+	// Check if the PDB exists and create it if it doesn't
+	pdbExists, pdb, err := r.hasPDB(ctx, cluster)
+	if err != nil {
+		return result, nil, fmt.Errorf("unable to fetch pdb from Kubernetes API: %w", err)
+	}
+	if !pdbExists {
+		pdbEvent, err := r.createOrPatchPDB(ctx, cluster)
+		if err != nil {
+			return result, nil, fmt.Errorf("unable to create pdb: %w", err)
+		}
+		log.V(1).Info("Created PDB")
+		return result, pdbEvent, nil
+	}
+
+	serviceMonitorCRDInstalled := true
+	// Assuming the service monitor CRD is installed
+	// Check if a service monitor CR exists and create one if it doesn't
+	smExists, err := r.hasServiceMonitor(ctx, cluster)
+	if err != nil {
+		if !merrors.IsNoMatchError(err) {
+			return result, nil, fmt.Errorf("unable to fetch service monitor from Kubernetes API: %w", err)
+		}
+		r.Log.Info("service monitor crd not installed, skipping creation of service monitor")
+		serviceMonitorCRDInstalled = false
+	}
+
+	if !smExists && serviceMonitorCRDInstalled {
+		smCreatedEvent, err := r.createServiceMonitor(ctx, cluster)
+		if err != nil {
+			return result, nil, fmt.Errorf("unable to create service monitor: %w", err)
+		}
+		log.V(1).Info("Created ServiceMonitor", "service_monitor", smCreatedEvent.ServiceMonitorName)
+		return result, smCreatedEvent, nil
+	}
+
+	schedule, found := r.Schedules.Read(string(cluster.UID))
+	if !found {
+		id, err := r.CronHandler.AddFunc("*/1 * * * *", func() {
+			r.defragCronJob(log, cluster, members)
+		})
+
+		if err != nil {
+			return result, nil, err
+		}
+		r.Schedules.Write(string(cluster.UID), Schedule{
+			cronEntry: id,
+		})
+		log.Info("created defrag cron job")
+	}
+
+	// If the cluster is being deleted, clean it up from the cron pool.
+	if !cluster.ObjectMeta.DeletionTimestamp.IsZero() {
+		r.CronHandler.Remove(schedule.cronEntry)
+		r.Schedules.Delete(string(cluster.UID))
+	}
+
 	// There are two big branches of behaviour: Either we (the operator) can contact the etcd cluster, or we can't. If
 	// the `members` pointer is nil that means we were unsuccessful in our attempts to connect. Otherwise it indicates
 	// a list of existing members.
@@ -592,6 +844,18 @@ func (r *EtcdClusterReconciler) reconcile(
 		// opposite way around to what we just said. But is important. It means that if you perform a scale-up to five
 		// from three, we'll add the fourth node to the membership list, then add the peer for the fourth node *before*
 		// we consider adding the fifth node to the membership list.
+
+		// Check if the PDB is valid, if it's not modify it
+		// We only do this once we have communication to the cluster to ensure
+		// we don't reduce the pdb when the cluster is unstable (and potentially not in quorum)
+		if !r.pdbIsValid(ctx, pdb, cluster) {
+			pdbEvent, err := r.createOrPatchPDB(ctx, cluster)
+			if err != nil {
+				return result, nil, fmt.Errorf("unable to create pdb: %w", err)
+			}
+			log.V(1).Info("Patched PDB")
+			return result, pdbEvent, nil
+		}
 
 		// Add EtcdPeer resources for members that do not have one.
 		for _, member := range *members {
@@ -799,9 +1063,11 @@ func peerNameForMember(member etcd.Member) (string, error) {
 // +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=*
 // +kubebuilder:rbac:groups=core,resources=namespaces,verbs=get;list;watch;create
+// +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;create;delete;patch;list;watch
+// +kubebuilder:rbac:groups="coordination.k8s.io",resources=leases,verbs=get;list;watch;create;update;patch;delete
 
-func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+func (r *EtcdClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	log := r.Log.WithValues("cluster", req.NamespacedName)
@@ -940,19 +1206,9 @@ func (r *EtcdClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rete
 }
 
 func (r *EtcdClusterReconciler) addEtcdMember(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, peerURL string) (*etcd.Member, error) {
-	var tlsConfig *cryptotls.Config
-	if cluster.Spec.TLS != nil && cluster.Spec.TLS.Enabled {
-		clientSecret, err := r.getClientSecret(ctx, cluster.Name, cluster.Namespace)
-		if err != nil {
-			return nil, fmt.Errorf("unable to fetch client secret from Kubernetes API: %w", err)
-		}
-
-		tlsConfig, err = createEtcdTLSConfig(clientSecret)
-		if err != nil {
-			return nil, fmt.Errorf("can not create etcd config: %w", err)
-		}
-	} else {
-		tlsConfig = nil
+	tlsConfig, err := r.getTLSConfig(ctx, cluster)
+	if err != nil {
+		return nil, err
 	}
 
 	c, err := r.Etcd.New(etcdClientConfig(cluster, tlsConfig))
@@ -972,20 +1228,11 @@ func (r *EtcdClusterReconciler) addEtcdMember(ctx context.Context, cluster *etcd
 // removeEtcdMember performs a runtime reconfiguration of the Etcd cluster to
 // remove a member from the cluster.
 func (r *EtcdClusterReconciler) removeEtcdMember(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster, memberID string) error {
-	var tlsConfig *cryptotls.Config
-	if cluster.Spec.TLS != nil && cluster.Spec.TLS.Enabled {
-		clientSecret, err := r.getClientSecret(ctx, cluster.Name, cluster.Namespace)
-		if err != nil {
-			return fmt.Errorf("unable to fetch client secret from Kubernetes API: %w", err)
-		}
-
-		tlsConfig, err = createEtcdTLSConfig(clientSecret)
-		if err != nil {
-			return fmt.Errorf("can not create etcd transport: %w", err)
-		}
-	} else {
-		tlsConfig = nil
+	tlsConfig, err := r.getTLSConfig(ctx, cluster)
+	if err != nil {
+		return err
 	}
+
 	c, err := r.Etcd.New(etcdClientConfig(cluster, tlsConfig))
 	if err != nil {
 		return fmt.Errorf("unable to connect to etcd: %w", err)
@@ -1134,10 +1381,44 @@ func expectedURLForPeer(cluster *etcdv1alpha1.EtcdCluster, peerName string) stri
 	)
 }
 
+func (r *EtcdClusterReconciler) defragCronJob(log logr.Logger, cluster *etcdv1alpha1.EtcdCluster, members *[]etcd.Member) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*25)
+	defer cancel()
+
+	tlsConfig, err := r.getTLSConfig(ctx, cluster)
+	if err != nil {
+		log.Error(err, "failed to create tls config before defragging")
+		return
+	}
+	var c etcd.API
+	if c, err = r.Etcd.New(etcdClientConfig(cluster, tlsConfig)); err != nil {
+		log.Error(err, "Unable to connect to etcd")
+		return
+	}
+
+	var memberSlice []etcd.Member
+	if memberSlice, err = c.List(ctx); err != nil {
+		log.Error(err, "Unable to list etcd cluster members")
+		return
+	}
+	if memberSlice == nil {
+		log.Info("Cannot defrag, not aware of members yet")
+		return
+	}
+
+	longCtx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
+	defer cancel()
+	err = defragger.DefragIfNecessary(longCtx, r.DefragThreshold, memberSlice, c, c, log)
+	if err != nil {
+		log.Error(err, "failed to defrag if necessary")
+	}
+
+}
+
 func (r *EtcdClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	if err := mgr.GetFieldIndexer().IndexField(&etcdv1alpha1.EtcdPeer{},
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &etcdv1alpha1.EtcdPeer{},
 		clusterNameSpecField,
-		func(obj runtime.Object) []string {
+		func(obj client.Object) []string {
 			peer, ok := obj.(*etcdv1alpha1.EtcdPeer)
 			if !ok {
 				// Fail? We've been asked to index the cluster name for something that isn't a peer.

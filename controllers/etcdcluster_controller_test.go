@@ -16,8 +16,8 @@ import (
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/pointer"
@@ -94,6 +94,18 @@ func (s *StaticResponseEtcdAPI) Remove(ctx context.Context, mID string) error {
 		}
 	}
 	return fmt.Errorf("unknown member: %s", mID)
+}
+
+func (s *StaticResponseEtcdAPI) Defragment(ctx context.Context, m etcd.Member) error {
+	s.Lock()
+	defer s.Unlock()
+	return nil
+}
+
+func (s *StaticResponseEtcdAPI) UsedSpacePercentage(ctx context.Context, m etcd.Member) (int, error) {
+	s.Lock()
+	defer s.Unlock()
+	return 0, nil
 }
 
 func (s *StaticResponseEtcdAPI) GetVersion(ctx context.Context) (*etcd.Versions, error) {
@@ -208,7 +220,7 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 				)
 			}
 			return nil
-		}, time.Second*5, time.Millisecond*500)
+		}, time.Second*25, time.Millisecond*500)
 		require.NoError(t, err)
 
 		t.Log("When the cluster is scaled down to 1-node.")
@@ -232,9 +244,28 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 					return fmt.Errorf("unexpected EtcdCluster.Status: diff --- expected, +++ actual\n%s", diff)
 				}
 				return nil
+			}, time.Second*45, time.Millisecond*500)
+			assert.NoError(t, err)
+		})
+		t.Run("PodDisruptionBudget updated", func(t *testing.T) {
+			t.Logf("The pdb minAvailable is decreased when the cluster has been scaled down")
+			expectedMinAvailable := 1
+			err = try.Eventually(func() error {
+				var pdb policyv1beta1.PodDisruptionBudget
+				err = s.k8sClient.Get(s.ctx, client.ObjectKey{
+					Namespace: namespace,
+					Name:      etcdCluster.Name,
+				}, &pdb)
+
+				require.NoError(t, err, "failed to find pdb")
+				if pdb.Spec.MinAvailable.IntValue() != expectedMinAvailable {
+					return errors.New("pdb hasn't updated")
+				}
+				return nil
 			}, time.Second*20, time.Millisecond*500)
 			assert.NoError(t, err)
 		})
+
 		t.Run("EtcdMembersUpdate", func(t *testing.T) {
 			t.Log("The etcd cluster API reports the expected number of nodes")
 			membership, err := etcdAPI.New(etcd.Config{})
@@ -267,8 +298,24 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 			err = try.Eventually(func() error {
 				var actual v1.PersistentVolumeClaimList
 				err := s.k8sClient.List(s.ctx, &actual, client.InNamespace(etcdCluster.Namespace))
+
+				// Since we can't control when PVCs with the pvc-protection are deleted
+				// we will remove them from this list
+				var pvcsWOProtectionFinalizer v1.PersistentVolumeClaimList
+				pvcsWOProtectionFinalizer.TypeMeta = actual.TypeMeta
+				pvcsWOProtectionFinalizer.ListMeta = actual.ListMeta
+				for _, pvc := range actual.Items {
+					// If a PVC doesn't have a deletion timestamp or it has some
+					// other finalizer we shouldn't consider it deleted
+					// i.e it should only contain 1 element "kubernetes.io/pvc-protection", or we should fail
+					if pvc.DeletionTimestamp != nil && len(pvc.Finalizers) == 1 && pvc.Finalizers[0] == "kubernetes.io/pvc-protection" {
+						continue
+					}
+					pvcsWOProtectionFinalizer.Items = append(pvcsWOProtectionFinalizer.Items, pvc)
+				}
+
 				require.NoError(t, err)
-				return hasIdenticalListItemNames(&expected, &actual)
+				return hasIdenticalListItemNames(&expected, &pvcsWOProtectionFinalizer)
 			}, time.Second*20, time.Millisecond*500)
 			assert.NoError(t, err)
 		})
@@ -338,6 +385,34 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 			}, "Service did not declare peer port")
 		})
 
+		t.Run("CreatePodDisruptionBudget", func(t *testing.T) {
+			expectedMinAvailable := 2
+			err = try.Eventually(func() error {
+				var pdb policyv1beta1.PodDisruptionBudget
+				err = s.k8sClient.Get(s.ctx, client.ObjectKey{
+					Namespace: namespace,
+					Name:      etcdCluster.Name,
+				}, &pdb)
+
+				require.NoError(t, err, "failed to find pdb")
+				if pdb.Spec.MinAvailable.IntValue() != expectedMinAvailable {
+					return errors.New("pdb hasn't updated")
+				}
+				return nil
+			}, time.Second*20, time.Millisecond*500)
+		})
+
+		t.Run("CreatesCronJob", func(t *testing.T) {
+			err = try.Eventually(func() error {
+				_, ok := s.clusterControllerSchedules.Read(string(etcdCluster.UID))
+				if !ok {
+					return errors.New("cronjob not found")
+				}
+				return nil
+			}, time.Second*10, time.Millisecond*500)
+			require.NoError(t, err, "failed to find cronjob")
+		})
+
 		t.Run("CreatesPeers", func(t *testing.T) {
 			// Assert on peers
 			peers := &etcdv1alpha1.EtcdPeerList{}
@@ -352,7 +427,7 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 					return fmt.Errorf("wrong number of peers. expected: %d, actual: %d", expectedReplicas, len(peers.Items))
 				}
 				return nil
-			}, time.Second*5, time.Millisecond*500)
+			}, time.Second*15, time.Millisecond*500)
 			require.NoError(t, err)
 
 			expectedInitialCluster := make([]etcdv1alpha1.InitialClusterMember, len(peers.Items))
@@ -476,7 +551,7 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 					return errors.New(fmt.Sprintf("Wrong number of etcd Replica Sets. Had %d wanted %d", len(replicaSetList.Items), 3))
 				}
 				return err
-			}, time.Second*5, time.Millisecond*500)
+			}, time.Second*15, time.Millisecond*500)
 			require.NoError(t, err)
 
 			for _, replicaSet := range replicaSetList.Items {
@@ -522,7 +597,7 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 					return errors.New(fmt.Sprintf("Wrong number of etcd Replica Sets. Had %d wanted %d", len(replicaSetList.Items), int(*etcdCluster.Spec.Replicas)))
 				}
 				return err
-			}, time.Second*5, time.Millisecond*500)
+			}, time.Second*15, time.Millisecond*500)
 			require.NoError(t, err)
 
 			r1 := replicaSetList.Items[0]
@@ -578,7 +653,7 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 					return errors.New(fmt.Sprintf("Wrong number of etcd Replica Sets. Had %d wanted %d", len(replicaSetList.Items), int(*etcdCluster.Spec.Replicas)))
 				}
 				return err
-			}, time.Second*5, time.Millisecond*500)
+			}, time.Second*15, time.Millisecond*500)
 			require.NoError(t, err)
 
 			for _, replicaSet := range replicaSetList.Items {
@@ -600,8 +675,7 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 
 		etcdCluster.Default()
 
-		etcdClusterKey, err := client.ObjectKeyFromObject(etcdCluster)
-		require.NoError(t, err)
+		etcdClusterKey := client.ObjectKeyFromObject(etcdCluster)
 
 		t.Run("ReportsEmptyVersion", func(t *testing.T) {
 			etcdAPI.Wrap(&AlwaysFailEtcdAPI{})
@@ -683,8 +757,7 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 
 		etcdCluster.Default()
 
-		etcdClusterKey, err := client.ObjectKeyFromObject(etcdCluster)
-		require.NoError(t, err)
+		etcdClusterKey := client.ObjectKeyFromObject(etcdCluster)
 
 		err = try.Eventually(func() error {
 			var fetchedCluster etcdv1alpha1.EtcdCluster
@@ -692,10 +765,11 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 			require.NoError(t, err)
 
 			if fetchedCluster.Status.Replicas != expectedReplicas {
-				return fmt.Errorf("wrong number of peers")
+				return fmt.Errorf("wrong number of peers - got: %v, want: %v",
+					fetchedCluster.Status.Replicas, expectedReplicas)
 			}
 			return nil
-		}, time.Second*5, time.Second)
+		}, time.Second*15, time.Second)
 		require.NoError(t, err)
 
 		staticAPI := fakeEtcdForEtcdCluster(*etcdCluster)
@@ -741,13 +815,13 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 		}, time.Second*5, time.Second)
 		require.NoError(t, err)
 
-		// t.Run("ReportsExpectedVersion", func(t *testing.T) {
-		//	expectedVersion := semver.Must(semver.NewVersion("3.2.0"))
-		//	staticAPI := fakeEtcdForEtcdCluster(*etcdCluster)
-		//	staticAPI.ClusterVersion = expectedVersion.String()
-		//	etcdAPI.Wrap(staticAPI)
+		t.Run("ReportsExpectedVersion", func(t *testing.T) {
+			expectedVersion := semver.Must(semver.NewVersion("3.2.0"))
+			staticAPI := fakeEtcdForEtcdCluster(*etcdCluster)
+			staticAPI.ClusterVersion = expectedVersion.String()
+			etcdAPI.Wrap(staticAPI)
 
-		// })
+		})
 	})
 }
 
@@ -818,16 +892,16 @@ func expectedEtcdPeersForCluster(c etcdv1alpha1.EtcdCluster) etcdv1alpha1.EtcdPe
 	}
 }
 
-func listOfRuntimeObjects(list metav1.ListInterface) []runtime.Object {
+func listOfRuntimeObjects(list metav1.ListInterface) []client.Object {
 	switch l := list.(type) {
 	case *etcdv1alpha1.EtcdPeerList:
-		ol := make([]runtime.Object, len(l.Items))
+		ol := make([]client.Object, len(l.Items))
 		for i := range l.Items {
 			ol[i] = &l.Items[i]
 		}
 		return ol
 	case *v1.PersistentVolumeClaimList:
-		ol := make([]runtime.Object, len(l.Items))
+		ol := make([]client.Object, len(l.Items))
 		for i := range l.Items {
 			ol[i] = &l.Items[i]
 		}
@@ -838,13 +912,10 @@ func listOfRuntimeObjects(list metav1.ListInterface) []runtime.Object {
 
 }
 
-func setOfNamespacedNamesForList(list []runtime.Object) sets.String {
+func setOfNamespacedNamesForList(list []client.Object) sets.String {
 	names := sets.NewString()
 	for _, o := range list {
-		nn, err := client.ObjectKeyFromObject(o)
-		if err != nil {
-			panic(err)
-		}
+		nn := client.ObjectKeyFromObject(o)
 		names.Insert(nn.String())
 	}
 	return names
