@@ -1064,6 +1064,7 @@ func peerNameForMember(member etcd.Member) (string, error) {
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=*
 // +kubebuilder:rbac:groups=core,resources=namespaces,verbs=get;list;watch;create
 // +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;create;delete;patch;list;watch
+// +kubebuilder:rbac:groups="monitoring.coreos.com",resources=servicemonitors,verbs=get;create;delete;patch;list;watch
 // +kubebuilder:rbac:groups="coordination.k8s.io",resources=leases,verbs=get;list;watch;create;update;patch;delete
 
 func (r *EtcdClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
