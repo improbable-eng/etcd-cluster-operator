@@ -1,6 +1,7 @@
 package controllers
 
 const (
+	etcdMetricsPort         = 2381
 	etcdClientPort          = 2379
 	etcdPeerPort            = 2380
 	EtcdDataMountPath       = "/var/lib/etcd"

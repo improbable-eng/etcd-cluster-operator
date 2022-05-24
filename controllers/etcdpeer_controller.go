@@ -178,8 +178,12 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, etcdRepository string, log log
 	}
 
 	etcdContainer := corev1.Container{
-		Name:  appName,
-		Image: fmt.Sprintf("%s:v%s", etcdRepository, peer.Spec.Version),
+		Name:    appName,
+		Image:   fmt.Sprintf("%s:v%s", etcdRepository, peer.Spec.Version),
+		Command: []string{"/usr/local/bin/etcd"},
+		Args: []string{
+			"--listen-metrics-urls", fmt.Sprintf("http://%v:%v", "0.0.0.0", etcdMetricsPort),
+		},
 		Env: []corev1.EnvVar{
 			{
 				Name:  etcdenvvar.InitialCluster,
@@ -227,6 +231,10 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, etcdRepository string, log log
 				Name:          "etcd-peer",
 				ContainerPort: etcdPeerPort,
 			},
+			{
+				Name:          "etcd-metrics",
+				ContainerPort: etcdMetricsPort,
+			},
 		},
 		VolumeMounts: []corev1.VolumeMount{
 			{
@@ -237,8 +245,9 @@ func defineReplicaSet(peer etcdv1alpha1.EtcdPeer, etcdRepository string, log log
 		ReadinessProbe: &corev1.Probe{
 			Handler: corev1.Handler{
 				HTTPGet: &corev1.HTTPGetAction{
-					Path: "/health",
-					Port: intstr.FromInt(etcdClientPort),
+					Scheme: corev1.URISchemeHTTP,
+					Path:   "/health",
+					Port:   intstr.FromInt(etcdMetricsPort),
 				},
 			},
 			TimeoutSeconds:      5,
