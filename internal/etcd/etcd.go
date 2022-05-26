@@ -156,8 +156,9 @@ func (c *ClientEtcdAPI) GetMetrics(ctx context.Context, member Member) (map[stri
 		return nil, fmt.Errorf("unable to get metrics, etcd member has no client urls")
 	}
 
+	httpClient := createHTTPClient(c.Config)
 	url := member.ClientURLs[0] + "/metrics"
-	resp, err := http.Get(url)
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get metrics from etcd: %w", err)
 	}
@@ -227,25 +228,7 @@ func (c *ClientEtcdAPI) Defragment(ctx context.Context, member Member) error {
 }
 
 func checkVersion(config Config) (*Versions, error) {
-	tr := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		Dial: (&net.Dialer{
-			Timeout:   2 * time.Second,
-			KeepAlive: 2 * time.Second,
-		}).Dial,
-		TLSHandshakeTimeout:   2 * time.Second,
-		IdleConnTimeout:       2 * time.Second,
-		ResponseHeaderTimeout: 2 * time.Second,
-	}
-
-	if config.TLS != nil {
-		tr.TLSClientConfig = config.TLS
-	}
-
-	httpClient := &http.Client{
-		Transport: tr,
-		Timeout:   2 * time.Second,
-	}
+	httpClient := createHTTPClient(config)
 
 	// always get the first endpoint
 	url := fmt.Sprintf("%s/version", config.Endpoints[0])
@@ -272,6 +255,28 @@ func checkVersion(config Config) (*Versions, error) {
 		return &versions, nil
 	} else {
 		return nil, errors.New(fmt.Sprintf("error while get version 200 expected, but got %d", resp.StatusCode))
+	}
+}
+
+func createHTTPClient(config Config) *http.Client {
+	tr := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		Dial: (&net.Dialer{
+			Timeout:   2 * time.Second,
+			KeepAlive: 2 * time.Second,
+		}).Dial,
+		TLSHandshakeTimeout:   2 * time.Second,
+		IdleConnTimeout:       2 * time.Second,
+		ResponseHeaderTimeout: 2 * time.Second,
+	}
+
+	if config.TLS != nil {
+		tr.TLSClientConfig = config.TLS
+	}
+
+	return &http.Client{
+		Transport: tr,
+		Timeout:   2 * time.Second,
 	}
 }
 
