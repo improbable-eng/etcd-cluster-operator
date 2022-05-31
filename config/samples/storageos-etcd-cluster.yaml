@@ -43,7 +43,7 @@ spec:
         value: "revision"
     affinity:
       podAntiAffinity:
-        preferredDuringSchedulingIgnoredDuringExecution:
+        requiredDuringSchedulingIgnoredDuringExecution:
           - weight: 100
             podAffinityTerm:
               labelSelector:
