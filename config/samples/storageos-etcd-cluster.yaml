@@ -44,12 +44,11 @@ spec:
     affinity:
       podAntiAffinity:
         requiredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchExpressions:
-                  - key: etcd.improbable.io/cluster-name
-                    operator: In
-                    values:
-                      - storageos-etcd
-              topologyKey: kubernetes.io/hostname
+        - weight: 100
+          labelSelector:
+            matchExpressions:
+              - key: etcd.improbable.io/cluster-name
+                operator: In
+                values:
+                  - storageos-etcd
+          topologyKey: kubernetes.io/hostname
