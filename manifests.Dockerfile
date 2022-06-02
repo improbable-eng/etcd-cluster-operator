@@ -1,5 +1,5 @@
 # Nixery image registry generates images on the fly with the counted dependencies.
-FROM nixery.dev/shell/remake/go_1_16/gcc/kustomize as build
+FROM nixery.dev/shell/remake/go/gcc/kustomize as build
 
 ENV PATH=/share/go/bin:$PATH
 
