@@ -96,6 +96,14 @@ type EtcdPeerStatus struct {
 	// ServerVersion contains the Member server version
 	ServerVersion string `json:"serverVersion"`
 
+	// Healthy states whether the peer is reachable from the controller
+	// +optional
+	Healthy bool `json:"healthy"`
+
+	// LastHealthy states when the peer was last healthy
+	// +optional
+	LastHealthy metav1.Time `json:"lastHealthy"`
+
 	// TLS configuration
 	// +optional
 	TLSEnabled bool `json:"tlsEnabled"`

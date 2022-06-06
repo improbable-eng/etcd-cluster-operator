@@ -1068,6 +1068,14 @@ spec:
           status:
             description: EtcdPeerStatus defines the observed state of EtcdPeer
             properties:
+              healthy:
+                description: Healthy states whether the peer is reachable from the
+                  controller
+                type: boolean
+              lastHealthy:
+                description: LastHealthy states when the peer was last healthy
+                format: date-time
+                type: string
               serverVersion:
                 description: ServerVersion contains the Member server version
                 type: string

@@ -46,6 +46,13 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - nodes
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ""
+  resources:
   - persistantvolumeclaims/status
   verbs:
   - create
@@ -69,6 +76,7 @@ rules:
   - pods
   verbs:
   - create
+  - delete
   - get
   - list
   - watch
@@ -210,3 +218,10 @@ rules:
   - list
   - patch
   - watch
+- apiGroups:
+  - storage
+  resources:
+  - volumeattachments
+  verbs:
+  - delete
+  - list

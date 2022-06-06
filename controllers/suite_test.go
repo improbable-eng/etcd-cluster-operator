@@ -102,6 +102,7 @@ func (s *controllerSuite) setupTest(t *testing.T, etcdAPI etcd.APIBuilder) (tear
 		Log:            logger.WithName("EtcdPeer"),
 		Etcd:           etcdAPI,
 		EtcdRepository: "quay.io/coreos/etcd",
+		Recorder:       mgr.GetEventRecorderFor("etcdpeer-reconciler"),
 	}
 	err = peerController.SetupWithManager(mgr)
 	require.NoError(t, err, "failed to set up EtcdPeer controller")

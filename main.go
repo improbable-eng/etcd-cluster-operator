@@ -114,8 +114,10 @@ func main() {
 	))
 
 	if err = (&controllers.EtcdPeerReconciler{
-		Client:         mgr.GetClient(),
-		Log:            ctrl.Log.WithName("controllers").WithName("EtcdPeer"),
+		Client:   mgr.GetClient(),
+		Log:      ctrl.Log.WithName("controllers").WithName("EtcdPeer"),
+		Recorder: mgr.GetEventRecorderFor("etcdpeer-reconciler"),
+
 		Etcd:           &etcd.ClientEtcdAPIBuilder{},
 		EtcdRepository: etcdRepository,
 	}).SetupWithManager(mgr); err != nil {
