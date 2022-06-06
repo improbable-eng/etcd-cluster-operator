@@ -48,22 +48,24 @@ func init() {
 
 func main() {
 	var (
-		enableLeaderElection bool
-		leaderElectionID     string
-		metricsAddr          string
-		printVersion         bool
-		proxyURL             string
-		etcdRepository       string
-		restoreAgentImage    string
-		backupAgentImage     string
-		defragThreshold      uint
+		enableLeaderElection      bool
+		leaderElectionID          string
+		leaderElectionCMNamespace string
+		metricsAddr               string
+		printVersion              bool
+		proxyURL                  string
+		etcdRepository            string
+		restoreAgentImage         string
+		backupAgentImage          string
+		defragThreshold           uint
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
+	flag.BoolVar(&enableLeaderElection, "enable-leader-election", true,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&leaderElectionID, "leader-election-id", "etcd-cluster-operator-controller-leader-election-helper",
 		"The name of the configmap that leader election will use for holding the leader lock.")
+	flag.StringVar(&leaderElectionCMNamespace, "leader-election-cm-namespace", "storageos", "The namespace of the config map that is used for leader election")
 	flag.StringVar(&etcdRepository, "etcd-repository", defaultEtcdRepository, "The Docker repository to use for the etcd image")
 	flag.StringVar(&backupAgentImage, "backup-agent-image", defaultBackupAgentImage, "The Docker image for the backup-agent")
 	flag.StringVar(&restoreAgentImage, "restore-agent-image", defaultRestoreAgentImage, "The Docker image to use to perform a restore")
@@ -99,11 +101,12 @@ func main() {
 	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:             scheme,
-		MetricsBindAddress: metricsAddr,
-		LeaderElection:     enableLeaderElection,
-		LeaderElectionID:   leaderElectionID,
-		Port:               9443,
+		Scheme:                  scheme,
+		MetricsBindAddress:      metricsAddr,
+		LeaderElection:          enableLeaderElection,
+		LeaderElectionID:        leaderElectionID,
+		LeaderElectionNamespace: leaderElectionCMNamespace,
+		Port:                    9443,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
