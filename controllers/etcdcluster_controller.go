@@ -68,26 +68,34 @@ func etcdScheme(tls *etcdv1alpha1.TLS) string {
 }
 
 func (r *EtcdClusterReconciler) createNamespaceIfNotPresent(ctx context.Context, name string) error {
-	namespace := &v1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
-	}
-	err := r.Get(ctx, client.ObjectKey{Name: name}, namespace)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			// We got the expected error, which is that it's not found
-			err = r.Create(ctx, namespace)
-			if err != nil {
-				return err
+	ticker := time.NewTicker(time.Second * 5)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timeout attempting to create namespace %s", name)
+		case <-ticker.C:
+			namespace := &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+				},
 			}
-			return nil
+			if err := r.Get(ctx, client.ObjectKey{Name: name}, namespace); err != nil {
+				if apierrors.IsNotFound(err) {
+					r.Log.Info("namespace not found, attempting to create it")
+					// We got the expected error, which is that it's not found
+					if err := r.Create(ctx, namespace); err == nil {
+						r.Log.Info("sucessfully created namespace")
+						return nil
+					}
+				}
+			}
+			if namespace.Status.Phase != v1.NamespaceTerminating {
+				return nil
+			}
+			r.Log.Info("namespace exists in terminating phase, waiting for deletion to conclude")
 		}
-		// Unexpected error, some other problem?
-		return err
 	}
-	// We found it because we got no error
-	return nil
 }
 
 // getCaSecret determines if the ca secret exists. Error is returned if there is some problem communicating with
