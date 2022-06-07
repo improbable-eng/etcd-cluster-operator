@@ -101,12 +101,13 @@ func main() {
 	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                  scheme,
-		MetricsBindAddress:      metricsAddr,
-		LeaderElection:          enableLeaderElection,
-		LeaderElectionID:        leaderElectionID,
-		LeaderElectionNamespace: leaderElectionCMNamespace,
-		Port:                    9443,
+		Scheme:                        scheme,
+		MetricsBindAddress:            metricsAddr,
+		LeaderElection:                enableLeaderElection,
+		LeaderElectionID:              leaderElectionID,
+		LeaderElectionNamespace:       leaderElectionCMNamespace,
+		LeaderElectionReleaseOnCancel: true,
+		Port:                          9443,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
