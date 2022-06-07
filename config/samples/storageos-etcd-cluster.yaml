@@ -4,8 +4,8 @@ metadata:
   name: storageos-etcd
   namespace: storageos-etcd
 spec:
-  replicas: 3
-  version: 3.5.3
+  replicas: 5
+  version: 3.5.4
   tls:
     enabled: false
     storageOSClusterNamespace: "storageos"
