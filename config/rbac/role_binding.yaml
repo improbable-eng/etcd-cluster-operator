@@ -8,5 +8,5 @@ roleRef:
   name: manager-role
 subjects:
 - kind: ServiceAccount
-  name: storageos-etcd-cluster-operator
-  namespace: storageos-etcd
+  name: default
+  namespace: default

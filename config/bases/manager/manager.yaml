@@ -21,6 +21,7 @@ spec:
         args:
         - --enable-leader-election
         - --proxy-url=storageos-proxy.storageos-etcd.svc
+        - --leader-election-cm-namespace=storageos
         image: controller
         env:
         - name: DISABLE_WEBHOOKS
