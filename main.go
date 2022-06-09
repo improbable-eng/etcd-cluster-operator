@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/pprof"
+	"time"
 
 	"os"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -33,6 +35,7 @@ var (
 	// prefix and version of the controller image. See Dockerfile.
 	defaultBackupAgentImage  = "REPLACE_ME"
 	defaultRestoreAgentImage = "REPLACE_ME"
+	leaderRetryDuration      = 5 * time.Second
 )
 
 const (
@@ -58,6 +61,7 @@ func main() {
 		restoreAgentImage         string
 		backupAgentImage          string
 		defragThreshold           uint
+		leaderRenewSeconds        uint
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
@@ -73,7 +77,11 @@ func main() {
 	flag.BoolVar(&printVersion, "version", false,
 		"Print version to stdout and exit")
 	flag.UintVar(&defragThreshold, "defrag-threshold", 80, "The percentage of used space at which the operator will defrag an etcd member")
+	flag.UintVar(&leaderRenewSeconds, "leader-renew-seconds", 10, "Leader renewal frequency - for leader election")
 	flag.Parse()
+
+	renewDeadline := time.Duration(leaderRenewSeconds) * time.Second
+	leaseDuration := time.Duration(int(1.2*float64(leaderRenewSeconds))) * time.Second
 
 	if printVersion {
 		fmt.Println(version.Version)
@@ -107,6 +115,10 @@ func main() {
 		LeaderElectionID:              leaderElectionID,
 		LeaderElectionNamespace:       leaderElectionCMNamespace,
 		LeaderElectionReleaseOnCancel: true,
+		LeaderElectionResourceLock:    resourcelock.LeasesResourceLock,
+		RenewDeadline:                 &renewDeadline,
+		LeaseDuration:                 &leaseDuration,
+		RetryPeriod:                   &leaderRetryDuration,
 		Port:                          9443,
 	})
 	if err != nil {
