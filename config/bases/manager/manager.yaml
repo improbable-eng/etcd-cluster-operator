@@ -4,16 +4,16 @@ metadata:
   name: controller-manager
   namespace: system
   labels:
-    control-plane: controller-manager
+    control-plane: etcd-controller-manager
 spec:
   selector:
     matchLabels:
-      control-plane: controller-manager
-  replicas: 1
+      control-plane: etcd-controller-manager
+  replicas: 2
   template:
     metadata:
       labels:
-        control-plane: controller-manager
+        control-plane: etcd-controller-manager
     spec:
       containers:
       - command:
@@ -35,6 +35,14 @@ spec:
             cpu: 100m
             memory: 120Mi
       terminationGracePeriodSeconds: 10
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                control-plane: etcd-controller-manager
+            topologyKey: kubernetes.io/hostname
+
 ---
 apiVersion: apps/v1
 kind: Deployment
