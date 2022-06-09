@@ -1405,6 +1405,7 @@ func (r *EtcdClusterReconciler) defragCronJob(log logr.Logger, cluster *etcdv1al
 		log.Error(err, "Unable to connect to etcd")
 		return
 	}
+	defer c.Close()
 
 	var memberSlice []etcd.Member
 	if memberSlice, err = c.List(ctx); err != nil {
