@@ -60,10 +60,10 @@ spec:
         resources:
           limits:
             cpu: 100m
-            memory: 50Mi
+            memory: 100Mi
           requests:
-            cpu: 100m
-            memory: 50Mi
+            cpu: 70m
+            memory: 70Mi
       terminationGracePeriodSeconds: 10
 ---
 apiVersion: v1
