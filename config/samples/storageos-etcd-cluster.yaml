@@ -15,7 +15,7 @@ spec:
       storageClassName: "standard"
       resources:
         requests:
-          storage: 1Gi
+          storage: 12Gi
   podTemplate:
     resources:
       requests:
