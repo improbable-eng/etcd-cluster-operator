@@ -40,6 +40,7 @@ import (
 
 const (
 	clusterNameSpecField = "spec.clusterName"
+	etcdClientPortName   = "etcd-client"
 )
 
 // EtcdClusterReconciler reconciles a EtcdCluster object
@@ -357,7 +358,7 @@ func headlessServiceForCluster(cluster *etcdv1alpha1.EtcdCluster) *v1.Service {
 			},
 			Ports: []v1.ServicePort{
 				{
-					Name:     "etcd-client",
+					Name:     etcdClientPortName,
 					Protocol: "TCP",
 					Port:     etcdClientPort,
 				},
@@ -520,7 +521,7 @@ func serviceMonitorForCluster(cluster *etcdv1alpha1.EtcdCluster) *monitorv1.Serv
 		Spec: monitorv1.ServiceMonitorSpec{
 			Endpoints: []monitorv1.Endpoint{
 				{
-					Port:     fmt.Sprintf("%d", etcdClientPort),
+					Port:     etcdClientPortName,
 					Interval: "10s",
 				}},
 			NamespaceSelector: monitorv1.NamespaceSelector{
@@ -757,7 +758,7 @@ func (r *EtcdClusterReconciler) reconcile(
 		if err != nil {
 			return result, nil, fmt.Errorf("unable to create service monitor: %w", err)
 		}
-		log.V(1).Info("Created ServiceMonitor", "service_monitor", smCreatedEvent.ServiceMonitorName)
+		log.Info("Created ServiceMonitor", "service_monitor", smCreatedEvent.ServiceMonitorName)
 		return result, smCreatedEvent, nil
 	}
 
