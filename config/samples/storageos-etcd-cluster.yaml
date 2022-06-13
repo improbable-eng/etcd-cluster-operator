@@ -44,8 +44,7 @@ spec:
     affinity:
       podAntiAffinity:
         requiredDuringSchedulingIgnoredDuringExecution:
-        - weight: 100
-          labelSelector:
+        - labelSelector:
             matchExpressions:
               - key: etcd.improbable.io/cluster-name
                 operator: In
