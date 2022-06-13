@@ -21,6 +21,7 @@ import (
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
 	"github.com/improbable-eng/etcd-cluster-operator/controllers"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/etcd"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/interval"
 	"github.com/improbable-eng/etcd-cluster-operator/version"
 	"github.com/improbable-eng/etcd-cluster-operator/webhooks"
 	"github.com/robfig/cron/v3"
@@ -42,6 +43,11 @@ const (
 	defaultProxyPort = 80
 )
 
+const (
+	defaultDefragThreshold                = 80
+	defaultDefragWithoutThresholdInterval = "weekly"
+)
+
 func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 	_ = etcdv1alpha1.AddToScheme(scheme)
@@ -51,17 +57,18 @@ func init() {
 
 func main() {
 	var (
-		enableLeaderElection      bool
-		leaderElectionID          string
-		leaderElectionCMNamespace string
-		metricsAddr               string
-		printVersion              bool
-		proxyURL                  string
-		etcdRepository            string
-		restoreAgentImage         string
-		backupAgentImage          string
-		defragThreshold           uint
-		leaderRenewSeconds        uint
+		enableLeaderElection           bool
+		leaderElectionID               string
+		leaderElectionCMNamespace      string
+		metricsAddr                    string
+		printVersion                   bool
+		proxyURL                       string
+		etcdRepository                 string
+		restoreAgentImage              string
+		backupAgentImage               string
+		defragWithoutThresholdInterval string
+		defragThreshold                uint
+		leaderRenewSeconds             uint
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
@@ -76,7 +83,8 @@ func main() {
 	flag.StringVar(&proxyURL, "proxy-url", "", "The URL of the upload/download proxy")
 	flag.BoolVar(&printVersion, "version", false,
 		"Print version to stdout and exit")
-	flag.UintVar(&defragThreshold, "defrag-threshold", 80, "The percentage of used space at which the operator will defrag an etcd member")
+	flag.UintVar(&defragThreshold, "defrag-threshold", defaultDefragThreshold, "The percentage of used space at which the operator will defrag an etcd member")
+	flag.StringVar(&defragWithoutThresholdInterval, "defrag-without-threshold-interval", defaultDefragWithoutThresholdInterval, "The interval at which the operator will defrag an etcd member disregarding the threshold. Valid options are: hourly, daily, weekly")
 	flag.UintVar(&leaderRenewSeconds, "leader-renew-seconds", 10, "Leader renewal frequency - for leader election")
 	flag.Parse()
 
@@ -91,6 +99,12 @@ func main() {
 	// See https://github.com/improbable-eng/etcd-cluster-operator/issues/171
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
+	validatedInterval, err := interval.ValidateForDefrag(defragWithoutThresholdInterval)
+	if err != nil {
+		setupLog.Error(err, "invalid defrag-without-threshold-interval configuration")
+		os.Exit(1)
+	}
+
 	setupLog.Info(
 		"Starting manager",
 		"version", version.Version,
@@ -98,6 +112,8 @@ func main() {
 		"backup-agent-image", backupAgentImage,
 		"restore-agent-image", restoreAgentImage,
 		"proxy-url", proxyURL,
+		"defrag-threshold", defragThreshold,
+		"defrag-without-threshold-interval", defragWithoutThresholdInterval,
 	)
 
 	if !strings.Contains(proxyURL, ":") {
@@ -141,13 +157,14 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&controllers.EtcdClusterReconciler{
-		Client:          mgr.GetClient(),
-		Log:             ctrl.Log.WithName("controllers").WithName("EtcdCluster"),
-		Recorder:        mgr.GetEventRecorderFor("etcdcluster-reconciler"),
-		Etcd:            &etcd.ClientEtcdAPIBuilder{},
-		CronHandler:     cronHandler,
-		Schedules:       controllers.NewScheduleMap(),
-		DefragThreshold: defragThreshold,
+		Client:                         mgr.GetClient(),
+		Log:                            ctrl.Log.WithName("controllers").WithName("EtcdCluster"),
+		Recorder:                       mgr.GetEventRecorderFor("etcdcluster-reconciler"),
+		Etcd:                           &etcd.ClientEtcdAPIBuilder{},
+		CronHandler:                    cronHandler,
+		Schedules:                      controllers.NewScheduleMap(),
+		DefragThreshold:                defragThreshold,
+		DefragWithoutThresholdInterval: validatedInterval,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "EtcdCluster")
 		os.Exit(1)

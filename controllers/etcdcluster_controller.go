@@ -43,6 +43,11 @@ const (
 	etcdClientPortName   = "etcd-client"
 )
 
+const (
+	getTLSConfigTimeout = time.Second * 24
+	defragTimeout       = time.Minute * 10
+)
+
 // EtcdClusterReconciler reconciles a EtcdCluster object
 type EtcdClusterReconciler struct {
 	client.Client
@@ -53,9 +58,11 @@ type EtcdClusterReconciler struct {
 	// DefragThreshold is the percentage of used space at which we defrag the etcd cluster
 	DefragThreshold uint
 
+	// DefragWithoutThresholdInterval is the interval at which to force a defrag of the etcd cluster.
+	DefragWithoutThresholdInterval string
+
 	// CronHandler is able to schedule cronjobs to occur at given times.
 	CronHandler CronScheduler
-
 	// Schedules holds a mapping of resources to the object responsible for scheduling the defrag to be taken.
 	Schedules *ScheduleMap
 }
@@ -762,24 +769,40 @@ func (r *EtcdClusterReconciler) reconcile(
 		return result, smCreatedEvent, nil
 	}
 
-	schedule, found := r.Schedules.Read(string(cluster.UID))
+	withThresholdSchedule, found := r.Schedules.Read(scheduleMapKeyFor(cluster))
 	if !found {
 		id, err := r.CronHandler.AddFunc("*/1 * * * *", func() {
-			r.defragCronJob(log, cluster, members)
+			r.defragWithThresholdCronJob(log, cluster)
 		})
 
 		if err != nil {
 			return result, nil, err
 		}
-		r.Schedules.Write(string(cluster.UID), Schedule{
+		r.Schedules.Write(scheduleMapKeyFor(cluster), Schedule{
 			cronEntry: id,
 		})
-		log.Info("created defrag cron job")
+		log.Info("created defrag with threshold cron job", "threshold", r.DefragThreshold)
+	}
+
+	withoutThresholdSchedule, found := r.Schedules.Read(scheduleMapKeyWithoutThresholdFor(cluster))
+	if !found {
+		id, err := r.CronHandler.AddFunc(r.DefragWithoutThresholdInterval, func() {
+			r.defragCronJob(log, cluster)
+		})
+
+		if err != nil {
+			return result, nil, err
+		}
+		r.Schedules.Write(scheduleMapKeyWithoutThresholdFor(cluster), Schedule{
+			cronEntry: id,
+		})
+		log.Info("created defrag without threshold cron job", "interval", r.DefragWithoutThresholdInterval)
 	}
 
 	// If the cluster is being deleted, clean it up from the cron pool.
 	if !cluster.ObjectMeta.DeletionTimestamp.IsZero() {
-		r.CronHandler.Remove(schedule.cronEntry)
+		r.CronHandler.Remove(withThresholdSchedule.cronEntry)
+		r.CronHandler.Remove(withoutThresholdSchedule.cronEntry)
 		r.Schedules.Delete(string(cluster.UID))
 	}
 
@@ -1023,6 +1046,14 @@ func nextOutdatedPeer(cluster *etcdv1alpha1.EtcdCluster, peers *etcdv1alpha1.Etc
 		}
 	}
 	return nil
+}
+
+func scheduleMapKeyFor(cluster *etcdv1alpha1.EtcdCluster) string {
+	return string(cluster.UID)
+}
+
+func scheduleMapKeyWithoutThresholdFor(cluster *etcdv1alpha1.EtcdCluster) string {
+	return scheduleMapKeyFor(cluster) + "-without-threshold"
 }
 
 func hasTooFewPeers(cluster *etcdv1alpha1.EtcdCluster, peers *etcdv1alpha1.EtcdPeerList) bool {
@@ -1391,39 +1422,70 @@ func expectedURLForPeer(cluster *etcdv1alpha1.EtcdCluster, peerName string) stri
 	)
 }
 
-func (r *EtcdClusterReconciler) defragCronJob(log logr.Logger, cluster *etcdv1alpha1.EtcdCluster, members *[]etcd.Member) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*25)
+func (r *EtcdClusterReconciler) defragWithThresholdCronJob(log logr.Logger, cluster *etcdv1alpha1.EtcdCluster) {
+	ctx, cancel, etcdClient, members, ok := r.setupDefragDeps(log, cluster)
+	if !ok {
+		return
+	}
+	defer cancel()
+	defer etcdClient.Close()
+
+	err := defragger.DefragIfNecessary(ctx, r.DefragThreshold, members, etcdClient, etcdClient, log)
+	if err != nil {
+		log.Error(err, "failed to defrag if necessary")
+	}
+
+}
+
+func (r *EtcdClusterReconciler) defragCronJob(log logr.Logger, cluster *etcdv1alpha1.EtcdCluster) {
+	ctx, cancel, etcdClient, members, ok := r.setupDefragDeps(log, cluster)
+	if !ok {
+		return
+	}
+	defer cancel()
+	defer etcdClient.Close()
+
+	ctx = context.Background()
+	err := defragger.Defrag(ctx, members, etcdClient, log)
+	if err != nil {
+		log.Error(err, "failed to defrag")
+	}
+}
+
+func (r *EtcdClusterReconciler) setupDefragDeps(log logr.Logger, cluster *etcdv1alpha1.EtcdCluster) (
+	context.Context,
+	context.CancelFunc,
+	etcd.API,
+	[]etcd.Member,
+	bool,
+) {
+	ctx, cancel := context.WithTimeout(context.Background(), getTLSConfigTimeout)
 	defer cancel()
 
 	tlsConfig, err := r.getTLSConfig(ctx, cluster)
 	if err != nil {
 		log.Error(err, "failed to create tls config before defragging")
-		return
+		return nil, nil, nil, nil, false
 	}
 	var c etcd.API
 	if c, err = r.Etcd.New(etcdClientConfig(cluster, tlsConfig)); err != nil {
 		log.Error(err, "Unable to connect to etcd")
-		return
+		return nil, nil, nil, nil, false
 	}
-	defer c.Close()
 
 	var memberSlice []etcd.Member
 	if memberSlice, err = c.List(ctx); err != nil {
 		log.Error(err, "Unable to list etcd cluster members")
-		return
+		return nil, nil, nil, nil, false
 	}
 	if memberSlice == nil {
 		log.Info("Cannot defrag, not aware of members yet")
-		return
+		return nil, nil, nil, nil, false
 	}
 
-	longCtx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
-	defer cancel()
-	err = defragger.DefragIfNecessary(longCtx, r.DefragThreshold, memberSlice, c, c, log)
-	if err != nil {
-		log.Error(err, "failed to defrag if necessary")
-	}
+	longCtx, cancel := context.WithTimeout(context.Background(), defragTimeout)
 
+	return longCtx, cancel, c, memberSlice, true
 }
 
 func (r *EtcdClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {

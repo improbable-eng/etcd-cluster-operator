@@ -2,7 +2,6 @@ package defragger
 
 import (
 	"context"
-
 	"github.com/go-logr/logr"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/etcd"
 )
@@ -36,15 +35,41 @@ func DefragIfNecessary(ctx context.Context, defragThreshold uint, memberList []e
 		}
 
 		log.Info("defrag necessary - defragging")
-		err = d.Defragment(ctx, member)
+
+		err = DefragMember(ctx, member, d, log)
 		if err != nil {
-			log.Error(err, "unable to defrag etcd")
 			returnErr = err
 			continue
 		}
-		log.Info("defrag complete")
-
 	}
 
 	return returnErr
+}
+
+// Defrag will defrag each etcd member, it will return the last error encountered
+func Defrag(ctx context.Context, memberList []etcd.Member, d defragger, log logr.Logger) error {
+	var returnErr error
+
+	for _, member := range memberList {
+		err := DefragMember(ctx, member, d, log)
+		if err != nil {
+			returnErr = err
+			continue
+		}
+	}
+
+	return returnErr
+}
+
+// DefragMember will degfrag a member.
+func DefragMember(ctx context.Context, member etcd.Member, d defragger, log logr.Logger) error {
+	err := d.Defragment(ctx, member)
+	if err != nil {
+		log.Error(err, "unable to defrag etcd")
+		return err
+	}
+
+	log.Info("defrag complete")
+
+	return nil
 }
