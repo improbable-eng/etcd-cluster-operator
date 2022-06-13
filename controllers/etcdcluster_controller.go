@@ -1423,12 +1423,15 @@ func expectedURLForPeer(cluster *etcdv1alpha1.EtcdCluster, peerName string) stri
 }
 
 func (r *EtcdClusterReconciler) defragWithThresholdCronJob(log logr.Logger, cluster *etcdv1alpha1.EtcdCluster) {
-	ctx, cancel, etcdClient, members, ok := r.setupDefragDeps(log, cluster)
+	etcdClient, members, ok := r.setupDefragDeps(log, cluster)
 	if !ok {
 		return
 	}
-	defer cancel()
 	defer etcdClient.Close()
+
+	// create a new context with a long timeout for the defrag operation.
+	ctx, cancel := context.WithTimeout(context.Background(), defragTimeout)
+	defer cancel()
 
 	err := defragger.DefragIfNecessary(ctx, r.DefragThreshold, members, etcdClient, etcdClient, log)
 	if err != nil {
@@ -1438,12 +1441,15 @@ func (r *EtcdClusterReconciler) defragWithThresholdCronJob(log logr.Logger, clus
 }
 
 func (r *EtcdClusterReconciler) defragCronJob(log logr.Logger, cluster *etcdv1alpha1.EtcdCluster) {
-	ctx, cancel, etcdClient, members, ok := r.setupDefragDeps(log, cluster)
+	etcdClient, members, ok := r.setupDefragDeps(log, cluster)
 	if !ok {
 		return
 	}
-	defer cancel()
 	defer etcdClient.Close()
+
+	// create a new context with a long timeout for the defrag operation.
+	ctx, cancel := context.WithTimeout(context.Background(), defragTimeout)
+	defer cancel()
 
 	err := defragger.Defrag(ctx, members, etcdClient, log)
 	if err != nil {
@@ -1452,8 +1458,6 @@ func (r *EtcdClusterReconciler) defragCronJob(log logr.Logger, cluster *etcdv1al
 }
 
 func (r *EtcdClusterReconciler) setupDefragDeps(log logr.Logger, cluster *etcdv1alpha1.EtcdCluster) (
-	context.Context,
-	context.CancelFunc,
 	etcd.API,
 	[]etcd.Member,
 	bool,
@@ -1464,27 +1468,25 @@ func (r *EtcdClusterReconciler) setupDefragDeps(log logr.Logger, cluster *etcdv1
 	tlsConfig, err := r.getTLSConfig(ctx, cluster)
 	if err != nil {
 		log.Error(err, "failed to create tls config before defragging")
-		return nil, nil, nil, nil, false
+		return nil, nil, false
 	}
 	var c etcd.API
 	if c, err = r.Etcd.New(etcdClientConfig(cluster, tlsConfig)); err != nil {
 		log.Error(err, "Unable to connect to etcd")
-		return nil, nil, nil, nil, false
+		return nil, nil, false
 	}
 
 	var memberSlice []etcd.Member
 	if memberSlice, err = c.List(ctx); err != nil {
 		log.Error(err, "Unable to list etcd cluster members")
-		return nil, nil, nil, nil, false
+		return nil, nil, false
 	}
 	if memberSlice == nil {
 		log.Info("Cannot defrag, not aware of members yet")
-		return nil, nil, nil, nil, false
+		return nil, nil, false
 	}
 
-	longCtx, cancel := context.WithTimeout(context.Background(), defragTimeout)
-
-	return longCtx, cancel, c, memberSlice, true
+	return c, memberSlice, true
 }
 
 func (r *EtcdClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
