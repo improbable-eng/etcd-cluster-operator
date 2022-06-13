@@ -1445,7 +1445,6 @@ func (r *EtcdClusterReconciler) defragCronJob(log logr.Logger, cluster *etcdv1al
 	defer cancel()
 	defer etcdClient.Close()
 
-	ctx = context.Background()
 	err := defragger.Defrag(ctx, members, etcdClient, log)
 	if err != nil {
 		log.Error(err, "failed to defrag")
