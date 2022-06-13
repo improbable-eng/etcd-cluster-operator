@@ -404,7 +404,7 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 
 		t.Run("CreatesCronJob", func(t *testing.T) {
 			err = try.Eventually(func() error {
-				_, ok := s.clusterControllerSchedules.Read(string(etcdCluster.UID))
+				_, ok := s.clusterControllerSchedules.Read(string(etcdCluster.UID) + "-defrag")
 				if !ok {
 					return errors.New("cronjob not found")
 				}

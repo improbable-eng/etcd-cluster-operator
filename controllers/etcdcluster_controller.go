@@ -1049,7 +1049,7 @@ func nextOutdatedPeer(cluster *etcdv1alpha1.EtcdCluster, peers *etcdv1alpha1.Etc
 }
 
 func scheduleMapKeyFor(cluster *etcdv1alpha1.EtcdCluster) string {
-	return string(cluster.UID)
+	return string(cluster.UID) + "-defrag"
 }
 
 func scheduleMapKeyWithoutThresholdFor(cluster *etcdv1alpha1.EtcdCluster) string {
