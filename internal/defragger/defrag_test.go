@@ -128,3 +128,50 @@ func Test_DefragIfNecessary(t *testing.T) {
 		})
 	}
 }
+
+func Test_Defrag(t *testing.T) {
+
+	tests := []struct {
+		name             string
+		defragError      map[string]error
+		members          []etcd.Member
+		wantErr          error
+		wantDefragCalled map[string]int
+	}{
+		{
+			name: "should defrag both members",
+			members: []etcd.Member{
+				{ID: "member1"},
+				{ID: "member2"},
+			},
+			wantErr:          nil,
+			wantDefragCalled: map[string]int{"member1": 1, "member2": 1},
+		},
+		{
+			name: "defrag returns an error",
+
+			members: []etcd.Member{
+				{ID: "member1"},
+				{ID: "member2"},
+			},
+			defragError: map[string]error{
+				"member1": errors.New("member1: failed to defrag"),
+			},
+
+			wantErr:          errors.New("member1: failed to defrag"),
+			wantDefragCalled: map[string]int{"member1": 1, "member2": 1},
+		},
+	}
+
+	for _, tt := range tests {
+		var tt = tt
+		t.Run(tt.name, func(t *testing.T) {
+			d := &fakeDefragger{defragError: tt.defragError, defraggedCallMap: make(map[string]int)}
+
+			err := Defrag(context.Background(), tt.members, d, logr.Discard())
+			assert.Equal(t, tt.wantErr, err)
+			assert.Equal(t, tt.wantDefragCalled, d.defraggedCallMap)
+
+		})
+	}
+}
