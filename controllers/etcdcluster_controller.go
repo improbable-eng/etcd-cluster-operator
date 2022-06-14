@@ -1457,6 +1457,8 @@ func (r *EtcdClusterReconciler) defragCronJob(log logr.Logger, cluster *etcdv1al
 	}
 }
 
+// setupDefragDeps gathers the dependencies for running a defrag (etcd client and list of etcd members).
+// The caller is responsible for closing the etcd client when done with the operations.
 func (r *EtcdClusterReconciler) setupDefragDeps(log logr.Logger, cluster *etcdv1alpha1.EtcdCluster) (
 	etcd.API,
 	[]etcd.Member,
