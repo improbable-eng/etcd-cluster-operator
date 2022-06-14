@@ -26,7 +26,7 @@ require (
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.46.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/spf13/pflag v1.0.5
-	github.com/stretchr/testify v1.6.1
+	github.com/stretchr/testify v1.7.2
 	// Pin specific etcd version via tag. See https://github.com/etcd-io/etcd/pull/11477
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20200910180754-dd1b699fc489
 	gocloud.dev v0.17.0

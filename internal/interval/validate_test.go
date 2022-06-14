@@ -1,8 +1,9 @@
 package interval
 
 import (
-	"errors"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestValidateForDefrag(t *testing.T) {
@@ -27,21 +28,19 @@ func TestValidateForDefrag(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			out, err := ValidateForDefrag(tc.input)
 
-			if tc.err != nil && err == nil {
-				t.Errorf("expected an error")
-			}
-			if err != nil && tc.err == nil {
-				t.Errorf("unexpected error: %s", err)
-			}
-			if tc.err != nil && err != nil {
-				if !errors.As(err, &tc.err) {
-					t.Errorf("expected (%s) got (%s)", tc.err, err)
-				}
-			}
-
-			if out != tc.output {
-				t.Errorf("expected (%s) got (%s)", tc.output, out)
-			}
+			errorAs(t, err, tc.err)
+			assert.Equal(t, tc.output, out)
 		})
+	}
+}
+
+// errorAs wraps assert.ErrorAs but handles nil target errors.
+func errorAs(t *testing.T, err, target error) {
+	t.Helper()
+
+	if target == nil {
+		assert.Nil(t, err)
+	} else {
+		assert.ErrorAs(t, err, &target)
 	}
 }
