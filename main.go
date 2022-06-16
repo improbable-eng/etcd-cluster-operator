@@ -45,7 +45,7 @@ const (
 
 const (
 	defaultDefragThreshold                = 80
-	defaultDefragWithoutThresholdInterval = "weekly"
+	defaultDefragWithoutThresholdInterval = "hourly"
 )
 
 func init() {
