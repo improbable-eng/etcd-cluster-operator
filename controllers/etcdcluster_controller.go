@@ -295,9 +295,6 @@ func clientCertForStorageOSCluster(cluster *etcdv1alpha1.EtcdCluster, caCert, ca
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name.Name,
 			Namespace: name.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(cluster, etcdv1alpha1.GroupVersion.WithKind("EtcdCluster")),
-			},
 			Labels: map[string]string{
 				appLabel:     appName,
 				clusterLabel: cluster.Name,
