@@ -9,6 +9,7 @@ const (
 	appName                 = "etcd"
 	appLabel                = "app.kubernetes.io/name"
 	clusterLabel            = "etcd.improbable.io/cluster-name"
+	clusterId               = "etcd.improbable.io/cluster-id"
 	scheduleLabel           = "etcd.improbable.io/backup-schedule-name"
 	scheduleCancelFinalizer = "finalizers.etcd.improbable.io/backup-schedule-cancel"
 )

@@ -298,6 +298,7 @@ func clientCertForStorageOSCluster(cluster *etcdv1alpha1.EtcdCluster, caCert, ca
 			Labels: map[string]string{
 				appLabel:     appName,
 				clusterLabel: cluster.Name,
+				clusterId:    string(cluster.UID),
 			},
 		},
 		Data: data,
@@ -1192,7 +1193,19 @@ func (r *EtcdClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 				log.Error(err, "unable to fetch storageos client secret from Kubernetes API")
 				return ctrl.Result{}, err
 			}
+			createNewSecret := false
 			if storageOSClientSecret == nil {
+				createNewSecret = true
+			} else if storageOSClientSecret.Labels[clusterId] != string(cluster.UID) {
+				err = r.Delete(ctx, storageOSClientSecret)
+				if err != nil {
+					log.Error(err, "unable to delete stale storageos client secret")
+					return ctrl.Result{}, err
+				}
+				createNewSecret = true
+			}
+
+			if createNewSecret {
 				err = r.createStorageOSClientSecret(ctx, &cluster, caSecret)
 				if err != nil {
 					log.Error(err, "unable to create storageos client secret")
