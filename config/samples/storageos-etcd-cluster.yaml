@@ -19,11 +19,11 @@ spec:
   podTemplate:
     resources:
       requests:
-        cpu: 200m
-        memory: 200Mi
+        cpu: 500m
+        memory: 500Mi
       limits:
-        cpu: 200m
-        memory: 200Mi
+        cpu: 500m
+        memory: 500Mi
     etcdEnv:
       - name: "ETCD_HEARTBEAT_INTERVAL"
         value: "500"
@@ -36,7 +36,7 @@ spec:
       - name: "ETCD_QUOTA_BACKEND_BYTES"
         value: "8589934592"
       - name: "ETCD_SNAPSHOT_COUNT"
-        value: "100000"
+        value: "20000"
       - name: "ETCD_AUTO_COMPACTION_RETENTION"
         value: "20000"
       - name: "ETCD_AUTO_COMPACTION_MODE"
