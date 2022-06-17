@@ -51,3 +51,13 @@ spec:
                 values:
                   - storageos-etcd
           topologyKey: kubernetes.io/hostname
+        preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 1
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+              - key: etcd.improbable.io/cluster-name
+                operator: In
+                values:
+                  - storageos-etcd
+            topologyKey: topology.kubernetes.io/zone
