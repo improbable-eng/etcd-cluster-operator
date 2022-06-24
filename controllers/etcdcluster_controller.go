@@ -20,6 +20,7 @@ import (
 	monitorv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	merrors "k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"k8s.io/apimachinery/pkg/types"
@@ -46,6 +47,7 @@ const (
 const (
 	getTLSConfigTimeout = time.Second * 24
 	defragTimeout       = time.Minute * 10
+	resourceQuotaName   = "etcd-critical-pods"
 )
 
 // EtcdClusterReconciler reconciles a EtcdCluster object
@@ -413,6 +415,71 @@ func (r *EtcdClusterReconciler) createService(ctx context.Context, cluster *etcd
 	return &reconcilerevent.ServiceCreatedEvent{Object: cluster, ServiceName: service.Name}, nil
 }
 
+func resourceQuotaNameKey(cluster *etcdv1alpha1.EtcdCluster) types.NamespacedName {
+	return types.NamespacedName{
+		// It only makes sense to have 1 storage quota per namespace
+		// so we don't use the cluster name when naming this object
+		Name:      resourceQuotaName,
+		Namespace: cluster.Namespace,
+	}
+}
+
+func (r *EtcdClusterReconciler) hasResourceQuota(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster) (bool, error) {
+	quota := &v1.ResourceQuota{}
+	err := r.Get(ctx, resourceQuotaNameKey(cluster), quota)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			// We got the expected error, which is that it's not found
+			return false, nil
+		}
+		// Unexpected error, some other problem?
+		return false, err
+	}
+	// We found it because we got no error
+	return true, nil
+}
+
+// createResourceQuota creates a resource quota in Kubernetes
+func (r *EtcdClusterReconciler) createResourceQuota(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster) (*reconcilerevent.ResourceQuotaCreatedEvent, error) {
+	quota := resourceQuotaForCluster(cluster)
+	if err := r.Create(ctx, quota); err != nil {
+		return nil, err
+	}
+	return &reconcilerevent.ResourceQuotaCreatedEvent{Object: cluster, ResourceQuotaName: quota.Name}, nil
+}
+
+func resourceQuotaForCluster(cluster *etcdv1alpha1.EtcdCluster) *v1.ResourceQuota {
+	name := resourceQuotaNameKey(cluster)
+	return &v1.ResourceQuota{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name.Name,
+			Namespace: name.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(cluster, etcdv1alpha1.GroupVersion.WithKind("EtcdCluster")),
+			},
+			Labels: map[string]string{
+				appLabel:     appName,
+				clusterLabel: cluster.Name,
+			},
+		},
+		Spec: v1.ResourceQuotaSpec{
+			Hard: v1.ResourceList{
+				// We set an arbitary limit here, GKE requires a resource quota, but we don't actually want to hit the limit
+				v1.ResourcePods: resource.MustParse("10000"),
+			},
+			ScopeSelector: &v1.ScopeSelector{
+				MatchExpressions: []v1.ScopedResourceSelectorRequirement{
+					{
+						ScopeName: v1.ResourceQuotaScopePriorityClass,
+						Operator:  v1.ScopeSelectorOpIn,
+						Values:    []string{"system-cluster-critical", "system-node-critical"},
+					},
+				},
+			},
+		},
+	}
+}
+
 // minAvailableForETCDQuorum will calculate the minimum amount of pods required to maintain quorum
 func minAvailableForETCDQuorum(cluster *etcdv1alpha1.EtcdCluster) int {
 	// defined in https://etcd.io/docs/v3.3/faq/
@@ -749,6 +816,23 @@ func (r *EtcdClusterReconciler) reconcile(
 		return result, pdbEvent, nil
 	}
 
+	// GKE requires a resource quota to be made if we're making pods that use
+	// the "system-cluster-critical" or "system-node-critical" priority class.
+	// We use both of these so we create a resource quota per namespace, so that
+	// GKE will schedule our etcd pods
+	quotaExists, err := r.hasResourceQuota(ctx, cluster)
+	if err != nil {
+		return result, nil, fmt.Errorf("unable to fetch resource quota from Kubernetes API: %w", err)
+	}
+	if !quotaExists {
+		quotaCreatedEvent, err := r.createResourceQuota(ctx, cluster)
+		if err != nil {
+			return result, nil, fmt.Errorf("unable to create resource quota: %w", err)
+		}
+		log.V(1).Info("Created ResourceQuota", "quota", quotaCreatedEvent.ResourceQuotaName)
+		return result, quotaCreatedEvent, nil
+	}
+
 	serviceMonitorCRDInstalled := true
 	// Assuming the service monitor CRD is installed
 	// Check if a service monitor CR exists and create one if it doesn't
@@ -767,7 +851,9 @@ func (r *EtcdClusterReconciler) reconcile(
 			return result, nil, fmt.Errorf("unable to create service monitor: %w", err)
 		}
 		log.Info("Created ServiceMonitor", "service_monitor", smCreatedEvent.ServiceMonitorName)
-		return result, smCreatedEvent, nil
+		// As we can't be sure if this CRD exists, we can't watch events for it
+		// so we force a reconcile requeue
+		return ctrl.Result{RequeueAfter: time.Millisecond * 500}, smCreatedEvent, nil
 	}
 
 	withThresholdSchedule, found := r.Schedules.Read(scheduleMapKeyFor(cluster))
@@ -1100,6 +1186,7 @@ func peerNameForMember(member etcd.Member) (string, error) {
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdclusters,verbs=get;list;watch
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdclusters/status;etcdclusters/finalizers,verbs=get;update;patch
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create
+// +kubebuilder:rbac:groups=core,resources=resourcequotas,verbs=get;list;watch;create
 // +kubebuilder:rbac:groups=etcd.improbable.io,resources=etcdpeers,verbs=get;list;watch;create;delete;patch
 // +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=*
@@ -1521,6 +1608,8 @@ func (r *EtcdClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&etcdv1alpha1.EtcdCluster{}).
 		Owns(&v1.Service{}).
+		Owns(&v1.ResourceQuota{}).
+		Owns(&policyv1beta1.PodDisruptionBudget{}).
 		Owns(&etcdv1alpha1.EtcdPeer{}).
 		Complete(r)
 }

@@ -402,6 +402,20 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 			}, time.Second*20, time.Millisecond*500)
 		})
 
+		t.Run("CreateResourceQuota", func(t *testing.T) {
+			err = try.Eventually(func() error {
+				var quota v1.ResourceQuota
+				err = s.k8sClient.Get(s.ctx, client.ObjectKey{
+					Namespace: namespace,
+					Name:      resourceQuotaName,
+				}, &quota)
+
+				require.NoError(t, err, "failed to find resource quota")
+				require.NotNil(t, quota.Spec.ScopeSelector, "no scope selector set for resource quota")
+				return nil
+			}, time.Second*15, time.Millisecond*500)
+		})
+
 		t.Run("CreatesCronJob", func(t *testing.T) {
 			err = try.Eventually(func() error {
 				_, ok := s.clusterControllerSchedules.Read(string(etcdCluster.UID) + "-defrag")

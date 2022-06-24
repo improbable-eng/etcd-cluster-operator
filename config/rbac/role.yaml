@@ -83,6 +83,15 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - resourcequotas
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - secrets
   verbs:
   - '*'

@@ -3709,6 +3709,15 @@ rules:
   - patch
   - watch
 - apiGroups:
+  - ""
+  resources:
+  - resourcequotas
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+- apiGroups:
   - etcd.improbable.io
   resources:
   - etcdpeers/finalizers

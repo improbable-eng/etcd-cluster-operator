@@ -25,6 +25,18 @@ func (s *ServiceCreatedEvent) Record(recorder record.EventRecorder) {
 		fmt.Sprintf("Created service with name %q", s.ServiceName))
 }
 
+type ResourceQuotaCreatedEvent struct {
+	Object            runtime.Object
+	ResourceQuotaName string
+}
+
+func (s *ResourceQuotaCreatedEvent) Record(recorder record.EventRecorder) {
+	recorder.Event(s.Object,
+		K8sEventTypeNormal,
+		"ResourceQuotaCreated",
+		fmt.Sprintf("Created ResourceQuota with name %q", s.ResourceQuotaName))
+}
+
 type ServiceMonitorCreatedEvent struct {
 	Object             runtime.Object
 	ServiceMonitorName string
