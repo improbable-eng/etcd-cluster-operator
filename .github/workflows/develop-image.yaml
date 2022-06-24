@@ -22,21 +22,17 @@ jobs:
           registry: docker.io
           username: ${{ secrets.DH_USERNAME }}
           password: ${{ secrets.DH_PASSWORD }}
-      - name: Build container images for docker
-        run: make docker-build
-      - name: Push container images to docker
-        run: make docker-push
-
-      - name: Login to Quay 
+      - name: Login to quay container registry
         uses: docker/login-action@v1
         with:
           registry: quay.io
-          username: ${{ secrets.QUAY_USERNAME }}
-          password: ${{ secrets.QUAY_PASSWORD }}
-      - name: Build container images for quay
-        run: make docker-build-quay 
-      - name: Push container images to quay
-        run: make docker-push-quay
+          username: ${{ secrets.RED_HAT_QUAY_CLI_USERNAME }}
+          password: ${{ secrets.RED_HAT_QUAY_CLI_PASSWORD }}
+      - name: Build container images for docker
+        run: make docker-build
+      - name: Push container images to docker hub and quay
+        run: make docker-push
+
 
   publish-manifests-image:
     runs-on: ubuntu-latest
