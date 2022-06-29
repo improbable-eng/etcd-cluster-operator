@@ -358,6 +358,11 @@ func headlessServiceForCluster(cluster *etcdv1alpha1.EtcdCluster) *v1.Service {
 					Protocol: "TCP",
 					Port:     etcdPeerPort,
 				},
+				{
+					Name:     "etcd-metrics",
+					Protocol: "TCP",
+					Port:     etcdMetricsPort,
+				},
 			},
 		},
 	}
@@ -512,7 +517,7 @@ func serviceMonitorForCluster(cluster *etcdv1alpha1.EtcdCluster) *monitorv1.Serv
 		Spec: monitorv1.ServiceMonitorSpec{
 			Endpoints: []monitorv1.Endpoint{
 				{
-					Port:     fmt.Sprintf("%d", etcdClientPort),
+					Port:     fmt.Sprintf("%d", etcdMetricsPort),
 					Interval: "10s",
 				}},
 			NamespaceSelector: monitorv1.NamespaceSelector{

@@ -3,6 +3,7 @@ package controllers
 const (
 	etcdClientPort          = 2379
 	etcdPeerPort            = 2380
+	etcdMetricsPort         = 2381
 	EtcdDataMountPath       = "/var/lib/etcd"
 	EtcdCertPath            = "/etc/etcd/certs"
 	appName                 = "etcd"
