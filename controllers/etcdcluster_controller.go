@@ -42,6 +42,7 @@ import (
 const (
 	clusterNameSpecField = "spec.clusterName"
 	etcdClientPortName   = "etcd-client"
+	etcdMetricsPortName  = "etcd-metrics"
 )
 
 const (
@@ -377,6 +378,11 @@ func headlessServiceForCluster(cluster *etcdv1alpha1.EtcdCluster) *v1.Service {
 					Protocol: "TCP",
 					Port:     etcdPeerPort,
 				},
+				{
+					Name:     "etcd-metrics",
+					Protocol: "TCP",
+					Port:     etcdMetricsPort,
+				},
 			},
 		},
 	}
@@ -596,7 +602,7 @@ func serviceMonitorForCluster(cluster *etcdv1alpha1.EtcdCluster) *monitorv1.Serv
 		Spec: monitorv1.ServiceMonitorSpec{
 			Endpoints: []monitorv1.Endpoint{
 				{
-					Port:     etcdClientPortName,
+					Port:     etcdMetricsPortName,
 					Interval: "10s",
 				}},
 			NamespaceSelector: monitorv1.NamespaceSelector{
