@@ -383,6 +383,12 @@ func (s *controllerSuite) testClusterController(t *testing.T) {
 				Port:       2380,
 				TargetPort: intstr.FromInt(2380),
 			}, "Service did not declare peer port")
+			require.Contains(t, ports, v1.ServicePort{
+				Name:       "etcd-metrics",
+				Protocol:   "TCP",
+				Port:       2381,
+				TargetPort: intstr.FromInt(2381),
+			}, "Service did not declare metrics port")
 		})
 
 		t.Run("CreatePodDisruptionBudget", func(t *testing.T) {
