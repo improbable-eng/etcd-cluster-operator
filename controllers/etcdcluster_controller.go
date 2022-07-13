@@ -15,6 +15,7 @@ import (
 	"github.com/go-logr/logr"
 
 	v1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
 
 	monitorv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -33,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	etcdv1alpha1 "github.com/improbable-eng/etcd-cluster-operator/api/v1alpha1"
+	"github.com/improbable-eng/etcd-cluster-operator/internal/capabilities"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/defragger"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/etcd"
 	"github.com/improbable-eng/etcd-cluster-operator/internal/reconcilerevent"
@@ -57,7 +59,7 @@ type EtcdClusterReconciler struct {
 	Log      logr.Logger
 	Recorder record.EventRecorder
 	Etcd     etcd.APIBuilder
-
+	Lists    []*metav1.APIResourceList
 	// DefragThreshold is the percentage of used space at which we defrag the etcd cluster
 	DefragThreshold uint
 
@@ -492,7 +494,7 @@ func minAvailableForETCDQuorum(cluster *etcdv1alpha1.EtcdCluster) int {
 	return int((*cluster.Spec.Replicas / 2) + 1)
 }
 
-func pdbForCluster(cluster *etcdv1alpha1.EtcdCluster) *policyv1beta1.PodDisruptionBudget {
+func pdbForClusterV1Beta1(cluster *etcdv1alpha1.EtcdCluster) *policyv1beta1.PodDisruptionBudget {
 	minAvailable := intstr.FromInt(minAvailableForETCDQuorum(cluster))
 	name := pdbName(cluster)
 	return &policyv1beta1.PodDisruptionBudget{
@@ -518,6 +520,32 @@ func pdbForCluster(cluster *etcdv1alpha1.EtcdCluster) *policyv1beta1.PodDisrupti
 	}
 }
 
+func pdbForClusterV1(cluster *etcdv1alpha1.EtcdCluster) *policyv1.PodDisruptionBudget {
+	minAvailable := intstr.FromInt(minAvailableForETCDQuorum(cluster))
+	name := pdbName(cluster)
+	return &policyv1.PodDisruptionBudget{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name.Name,
+			Namespace: name.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(cluster, etcdv1alpha1.GroupVersion.WithKind("EtcdCluster")),
+			},
+			Labels: map[string]string{
+				appLabel:     appName,
+				clusterLabel: cluster.Name,
+			},
+		},
+		Spec: policyv1.PodDisruptionBudgetSpec{
+			MinAvailable: &minAvailable,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					appLabel: appName,
+				},
+			},
+		},
+	}
+}
+
 func pdbName(cluster *etcdv1alpha1.EtcdCluster) types.NamespacedName {
 	return types.NamespacedName{
 		Name:      cluster.Name,
@@ -525,9 +553,9 @@ func pdbName(cluster *etcdv1alpha1.EtcdCluster) types.NamespacedName {
 	}
 }
 
-// hasPDB determines if the pod disruption budget exists for our etcd pods
+// hasPDBV1Beta1 determines if the pod disruption budget exists for our etcd pods
 // An error is returned if there is some problem communicating with Kubernetes.
-func (r *EtcdClusterReconciler) hasPDB(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster) (bool, *policyv1beta1.PodDisruptionBudget, error) {
+func (r *EtcdClusterReconciler) hasPDBV1Beta1(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster) (bool, *policyv1beta1.PodDisruptionBudget, error) {
 	pdb := &policyv1beta1.PodDisruptionBudget{}
 	err := r.Get(ctx, pdbName(cluster), pdb)
 	if err != nil {
@@ -542,8 +570,25 @@ func (r *EtcdClusterReconciler) hasPDB(ctx context.Context, cluster *etcdv1alpha
 	return true, pdb, nil
 }
 
-// pdbIsValid checks if a pdb will ensure etcd maintains quorum
-func (r *EtcdClusterReconciler) pdbIsValid(ctx context.Context, pdb *policyv1beta1.PodDisruptionBudget, cluster *etcdv1alpha1.EtcdCluster) bool {
+// hasPDBV1 determines if the pod disruption budget exists for our etcd pods
+// An error is returned if there is some problem communicating with Kubernetes.
+func (r *EtcdClusterReconciler) hasPDBV1(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster) (bool, *policyv1.PodDisruptionBudget, error) {
+	pdb := &policyv1.PodDisruptionBudget{}
+	err := r.Get(ctx, pdbName(cluster), pdb)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			// We got the expected error, which is that it's not found
+			return false, nil, nil
+		}
+		// Unexpected error, some other problem?
+		return false, nil, err
+	}
+	// We found it because we got no error check its valid for etcd quorum
+	return true, pdb, nil
+}
+
+// pdbV1Beta1IsValid checks if a pdb will ensure etcd maintains quorum
+func (r *EtcdClusterReconciler) pdbV1Beta1IsValid(ctx context.Context, pdb *policyv1beta1.PodDisruptionBudget, cluster *etcdv1alpha1.EtcdCluster) bool {
 	if pdb == nil {
 		return false
 	}
@@ -561,9 +606,53 @@ func (r *EtcdClusterReconciler) pdbIsValid(ctx context.Context, pdb *policyv1bet
 	return true
 }
 
-// createOrPatchPDB creates a pod disruption budget in Kubernetes
-func (r *EtcdClusterReconciler) createOrPatchPDB(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster) (reconcilerevent.ReconcilerEvent, error) {
-	pdb := pdbForCluster(cluster)
+// pdbV1IsValid checks if a pdb will ensure etcd maintains quorum
+func (r *EtcdClusterReconciler) pdbV1IsValid(ctx context.Context, pdb *policyv1.PodDisruptionBudget, cluster *etcdv1alpha1.EtcdCluster) bool {
+	if pdb == nil {
+		return false
+	}
+	// MinAvailable must be set or our PDB will not maintain quorum
+	if pdb.Spec.MinAvailable == nil {
+		return false
+	}
+	// check how many replicas we need to maintain quorum
+	want := minAvailableForETCDQuorum(cluster)
+	if pdb.Spec.MinAvailable.IntValue() != want {
+		r.Log.Info("want pdb with", "want", want, "got", pdb.Spec.MinAvailable.IntValue())
+		return false
+	}
+	// if the PDB will ensure quorum it's valid
+	return true
+}
+
+// createOrPatchPDBV1Beta1 creates a pod disruption budget in Kubernetes
+func (r *EtcdClusterReconciler) createOrPatchPDBV1Beta1(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster) (reconcilerevent.ReconcilerEvent, error) {
+	pdb := pdbForClusterV1Beta1(cluster)
+	desiredMinAvailable := pdb.Spec.MinAvailable
+	res, err := controllerutil.CreateOrPatch(ctx, r.Client, pdb, func() error {
+		pdb.Spec.MinAvailable = desiredMinAvailable
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	switch res {
+	case controllerutil.OperationResultCreated:
+		return &reconcilerevent.PDBCreatedEvent{
+			Object: cluster, PDBName: pdb.Name, MinAvailable: pdb.Spec.MinAvailable.IntValue(),
+		}, nil
+	case controllerutil.OperationResultUpdated, controllerutil.OperationResultUpdatedStatus:
+		return &reconcilerevent.PDBPatchedEvent{
+			Object: cluster, PDBName: pdb.Name, MinAvailable: pdb.Spec.MinAvailable.IntValue(),
+		}, nil
+	default:
+		return nil, errors.New("no changes made")
+	}
+}
+
+// createOrPatchPDBV1 creates a pod disruption budget in Kubernetes
+func (r *EtcdClusterReconciler) createOrPatchPDBV1(ctx context.Context, cluster *etcdv1alpha1.EtcdCluster) (reconcilerevent.ReconcilerEvent, error) {
+	pdb := pdbForClusterV1(cluster)
 	desiredMinAvailable := pdb.Spec.MinAvailable
 	res, err := controllerutil.CreateOrPatch(ctx, r.Client, pdb, func() error {
 		pdb.Spec.MinAvailable = desiredMinAvailable
@@ -808,18 +897,41 @@ func (r *EtcdClusterReconciler) reconcile(
 		return result, serviceCreatedEvent, nil
 	}
 
-	// Check if the PDB exists and create it if it doesn't
-	pdbExists, pdb, err := r.hasPDB(ctx, cluster)
-	if err != nil {
-		return result, nil, fmt.Errorf("unable to fetch pdb from Kubernetes API: %w", err)
-	}
-	if !pdbExists {
-		pdbEvent, err := r.createOrPatchPDB(ctx, cluster)
+	// Get preferred capability for PodDisruptionBudget. V1Beta1 is removed in k8s v1.25+.
+	pdbCaps := capabilities.GetPreferredAvailableAPIs(r.Lists, "PodDisruptionBudget")
+	pdbv1Capable := false
+	pdbExists := false
+	pdbv1 := &policyv1.PodDisruptionBudget{}
+	pdbv1beta1 := &policyv1beta1.PodDisruptionBudget{}
+	if pdbCaps.Has("policy/v1") {
+		pdbv1Capable = true
+		// Check if the PDB v1 exists and create it if it doesn't
+		pdbExists, pdbv1, err = r.hasPDBV1(ctx, cluster)
 		if err != nil {
-			return result, nil, fmt.Errorf("unable to create pdb: %w", err)
+			return result, nil, fmt.Errorf("unable to fetch pdb from Kubernetes API: %w", err)
 		}
-		log.V(1).Info("Created PDB")
-		return result, pdbEvent, nil
+		if !pdbExists {
+			pdbEvent, err := r.createOrPatchPDBV1(ctx, cluster)
+			if err != nil {
+				return result, nil, fmt.Errorf("unable to create pdb: %w", err)
+			}
+			log.V(1).Info("Created PDB")
+			return result, pdbEvent, nil
+		}
+	} else {
+		// Check if the PDB v1beta1 exists and create it if it doesn't
+		pdbExists, pdbv1beta1, err = r.hasPDBV1Beta1(ctx, cluster)
+		if err != nil {
+			return result, nil, fmt.Errorf("unable to fetch pdb from Kubernetes API: %w", err)
+		}
+		if !pdbExists {
+			pdbEvent, err := r.createOrPatchPDBV1Beta1(ctx, cluster)
+			if err != nil {
+				return result, nil, fmt.Errorf("unable to create pdb: %w", err)
+			}
+			log.V(1).Info("Created PDB")
+			return result, pdbEvent, nil
+		}
 	}
 
 	// GKE requires a resource quota to be made if we're making pods that use
@@ -973,13 +1085,24 @@ func (r *EtcdClusterReconciler) reconcile(
 		// Check if the PDB is valid, if it's not modify it
 		// We only do this once we have communication to the cluster to ensure
 		// we don't reduce the pdb when the cluster is unstable (and potentially not in quorum)
-		if !r.pdbIsValid(ctx, pdb, cluster) {
-			pdbEvent, err := r.createOrPatchPDB(ctx, cluster)
-			if err != nil {
-				return result, nil, fmt.Errorf("unable to create pdb: %w", err)
+		if pdbv1Capable {
+			if !r.pdbV1IsValid(ctx, pdbv1, cluster) {
+				pdbEvent, err := r.createOrPatchPDBV1(ctx, cluster)
+				if err != nil {
+					return result, nil, fmt.Errorf("unable to create pdb: %w", err)
+				}
+				log.V(1).Info("Patched PDB")
+				return result, pdbEvent, nil
 			}
-			log.V(1).Info("Patched PDB")
-			return result, pdbEvent, nil
+		} else {
+			if !r.pdbV1Beta1IsValid(ctx, pdbv1beta1, cluster) {
+				pdbEvent, err := r.createOrPatchPDBV1Beta1(ctx, cluster)
+				if err != nil {
+					return result, nil, fmt.Errorf("unable to create pdb: %w", err)
+				}
+				log.V(1).Info("Patched PDB")
+				return result, pdbEvent, nil
+			}
 		}
 
 		// Add EtcdPeer resources for members that do not have one.

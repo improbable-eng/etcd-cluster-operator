@@ -12,6 +12,7 @@ import (
 	monitorv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	flag "github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
@@ -156,8 +157,15 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "EtcdPeer")
 		os.Exit(1)
 	}
+
+	lists, err := kubernetes.NewForConfigOrDie(ctrl.GetConfigOrDie()).Discovery().ServerPreferredResources()
+	if err != nil {
+		setupLog.Error(err, "unable to get server preferred resources")
+		os.Exit(1)
+	}
 	if err = (&controllers.EtcdClusterReconciler{
 		Client:                         mgr.GetClient(),
+		Lists:                          lists,
 		Log:                            ctrl.Log.WithName("controllers").WithName("EtcdCluster"),
 		Recorder:                       mgr.GetEventRecorderFor("etcdcluster-reconciler"),
 		Etcd:                           &etcd.ClientEtcdAPIBuilder{},
