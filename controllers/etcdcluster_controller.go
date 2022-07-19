@@ -14,11 +14,11 @@ import (
 
 	"github.com/go-logr/logr"
 
+	monitorv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	v1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
-
-	monitorv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	kstoragev1 "k8s.io/api/storage/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	merrors "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -160,6 +160,24 @@ func (r *EtcdClusterReconciler) getStorageOSClientSecret(ctx context.Context, se
 	}
 	// We found it because we got no error
 	return secret, nil
+}
+
+// getDefaultStorageName returns the name of the default storage class in the cluster, if more than
+// one storage class is set to default, the first one discovered is returned. An error is returned if
+// no default storage class is found.
+func (r *EtcdClusterReconciler) getDefaultStorageClassName(ctx context.Context) (string, error) {
+	storageClasses := &kstoragev1.StorageClassList{}
+	if err := r.List(ctx, storageClasses); err != nil {
+		return "", err
+	}
+
+	for _, storageClass := range storageClasses.Items {
+		if defaultSC, ok := storageClass.GetObjectMeta().GetAnnotations()["storageclass.kubernetes.io/is-default-class"]; ok && defaultSC == "true" {
+			return storageClass.Name, nil
+		}
+	}
+
+	return "", fmt.Errorf("no default storage class discovered in cluster")
 }
 
 func storageOSClientSecretName(name, namespace string) types.NamespacedName {
@@ -1337,6 +1355,15 @@ func (r *EtcdClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	// Apply defaults in case a defaulting webhook has not been deployed.
 	cluster.Default()
+
+	// Set StorageClassName to default sc name if not set.
+	if cluster.Spec.Storage.VolumeClaimTemplate.StorageClassName == nil {
+		defaultSCName, err := r.getDefaultStorageClassName(ctx)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		cluster.Spec.Storage.VolumeClaimTemplate.StorageClassName = &defaultSCName
+	}
 
 	// Validate in case a validating webhook has not been deployed
 	err := cluster.ValidateCreate()
