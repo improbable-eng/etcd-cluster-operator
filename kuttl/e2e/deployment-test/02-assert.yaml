@@ -1,0 +1,11 @@
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+timeout: 120
+---
+apiVersion: apps/v1
+kind: ReplicaSet 
+metadata:
+  name: storageos-etcd-default-sc-0
+  namespace: storageos-etcd
+status:
+  replicas: 1

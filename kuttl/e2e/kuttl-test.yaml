@@ -7,4 +7,4 @@ startKIND: true
 kindContainers:
   - storageos/etcd-cluster-operator-controller:develop
   - storageos/etcd-cluster-operator-proxy:develop
-timeout: 120
+timeout: 240
