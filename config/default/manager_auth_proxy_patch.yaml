@@ -4,12 +4,13 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: controller-manager
-  namespace: system
+  namespace: cert-manager
 spec:
   template:
     spec:
       containers:
       - name: kube-rbac-proxy
+        imagePullPolicy: IfNotPresent
         image: gcr.io/kubebuilder/kube-rbac-proxy:v0.4.0
         args:
         - "--secure-listen-address=0.0.0.0:8443"

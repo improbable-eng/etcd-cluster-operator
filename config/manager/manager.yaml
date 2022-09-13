@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: controller-manager
-  namespace: system
+  namespace: cert-manager
   labels:
     control-plane: controller-manager
 spec:
@@ -21,8 +21,10 @@ spec:
         args:
         - --enable-leader-election
         - --proxy-url=eco-proxy.eco-system.svc
-        image: controller:latest
+        image: controller:v0.2.0-23-gf84abc6
         name: manager
+        imagePullPolicy: IfNotPresent
+        
         resources:
           limits:
             cpu: 100m
