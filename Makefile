@@ -31,7 +31,7 @@ GO := $(or $(shell which go${GO_VERSION}),$(shell which go))
 # Docker image configuration
 # Docker images are published to https://quay.io/repository/improbable-eng/etcd-cluster-operator
 DOCKER_TAG ?= ${VERSION}
-DOCKER_REPO ?= quay.io/improbable-eng
+DOCKER_REPO ?= 5000
 DOCKER_IMAGES ?= controller proxy backup-agent restore-agent
 DOCKER_IMAGE_NAME_PREFIX ?= etcd-cluster-operator-
 # The Docker image for the controller-manager which will be deployed to the cluster in tests
@@ -50,8 +50,8 @@ KIND := ${BIN}/kind-${KIND_VERSION}
 K8S_CLUSTER_NAME := etcd-e2e
 
 # controller-tools
-CONTROLLER_GEN_VERSION := 0.2.5
-CONTROLLER_GEN := ${BIN}/controller-gen-0.2.5
+CONTROLLER_GEN_VERSION := 1
+CONTROLLER_GEN := ${BIN}/controller-gen-1
 
 # Kustomize
 KUSTOMIZE_VERSION := 3.5.4
@@ -139,7 +139,7 @@ deploy-minio:
 .PHONY: deploy-cert-manager
 deploy-cert-manager: ## Deploy cert-manager in the configured Kubernetes cluster in ~/.kube/config
 	kubectl apply --validate=false --filename=https://github.com/jetstack/cert-manager/releases/download/v0.11.0/cert-manager.yaml
-	kubectl wait --for=condition=Available --timeout=300s apiservice v1beta1.webhook.cert-manager.io
+	# kubectl wait --for=condition=Available --timeout=300s apiservice v1beta1.webhook.cert-manager.io
 
 .PHONY: deploy-controller
 deploy-controller: ## Deploy controller in the configured Kubernetes cluster in ~/.kube/config
@@ -180,7 +180,8 @@ verify-protobuf-lint: ## Run protobuf static checks
 .PHONY: manifests
 manifests: ## Generate manifests e.g. CRD, RBAC etc.
 manifests: ${CONTROLLER_GEN}
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	# $(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 .PHONY: fmt
 fmt: ## Run go fmt against code
@@ -285,7 +286,9 @@ ${BIN}:
 ${CONTROLLER_GEN}: | ${BIN}
 # Prevents go get from modifying our go.mod file.
 # See https://github.com/kubernetes-sigs/kubebuilder/issues/909
-	cd /tmp; GOBIN=${BIN} GO111MODULE=on ${GO} get sigs.k8s.io/controller-tools/cmd/controller-gen@v${CONTROLLER_GEN_VERSION}
+	# cd /tmp; GOBIN=${BIN} GO111MODULE=on ${GO} get sigs.k8s.io/controller-tools/cmd/controller-gen@v${CONTROLLER_GEN_VERSION}
+	# mv ${BIN}/controller-gen ${CONTROLLER_GEN}
+	cd /tmp; GOBIN=${BIN} GO111MODULE=on ${GO} install sigs.k8s.io/controller-tools/cmd/controller-gen
 	mv ${BIN}/controller-gen ${CONTROLLER_GEN}
 
 ${KUSTOMIZE}: | ${BIN}

@@ -4,3 +4,12 @@ resources:
 # environment variables
 patchesStrategicMerge:
 - proxy_minio_credentials.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+images:
+- name: controller
+  newName: 5000/etcd-cluster-operator-controller
+  newTag: v0.2.0-23-gf84abc6
+- name: proxy
+  newName: 5000/etcd-cluster-operator-proxy
+  newTag: v0.2.0-23-gf84abc6

@@ -3,7 +3,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: controller-manager
-  namespace: system
+  namespace: cert-manager
 spec:
   template:
     metadata:
@@ -13,6 +13,7 @@ spec:
       containers:
       # Expose the prometheus metrics on default port
       - name: manager
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080
           name: metrics
