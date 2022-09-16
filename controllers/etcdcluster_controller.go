@@ -1762,6 +1762,18 @@ func (r *EtcdClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 
+	// Get preferred capability for PodDisruptionBudget. V1Beta1 is removed in k8s v1.25+.
+	pdbCaps := capabilities.GetPreferredAvailableAPIs(r.Lists, "PodDisruptionBudget")
+	if pdbCaps.Has("policy/v1") {
+		return ctrl.NewControllerManagedBy(mgr).
+			For(&etcdv1alpha1.EtcdCluster{}).
+			Owns(&v1.Service{}).
+			Owns(&v1.ResourceQuota{}).
+			Owns(&policyv1.PodDisruptionBudget{}).
+			Owns(&etcdv1alpha1.EtcdPeer{}).
+			Complete(r)
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&etcdv1alpha1.EtcdCluster{}).
 		Owns(&v1.Service{}).
