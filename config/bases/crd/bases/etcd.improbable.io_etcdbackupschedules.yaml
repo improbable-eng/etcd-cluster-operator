@@ -1,10 +1,9 @@
-
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.4.1
+    controller-gen.kubebuilder.io/version: v0.9.0
   creationTimestamp: null
   name: etcdbackupschedules.etcd.improbable.io
 spec:
@@ -50,11 +49,11 @@ spec:
                         description: "ObjectURLTemplate is a URL of a file of a backup
                           in object storage. \n It *MAY* contain go-template style
                           template fields. The fields *MUST* match fields the EtcdBackup
-                          resource. For example:  s3://example-bucket/snapshot.db
-                          \ s3://example-bucket/{{ .Namespace }}/{{ .Name }}/{{ .CreationTimestamp
-                          }}/snapshot.db \n You *SHOULD* include template fields if
-                          the URL will be used in an EtcdBackupSchedule, to ensure
-                          that every backup has a unique name. For example:  s3://example-bucket/snapshot-{{
+                          resource. For example: s3://example-bucket/snapshot.db s3://example-bucket/{{
+                          .Namespace }}/{{ .Name }}/{{ .CreationTimestamp }}/snapshot.db
+                          \n You *SHOULD* include template fields if the URL will
+                          be used in an EtcdBackupSchedule, to ensure that every backup
+                          has a unique name. For example: s3://example-bucket/snapshot-{{
                           .UID }}.db \n The scheme of this URL should be gs:// or
                           s3://."
                         type: string
@@ -94,9 +93,3 @@ spec:
         type: object
     served: true
     storage: true
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []

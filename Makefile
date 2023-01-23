@@ -22,9 +22,9 @@ export BIN ?= ${CURDIR}/bin
 # Make sure BIN is on the PATH
 export PATH := $(BIN):$(PATH)
 
-GO_VERSION ?= 1.14
-# Look for a `go1.14` on the path but fall back to `go`.
-# Allows me to use `go get golang.org/dl/go1.14` without having to replace my OS
+GO_VERSION ?= 1.18
+# Look for a `go1.18` on the path but fall back to `go`.
+# Allows me to use `go get golang.org/dl/go1.18` without having to replace my OS
 # provided golang package.
 GO := $(or $(shell which go${GO_VERSION}),$(shell which go))
 
@@ -51,7 +51,7 @@ KIND := ${BIN}/kind-${KIND_VERSION}
 K8S_CLUSTER_NAME := etcd-e2e
 
 # controller-tools
-CONTROLLER_GEN_VERSION := 0.4.1
+CONTROLLER_GEN_VERSION := 0.9.0
 CONTROLLER_GEN := ${BIN}/controller-gen-${CONTROLLER_GEN_VERSION}
 
 # Kustomize
@@ -67,9 +67,6 @@ RELEASE_NOTES := docs/release-notes/${VERSION}.md
 RELEASE_MANIFEST := "release-${VERSION}.yaml"
 
 E2E_ARTIFACTS_DIRECTORY ?= /tmp/${K8S_CLUSTER_NAME}
-
-# Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
-CRD_OPTIONS ?= "crd:trivialVersions=true"
 
 # Limit the number of parallel end-to-end tests
 # A higher number will result in more etcd nodes being deployed in the test
@@ -186,7 +183,7 @@ verify-protobuf-lint: ## Run protobuf static checks
 .PHONY: manifests
 manifests: ## Generate manifests e.g. CRD, RBAC etc.
 manifests: ${CONTROLLER_GEN}
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/bases/crd/bases
+	$(CONTROLLER_GEN) rbac:roleName=manager-role crd paths=./api/... webhook paths="./..." output:crd:artifacts:config=config/bases/crd/bases
 
 .PHONY: uber
 uber: KUSTOMIZE_DIRECTORY_TO_EDIT=config/bases/manager
@@ -209,10 +206,6 @@ generate: ${CONTROLLER_GEN}
 .PHONY: gomod
 gomod: ## Update the go.mod and go.sum files
 	${GO} mod tidy
-
-.PHONY: go-get-patch
-go-get-patch: ## Update Golang dependencies to latest patch versions
-	${GO} get -u=patch -t
 
 .PHONY: manifests-image
 manifests-image:  # Build the manifests docker image.
@@ -247,12 +240,6 @@ docker-push-%: FORCE
 	docker push ${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}$*:${DOCKER_TAG}
 	docker push quay.io/${DOCKER_REPO}/${DOCKER_IMAGE_NAME_PREFIX}$*:${DOCKER_TAG}
 FORCE:
-
-# Run the supplied make target argument in a temporary workspace and diff the results.
-verify-%: FORCE
-	./hack/verify.sh ${MAKE} -s $*
-FORCE:
-
 
 # Run the supplied make target argument in a temporary workspace and diff the results.
 verify-%: FORCE
@@ -313,7 +300,7 @@ ${BIN}:
 ${CONTROLLER_GEN}: | ${BIN}
 # Prevents go get from modifying our go.mod file.
 # See https://github.com/kubernetes-sigs/kubebuilder/issues/909
-	cd /tmp; GOBIN=${BIN} GO111MODULE=on ${GO} get sigs.k8s.io/controller-tools/cmd/controller-gen@v${CONTROLLER_GEN_VERSION}
+	cd /tmp; GOBIN=${BIN} GO111MODULE=on ${GO} install sigs.k8s.io/controller-tools/cmd/controller-gen@v${CONTROLLER_GEN_VERSION}
 	mv ${BIN}/controller-gen ${CONTROLLER_GEN}
 
 ${KUSTOMIZE}: | ${BIN}
