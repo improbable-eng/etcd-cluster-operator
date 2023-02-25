@@ -34,7 +34,7 @@ require (
 	go.opencensus.io v0.22.3 // indirect
 	gocloud.dev v0.17.0
 	golang.org/x/net v0.0.0-20200202094626-16171245cfb2 // indirect
-	golang.org/x/sys v0.0.0-20200202164722-d101bd2416d5 // indirect
+	golang.org/x/sys v0.1.0 // indirect
 	google.golang.org/api v0.13.0 // indirect
 	google.golang.org/appengine v1.6.5 // indirect
 	google.golang.org/genproto v0.0.0-20200128133413-58ce757ed39b // indirect
